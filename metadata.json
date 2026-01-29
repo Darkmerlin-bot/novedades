@@ -1,5 +1,0 @@
-{
-  "name": "Sistema de Novedades Pro",
-  "description": "A comprehensive tracking system for operational novelty reports with integrated Supabase connectivity, role-based access control, and activity logging.",
-  "requestFramePermissions": []
-}
