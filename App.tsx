@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabase';
 import { User, Novedad, ConfigData, LogEntry, View, NovedadChecks } from './types';
@@ -37,82 +36,66 @@ const App: React.FC = () => {
   const addLog = useCallback(async (action: string, details: string) => {
     if (!currentUser) return;
     try {
-      const { data, error } = await supabase.from('logs').insert([{
+      await supabase.from('logs').insert([{
         username: currentUser.username,
         nombre: currentUser.nombre,
         action,
         details
-      }]).select();
+      }]);
       
-      if (!error && data) {
-        setLogs(prev => [data[0], ...prev].slice(0, 500));
-      }
+      const { data } = await supabase.from('logs').select('*').order('created_at', { ascending: false }).limit(10);
+      if (data) setLogs(data);
     } catch (e) {
-      console.error("Error adding log:", e);
+      console.error("Error log:", e);
     }
   }, [currentUser]);
 
-  const loadAllData = async () => {
+  const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      // 1. Load Users
       const { data: userData, error: userError } = await supabase.from('users').select('*');
       if (userError) throw userError;
-      
-      if (userData.length === 0) {
-        // Create default admin if no users exist
-        const defaultAdmin = { username: 'admin', password: 'admin123', role: 'admin' as const, nombre: 'Administrador' };
-        const { data: newAdmin, error: adminError } = await supabase.from('users').insert([defaultAdmin]).select();
-        if (adminError) throw adminError;
-        setUsers(newAdmin);
-      } else {
-        setUsers(userData);
-      }
+      setUsers(userData || []);
 
-      // 2. Load Novedades
-      const { data: novData, error: novError } = await supabase.from('novedades').select('*').order('created_at', { ascending: false });
-      if (!novError) setNovedades(novData || []);
+      const { data: novData } = await supabase.from('novedades').select('*').order('created_at', { ascending: false });
+      setNovedades(novData || []);
 
-      // 3. Load Config
-      const { data: confData, error: confError } = await supabase.from('config').select('*').single();
-      if (!confError && confData) {
+      const { data: confData } = await supabase.from('config').select('*').limit(1).single();
+      if (confData) {
         setConfig(confData.data);
       } else {
-        // Initial default config if missing
-        const defaultConfig = {
-          informeActuacion: ['Oficial 1', 'Oficial 2'],
-          informeCriminalistico: ['Perito 1', 'Perito 2'],
-          informePericial: ['Especialista 1', 'Especialista 2'],
-          croquis: ['Dibujante 1']
+        const def = {
+          informeActuacion: ['Personal 1'],
+          informeCriminalistico: ['Personal 1'],
+          informePericial: ['Personal 1'],
+          croquis: ['Personal 1']
         };
-        await supabase.from('config').insert([{ data: defaultConfig }]);
-        setConfig(defaultConfig);
+        setConfig(def);
       }
 
-      // 4. Load Logs
-      const { data: logData, error: logError } = await supabase.from('logs').select('*').order('created_at', { ascending: false }).limit(200);
-      if (!logError) setLogs(logData || []);
+      const { data: logData } = await supabase.from('logs').select('*').order('created_at', { ascending: false }).limit(100);
+      setLogs(logData || []);
 
     } catch (error: any) {
-      console.error("Database connection error:", error);
-      showNotify("Error de conexión con Supabase. Verifique las tablas y RLS.", "error");
+      console.error("Error Supabase:", error);
+      showNotify("Error de conexión. Verifica las tablas.", "error");
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadAllData();
+    loadInitialData();
   }, []);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    addLog('LOGIN', 'Inicio de sesión exitoso');
-    showNotify(`Bienvenido, ${user.nombre}`);
+    addLog('LOGIN', 'Ingreso al sistema');
+    showNotify(`Hola, ${user.nombre}`);
   };
 
   const handleLogout = () => {
-    addLog('LOGOUT', 'Cierre de sesión');
+    addLog('LOGOUT', 'Salida del sistema');
     setCurrentUser(null);
     setCurrentView(View.LIST);
   };
@@ -120,8 +103,9 @@ const App: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 text-white">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-400 mb-4"></div>
-        <p className="text-slate-400">Verificando conexión con Supabase...</p>
+        <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+        <p className="text-xl font-bold tracking-widest animate-pulse">SISTEMA OPERATIVO</p>
+        <p className="text-slate-500 mt-2 text-sm uppercase tracking-tighter">Conectando con Supabase Cloud</p>
       </div>
     );
   }
@@ -131,7 +115,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen pb-20 md:pb-0">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
       <Header 
         user={currentUser} 
         currentView={currentView} 
@@ -140,18 +124,19 @@ const App: React.FC = () => {
         onShowStats={() => setShowStats(true)}
       />
       
-      <main className="max-w-5xl mx-auto p-4 md:p-8">
+      <main className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-8 animate-fadeIn">
         {currentView === View.LIST && (
           <NovedadesList 
             novedades={novedades} 
             setNovedades={setNovedades}
             onEdit={(n) => { setEditingNovedad(n); setCurrentView(View.FORM); }}
             onDelete={async (id) => {
+              if (!confirm("¿Eliminar este registro?")) return;
               const { error } = await supabase.from('novedades').delete().eq('id', id);
               if (!error) {
                 setNovedades(novedades.filter(n => n.id !== id));
-                showNotify("Novedad eliminada");
-                addLog('ELIMINAR_NOVEDAD', `ID: ${id}`);
+                showNotify("Registro eliminado");
+                addLog('ELIMINAR', `ID: ${id}`);
               }
             }}
             onToggleCheck={async (id, key) => {
@@ -165,7 +150,6 @@ const App: React.FC = () => {
               
               if (!error) {
                 setNovedades(novedades.map(n => n.id === id ? { ...n, checks: newChecks } : n));
-                addLog('MARCAR_TAREA', `Tarea ${key} actualizada en Novedad ${nov.numero_novedad}`);
               }
             }}
             setView={setCurrentView}
@@ -179,18 +163,22 @@ const App: React.FC = () => {
             currentUser={currentUser}
             onSave={async (data) => {
               if (editingNovedad) {
-                const { error } = await supabase.from('novedades').update({ ...data, modificado_por: currentUser.username }).eq('id', editingNovedad.id);
+                const { error } = await supabase.from('novedades').update({ 
+                  ...data, 
+                  modificado_por: currentUser.username 
+                }).eq('id', editingNovedad.id);
                 if (!error) {
-                  setNovedades(novedades.map(n => n.id === editingNovedad.id ? { ...n, ...data } : n));
-                  showNotify("Novedad actualizada");
-                  addLog('EDITAR_NOVEDAD', `Novedad: ${data.numero_novedad}`);
+                  setNovedades(novedades.map(n => n.id === editingNovedad.id ? { ...n, ...data, modificado_por: currentUser.username } : n));
+                  showNotify("Actualizado");
                 }
               } else {
-                const { data: newNov, error } = await supabase.from('novedades').insert([{ ...data, creado_por: currentUser.username }]).select();
-                if (!error && newNov) {
-                  setNovedades([newNov[0], ...novedades]);
-                  showNotify("Novedad creada exitosamente");
-                  addLog('CREAR_NOVEDAD', `Novedad: ${data.numero_novedad}`);
+                const { data: newItems, error } = await supabase.from('novedades').insert([{ 
+                  ...data, 
+                  creado_por: currentUser.username 
+                }]).select();
+                if (!error && newItems) {
+                  setNovedades([newItems[0], ...novedades]);
+                  showNotify("Guardado correctamente");
                 }
               }
               setEditingNovedad(null);
@@ -204,12 +192,14 @@ const App: React.FC = () => {
           <ConfigView 
             config={config} 
             onUpdate={async (newConfig) => {
-              const { error } = await supabase.from('config').update({ data: newConfig }).neq('id', 0); // Update all or specific id
-              if (!error) {
-                setConfig(newConfig);
-                showNotify("Configuración guardada");
-                addLog('CONFIG_UPDATE', 'Nombres de personal actualizados');
+              const { data: existing } = await supabase.from('config').select('id').limit(1).single();
+              if (existing) {
+                await supabase.from('config').update({ data: newConfig }).eq('id', existing.id);
+              } else {
+                await supabase.from('config').insert([{ data: newConfig }]);
               }
+              setConfig(newConfig);
+              showNotify("Configuración guardada");
             }}
           />
         )}
@@ -220,25 +210,18 @@ const App: React.FC = () => {
             currentUser={currentUser}
             onSaveUser={async (user) => {
               if (user.id) {
-                const { error } = await supabase.from('users').update(user).eq('id', user.id);
-                if (!error) {
-                  setUsers(users.map(u => u.id === user.id ? user : u));
-                  showNotify("Usuario actualizado");
-                }
+                await supabase.from('users').update(user).eq('id', user.id);
+                setUsers(users.map(u => u.id === user.id ? user : u));
               } else {
-                const { data, error } = await supabase.from('users').insert([user]).select();
-                if (!error && data) {
-                  setUsers([...users, data[0]]);
-                  showNotify("Nuevo usuario creado");
-                }
+                const { data } = await supabase.from('users').insert([user]).select();
+                if (data) setUsers([...users, data[0]]);
               }
+              showNotify("Usuario actualizado");
             }}
             onDeleteUser={async (id) => {
-              const { error } = await supabase.from('users').delete().eq('id', id);
-              if (!error) {
-                setUsers(users.filter(u => u.id !== id));
-                showNotify("Usuario eliminado");
-              }
+              await supabase.from('users').delete().eq('id', id);
+              setUsers(users.filter(u => u.id !== id));
+              showNotify("Usuario eliminado");
             }}
           />
         )}
@@ -255,6 +238,10 @@ const App: React.FC = () => {
       {notification && (
         <Notification message={notification.message} type={notification.type} />
       )}
+      
+      <footer className="bg-white border-t border-slate-200 p-4 text-center text-xs text-slate-400">
+        &copy; {new Date().getFullYear()} Sistema de Gestión Operativa &bull; <span className="text-emerald-500 font-bold">Supabase Cloud Ready</span>
+      </footer>
     </div>
   );
 };
