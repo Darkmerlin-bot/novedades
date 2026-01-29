@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Novedades</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f1f5f9; min-height: 100vh; }
+        
+        .login-container { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 20px; }
+        .login-card { background: white; border-radius: 16px; padding: 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .login-header { text-align: center; margin-bottom: 32px; }
+        .login-icon { font-size: 48px; display: block; margin-bottom: 16px; }
+        .login-title { margin: 0 0 8px; font-size: 24px; font-weight: 700; color: #1e293b; }
+        .login-subtitle { margin: 0; color: #64748b; font-size: 14px; }
+        .login-form { display: flex; flex-direction: column; gap: 20px; }
+        .login-error { background: #fef2f2; color: #ef4444; padding: 12px; border-radius: 8px; font-size: 14px; text-align: center; display: none; }
+        .login-btn { padding: 14px; background: #3b82f6; border: none; border-radius: 10px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; }
+        .login-btn:hover { background: #2563eb; }
+        .login-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+        .login-hint { text-align: center; margin-top: 24px; color: #94a3b8; font-size: 12px; }
+        .supabase-badge { display: inline-block; background: #3ecf8e20; color: #3ecf8e; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-top: 12px; }
+        
+        .input-group { display: flex; flex-direction: column; gap: 6px; }
+        .input-label { font-size: 13px; font-weight: 500; color: #374151; }
+        .input { padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-family: inherit; }
+        .input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .select { padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-family: inherit; background: white; cursor: pointer; }
+        
+        .header { background: #1e293b; padding: 16px 20px; position: sticky; top: 0; z-index: 100; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 12px; }
+        .title { margin: 0; font-size: 20px; font-weight: 600; color: white; }
+        .user-info { display: flex; align-items: center; gap: 12px; }
+        .user-name { color: white; font-size: 14px; font-weight: 500; }
+        .user-role { color: #94a3b8; font-size: 12px; background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 12px; }
+        .header-actions { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+        .action-btn { padding: 8px 14px; background: #475569; border: none; border-radius: 6px; color: white; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; }
+        .action-btn:hover { background: #64748b; }
+        .action-btn.danger { background: #ef4444; }
+        .nav { display: flex; gap: 8px; flex-wrap: wrap; }
+        .nav-btn { padding: 10px 16px; background: transparent; border: 1px solid #475569; border-radius: 6px; color: #94a3b8; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
+        .nav-btn:hover { background: rgba(255,255,255,0.1); }
+        .nav-btn.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+        
+        .main { padding: 20px; max-width: 900px; margin: 0 auto; }
+        .hidden { display: none !important; }
+        
+        .loading-container { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: #1e293b; }
+        .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.2); border-top-color: #3ecf8e; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 16px; color: #94a3b8; }
+        
+        .empty-state { text-align: center; padding: 60px 20px; background: white; border-radius: 12px; }
+        .empty-icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-text { font-size: 16px; color: #64748b; margin-bottom: 20px; }
+        
+        .btn-primary { padding: 12px 20px; background: #3b82f6; border: none; border-radius: 8px; color: white; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-secondary { padding: 12px 20px; background: #f1f5f9; border: none; border-radius: 8px; color: #64748b; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+        
+        .list { display: flex; flex-direction: column; gap: 8px; }
+        .list-item { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .list-item-main { display: flex; justify-content: space-between; align-items: center; padding: 16px; cursor: pointer; }
+        .list-item-main:hover { background: #f8fafc; }
+        .list-item-left { display: flex; align-items: center; gap: 16px; }
+        .list-item-numbers { display: flex; flex-direction: column; gap: 2px; }
+        .novedad-num { font-weight: 600; color: #1e293b; font-size: 15px; }
+        .sgsp-num { font-size: 12px; color: #64748b; }
+        .completion-badge { padding: 4px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; }
+        .completion-complete { background: #dcfce7; color: #22c55e; }
+        .completion-pending { background: #fef3c7; color: #f59e0b; }
+        .list-item-right { display: flex; align-items: center; gap: 12px; }
+        .date-text { font-size: 12px; color: #94a3b8; }
+        .expand-icon { color: #94a3b8; font-size: 10px; }
+        .expanded-content { padding: 0 16px 16px; border-top: 1px solid #f1f5f9; }
+        .meta-info { font-size: 12px; color: #94a3b8; padding: 12px 0; }
+        .section { padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+        .section-label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 10px; }
+        .assignment-row { display: flex; justify-content: space-between; font-size: 14px; padding: 4px 0; }
+        .assignment-label { color: #64748b; }
+        .assignment-value { font-weight: 500; color: #1e293b; }
+        .check-row { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 6px 0; font-size: 14px; }
+        .check-row input { width: 18px; height: 18px; cursor: pointer; }
+        .check-completed { text-decoration: line-through; color: #94a3b8; }
+        .item-actions { display: flex; gap: 8px; padding-top: 16px; }
+        .edit-btn, .delete-btn { flex: 1; padding: 10px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
+        .edit-btn { background: #f1f5f9; color: #475569; }
+        .delete-btn { background: #fef2f2; color: #ef4444; }
+        
+        .form-container { background: white; border-radius: 12px; padding: 24px; }
+        .form-title { margin: 0 0 24px; font-size: 20px; font-weight: 600; color: #1e293b; }
+        .form { display: flex; flex-direction: column; gap: 24px; }
+        .form-section { display: flex; flex-direction: column; gap: 12px; }
+        .form-section-title { font-size: 14px; font-weight: 600; color: #64748b; text-transform: uppercase; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9; }
+        .form-row { display: flex; flex-direction: column; gap: 6px; }
+        .form-label { font-size: 14px; font-weight: 500; color: #374151; }
+        .form-check-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; cursor: pointer; font-size: 14px; }
+        .form-actions { display: flex; gap: 12px; padding-top: 12px; border-top: 1px solid #f1f5f9; }
+        .form-actions button { flex: 1; }
+        
+        .config-section { background: white; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+        .config-title { margin: 0 0 16px; font-size: 16px; font-weight: 600; color: #1e293b; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; }
+        .names-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+        .name-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f8fafc; border-radius: 6px; font-size: 14px; }
+        .remove-btn { width: 24px; height: 24px; border: none; border-radius: 4px; background: #fee2e2; color: #ef4444; cursor: pointer; font-weight: 600; }
+        .add-name-row { display: flex; gap: 8px; }
+        .input-small { flex: 1; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; font-family: inherit; }
+        .add-btn { padding: 10px 16px; background: #22c55e; border: none; border-radius: 6px; color: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+        .page-title { margin: 0; font-size: 20px; font-weight: 600; color: #1e293b; }
+        .users-list { display: flex; flex-direction: column; gap: 12px; }
+        .user-card { background: white; border-radius: 12px; padding: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .user-info-2 { display: flex; align-items: center; gap: 12px; }
+        .user-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600; }
+        .user-name-card { font-weight: 600; color: #1e293b; font-size: 15px; }
+        .user-username { color: #64748b; font-size: 13px; }
+        .user-meta { display: flex; align-items: center; gap: 12px; }
+        .role-badge { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .role-admin { background: #dbeafe; color: #2563eb; }
+        .role-user { background: #f1f5f9; color: #64748b; }
+        .user-actions { display: flex; gap: 8px; }
+        .small-btn { width: 32px; height: 32px; border: none; border-radius: 6px; background: #f1f5f9; cursor: pointer; font-size: 14px; }
+        
+        .logs-list { display: flex; flex-direction: column; gap: 8px; }
+        .log-item { background: white; border-radius: 8px; padding: 14px 16px; }
+        .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+        .log-user { font-weight: 500; color: #1e293b; font-size: 14px; }
+        .log-time { color: #94a3b8; font-size: 12px; }
+        .log-content { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .log-action { background: #e0e7ff; color: #4338ca; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .log-details { color: #64748b; font-size: 13px; }
+        
+        .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+        .modal-content { background: white; border-radius: 12px; width: 100%; max-width: 420px; overflow: hidden; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: #1e293b; color: white; }
+        .modal-title { margin: 0; font-size: 18px; font-weight: 600; }
+        .close-btn { background: transparent; border: none; color: white; font-size: 18px; cursor: pointer; }
+        .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+        .modal-actions { display: flex; gap: 12px; padding-top: 8px; }
+        .modal-actions button { flex: 1; }
+        .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+        .stat-num { font-size: 18px; font-weight: 700; color: #1e293b; }
+        .stat-num.green { color: #22c55e; }
+        
+        .notification { position: fixed; top: 16px; right: 16px; padding: 12px 20px; border-radius: 8px; color: white; font-weight: 500; z-index: 1001; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+        .notification.success { background: #22c55e; }
+        .notification.error { background: #ef4444; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="loading-container">
+            <div class="spinner"></div>
+            <p class="loading-text">Conectando con Supabase...</p>
+        </div>
+    </div>
+
+    <script>
+        // =====================================================
+        // CONFIGURACIÓN DE SUPABASE
+        // =====================================================
+        // ⚠️ IMPORTANTE: Reemplaza estos valores con los de tu proyecto Supabase
+        const SUPABASE_URL = 'https://whfrenunfcrcrljithex.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJlbnVuZmNyY3Jsaml0aGV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2Njk5ODUsImV4cCI6MjA4NTI0NTk4NX0.MMbKQxmSL_7UPNcEh_F1NofVPa13Trz3sedDALvgvPs';
+        
+        // Inicializar Supabase
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // =====================================================
+        // DATOS
+        // =====================================================
+        let currentUser = null;
+        let users = [];
+        let novedades = [];
+        let config = {
+            informeActuacion: ['Oficial 1', 'Oficial 2', 'Oficial 3'],
+            informeCriminalistico: ['Perito 1', 'Perito 2', 'Perito 3'],
+            informePericial: ['Especialista 1', 'Especialista 2', 'Especialista 3'],
+            croquis: ['Dibujante 1', 'Dibujante 2', 'Dibujante 3']
+        };
+        let logs = [];
+        let currentView = 'list';
+        let editingNovedad = null;
+        let expandedId = null;
+        let isLoading = true;
+
+        const fieldLabels = {
+            informeActuacion: 'Informe de Actuación',
+            informeCriminalistico: 'Informe Criminalístico',
+            informePericial: 'Informe Pericial',
+            croquis: 'Croquis'
+        };
+
+        const checkLabels = {
+            actuacionRealizada: 'Actuación Realizada',
+            criminalisticoRealizado: 'Criminalístico Realizado',
+            pericialRealizado: 'Pericial Realizado',
+            croquisRealizado: 'Croquis Realizado'
+        };
+
+        // =====================================================
+        // FUNCIONES DE SUPABASE
+        // =====================================================
+        async function loadData() {
+            try {
+                // Cargar usuarios
+                const { data: usersData, error: usersError } = await supabase.from('users').select('*');
+                if (usersError) throw usersError;
+                
+                if (usersData.length === 0) {
+                    // Crear usuario admin por defecto
+                    const { data: newAdmin, error: adminError } = await supabase.from('users').insert([
+                        { username: 'admin', password: 'admin123', role: 'admin', nombre: 'Administrador' }
+                    ]).select();
+                    if (adminError) throw adminError;
+                    users = newAdmin;
+                } else {
+                    users = usersData;
+                }
+
+                // Cargar novedades
+                const { data: novedadesData, error: novedadesError } = await supabase.from('novedades').select('*').order('created_at', { ascending: false });
+                if (!novedadesError) novedades = novedadesData || [];
+
+                // Cargar config
+                const { data: configData, error: configError } = await supabase.from('config').select('*').single();
+                if (!configError && configData) config = configData.data;
+
+                // Cargar logs
+                const { data: logsData, error: logsError } = await supabase.from('logs').select('*').order('created_at', { ascending: false }).limit(500);
+                if (!logsError) logs = logsData || [];
+
+                isLoading = false;
+                render();
+            } catch (error) {
+                console.error('Error cargando datos:', error);
+                showNotification('Error al conectar con la base de datos', 'error');
+                isLoading = false;
+                render();
+            }
+        }
+
+        async function saveUser(user) {
+            try {
+                if (user.id) {
+                    const { error } = await supabase.from('users').update(user).eq('id', user.id);
+                    if (error) throw error;
+                } else {
+                    const { data, error } = await supabase.from('users').insert([user]).select();
+                    if (error) throw error;
+                    return data[0];
+                }
+            } catch (error) {
+                console.error('Error guardando usuario:', error);
+                showNotification('Error al guardar usuario', 'error');
+            }
+        }
+
+        async function deleteUserDB(id) {
+            try {
+                const { error } = await supabase.from('users').delete().eq('id', id);
+                if (error) throw error;
+            } catch (error) {
+                console.error('Error eliminando usuario:', error);
+                showNotification('Error al eliminar usuario', 'error');
+            }
+        }
+
+        async function saveNovedad(novedad) {
+            try {
+                if (novedad.id) {
+                    const { error } = await supabase.from('novedades').update(novedad).eq('id', novedad.id);
+                    if (error) throw error;
+                } else {
+                    const { data, error } = await supabase.from('novedades').insert([novedad]).select();
+                    if (error) throw error;
+                    return data[0];
+                }
+            } catch (error) {
+                console.error('Error guardando novedad:', error);
+                showNotification('Error al guardar novedad', 'error');
+            }
+        }
+
+        async function deleteNovedadDB(id) {
+            try {
+                const { error } = await supabase.from('novedades').delete().eq('id', id);
+                if (error) throw error;
+            } catch (error) {
+                console.error('Error eliminando novedad:', error);
+                showNotification('Error al eliminar novedad', 'error');
+            }
+        }
+
+        async function saveConfig() {
+            try {
+                const { data: existing } = await supabase.from('config').select('id').single();
+                if (existing) {
+                    await supabase.from('config').update({ data: config }).eq('id', existing.id);
+                } else {
+                    await supabase.from('config').insert([{ data: config }]);
+                }
+            } catch (error) {
+                console.error('Error guardando config:', error);
+            }
+        }
+
+        async function addLog(action, details) {
+            if (!currentUser) return;
+            try {
+                const log = {
+                    username: currentUser.username,
+                    nombre: currentUser.nombre,
+                    action,
+                    details
+                };
+                const { data, error } = await supabase.from('logs').insert([log]).select();
+                if (!error && data) {
+                    logs.unshift(data[0]);
+                    if (logs.length > 500) logs = logs.slice(0, 500);
+                }
+            } catch (error) {
+                console.error('Error guardando log:', error);
+            }
+        }
+
+        // =====================================================
+        // UTILIDADES
+        // =====================================================
+        function showNotification(message, type = 'success') {
+            const existing = document.querySelector('.notification');
+            if (existing) existing.remove();
+            
+            const notif = document.createElement('div');
+            notif.className = `notification ${type}`;
+            notif.textContent = (type === 'error' ? '⚠️ ' : '✓ ') + message;
+            document.body.appendChild(notif);
+            setTimeout(() => notif.remove(), 3000);
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('es-ES') + ' ' + date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function getCompletionCount(novedad) {
+            if (!novedad.checks) return 0;
+            return Object.values(novedad.checks).filter(Boolean).length;
+        }
+
+        // =====================================================
+        // RENDER
+        // =====================================================
+        function render() {
+            const app = document.getElementById('app');
+            
+            if (isLoading) {
+                app.innerHTML = `
+                    <div class="loading-container">
+                        <div class="spinner"></div>
+                        <p class="loading-text">Conectando con Supabase...</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (!currentUser) {
+                app.innerHTML = renderLogin();
+            } else {
+                app.innerHTML = renderMain();
+            }
+            
+            attachEvents();
+        }
+
+        function renderLogin() {
+            return `
+                <div class="login-container">
+                    <div class="login-card">
+                        <div class="login-header">
+                            <span class="login-icon">📋</span>
+                            <h1 class="login-title">Sistema de Novedades</h1>
+                            <p class="login-subtitle">Inicie sesión para continuar</p>
+                            <span class="supabase-badge">⚡ Conectado a Supabase</span>
+                        </div>
+                        <form class="login-form" id="loginForm">
+                            <div id="loginError" class="login-error"></div>
+                            <div class="input-group">
+                                <label class="input-label">Usuario</label>
+                                <input type="text" class="input" id="loginUsername" placeholder="Ingrese su usuario" required>
+                            </div>
+                            <div class="input-group">
+                                <label class="input-label">Contraseña</label>
+                                <input type="password" class="input" id="loginPassword" placeholder="Ingrese su contraseña" required>
+                            </div>
+                            <button type="submit" class="login-btn" id="loginBtn">Iniciar Sesión</button>
+                        </form>
+                        <p class="login-hint">Usuario: admin / Contraseña: admin123</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMain() {
+            return `
+                <header class="header">
+                    <div class="header-top">
+                        <h1 class="title">📋 Sistema de Novedades</h1>
+                        <div class="user-info">
+                            <span class="user-name">👤 ${currentUser.nombre}</span>
+                            <span class="user-role">${currentUser.role === 'admin' ? '🔑 Admin' : '👤 Usuario'}</span>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <button class="action-btn" onclick="showStatsModal()">📊 Estadísticas</button>
+                        <button class="action-btn" onclick="showChangePasswordModal()">🔑 Cambiar Contraseña</button>
+                        <button class="action-btn danger" onclick="handleLogout()">🚪 Salir</button>
+                    </div>
+                    <nav class="nav">
+                        <button class="nav-btn ${currentView === 'list' ? 'active' : ''}" onclick="setView('list')">📁 Lista</button>
+                        <button class="nav-btn ${currentView === 'form' ? 'active' : ''}" onclick="setView('form')">➕ Nueva</button>
+                        ${currentUser.role === 'admin' ? `
+                            <button class="nav-btn ${currentView === 'config' ? 'active' : ''}" onclick="setView('config')">⚙️ Config</button>
+                            <button class="nav-btn ${currentView === 'users' ? 'active' : ''}" onclick="setView('users')">👥 Usuarios</button>
+                            <button class="nav-btn ${currentView === 'logs' ? 'active' : ''}" onclick="setView('logs')">📜 Registro</button>
+                        ` : ''}
+                    </nav>
+                </header>
+                <main class="main">
+                    ${currentView === 'list' ? renderList() : ''}
+                    ${currentView === 'form' ? renderForm() : ''}
+                    ${currentView === 'config' ? renderConfig() : ''}
+                    ${currentView === 'users' ? renderUsers() : ''}
+                    ${currentView === 'logs' ? renderLogs() : ''}
+                </main>
+            `;
+        }
+
+        function renderList() {
+            if (novedades.length === 0) {
+                return `
+                    <div class="empty-state">
+                        <div class="empty-icon">📭</div>
+                        <p class="empty-text">No hay registros aún</p>
+                        <button class="btn-primary" onclick="setView('form')">+ Crear primer registro</button>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="list">
+                    ${novedades.map(n => `
+                        <div class="list-item">
+                            <div class="list-item-main" onclick="toggleExpand(${n.id})">
+                                <div class="list-item-left">
+                                    <div class="list-item-numbers">
+                                        <span class="novedad-num">${n.numero_novedad || ''}</span>
+                                        <span class="sgsp-num">SGSP: ${n.numero_sgsp || ''}</span>
+                                    </div>
+                                    <span class="completion-badge ${getCompletionCount(n) === 4 ? 'completion-complete' : 'completion-pending'}">${getCompletionCount(n)}/4</span>
+                                </div>
+                                <div class="list-item-right">
+                                    <span class="date-text">${n.created_at ? new Date(n.created_at).toLocaleDateString('es-ES') : ''}</span>
+                                    <span class="expand-icon">${expandedId === n.id ? '▲' : '▼'}</span>
+                                </div>
+                            </div>
+                            ${expandedId === n.id ? `
+                                <div class="expanded-content">
+                                    <div class="meta-info">Creado por: ${n.creado_por || ''}${n.modificado_por ? ` • Modificado por: ${n.modificado_por}` : ''}</div>
+                                    <div class="section">
+                                        <div class="section-label">Asignaciones:</div>
+                                        ${Object.keys(fieldLabels).map(f => `
+                                            <div class="assignment-row">
+                                                <span class="assignment-label">${fieldLabels[f]}:</span>
+                                                <span class="assignment-value">${n[f] || '—'}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    <div class="section">
+                                        <div class="section-label">Estado de tareas:</div>
+                                        ${Object.keys(checkLabels).map(c => `
+                                            <label class="check-row">
+                                                <input type="checkbox" ${n.checks && n.checks[c] ? 'checked' : ''} onchange="toggleCheck(${n.id}, '${c}')">
+                                                <span class="${n.checks && n.checks[c] ? 'check-completed' : ''}">${checkLabels[c]}</span>
+                                            </label>
+                                        `).join('')}
+                                    </div>
+                                    <div class="item-actions">
+                                        <button class="edit-btn" onclick="editNovedad(${n.id})">✏️ Editar</button>
+                                        <button class="delete-btn" onclick="deleteNovedad(${n.id})">🗑️ Eliminar</button>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderForm() {
+            const data = editingNovedad || {
+                numero_novedad: '', numero_sgsp: '', informeActuacion: '', informeCriminalistico: '', informePericial: '', croquis: '',
+                checks: { actuacionRealizada: false, criminalisticoRealizado: false, pericialRealizado: false, croquisRealizado: false }
+            };
+
+            return `
+                <div class="form-container">
+                    <h2 class="form-title">${editingNovedad ? '✏️ Editar Novedad' : '➕ Nueva Novedad'}</h2>
+                    <form class="form" id="novedadForm">
+                        <div class="form-section">
+                            <div class="form-row">
+                                <label class="form-label">Número de Novedad *</label>
+                                <input type="text" class="input" id="numeroNovedad" value="${data.numero_novedad || ''}" placeholder="Ej: NOV-2024-001" required>
+                            </div>
+                            <div class="form-row">
+                                <label class="form-label">Número SGSP *</label>
+                                <input type="text" class="input" id="numeroSgsp" value="${data.numero_sgsp || ''}" placeholder="Ej: SGSP-2024-001" required>
+                            </div>
+                        </div>
+                        <div class="form-section">
+                            <div class="form-section-title">Asignación de Personal</div>
+                            ${Object.keys(fieldLabels).map(f => `
+                                <div class="form-row">
+                                    <label class="form-label">${fieldLabels[f]}</label>
+                                    <select class="select" id="${f}">
+                                        <option value="">-- Seleccionar --</option>
+                                        ${config[f].map(name => `<option value="${name}" ${data[f] === name ? 'selected' : ''}>${name}</option>`).join('')}
+                                    </select>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="form-section">
+                            <div class="form-section-title">Estado de Tareas</div>
+                            ${Object.keys(checkLabels).map(c => `
+                                <label class="form-check-row">
+                                    <input type="checkbox" id="${c}" ${data.checks && data.checks[c] ? 'checked' : ''}>
+                                    <span>${checkLabels[c]}</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn-secondary" onclick="cancelForm()">Cancelar</button>
+                            <button type="submit" class="btn-primary">${editingNovedad ? '💾 Actualizar' : '💾 Guardar'}</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+        }
+
+        function renderConfig() {
+            return `
+                <h2 class="page-title" style="margin-bottom: 24px;">⚙️ Configuración de Nombres</h2>
+                ${Object.keys(fieldLabels).map(f => `
+                    <div class="config-section">
+                        <h3 class="config-title">${fieldLabels[f]}</h3>
+                        <div class="names-list">
+                            ${config[f].map((name, idx) => `
+                                <div class="name-item">
+                                    <span>${name}</span>
+                                    <button class="remove-btn" onclick="removeName('${f}', ${idx})">✕</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="add-name-row">
+                            <input type="text" class="input-small" id="newName_${f}" placeholder="Nuevo nombre...">
+                            <button class="add-btn" onclick="addNameToConfig('${f}')">+ Agregar</button>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        function renderUsers() {
+            return `
+                <div class="page-header">
+                    <h2 class="page-title">👥 Gestión de Usuarios</h2>
+                    <button class="btn-primary" onclick="showCreateUserModal()">+ Nuevo Usuario</button>
+                </div>
+                <div class="users-list">
+                    ${users.map(u => `
+                        <div class="user-card">
+                            <div class="user-info-2">
+                                <div class="user-avatar">${(u.nombre || 'U').charAt(0).toUpperCase()}</div>
+                                <div>
+                                    <div class="user-name-card">${u.nombre || ''}</div>
+                                    <div class="user-username">@${u.username || ''}</div>
+                                </div>
+                            </div>
+                            <div class="user-meta">
+                                <span class="role-badge ${u.role === 'admin' ? 'role-admin' : 'role-user'}">${u.role === 'admin' ? '🔑 Admin' : '👤 Usuario'}</span>
+                                <div class="user-actions">
+                                    <button class="small-btn" onclick="showEditUserModal(${u.id})">✏️</button>
+                                    <button class="small-btn" style="color:#ef4444" onclick="deleteUser(${u.id})">🗑️</button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderLogs() {
+            if (logs.length === 0) {
+                return `
+                    <h2 class="page-title" style="margin-bottom: 24px;">📜 Registro de Actividades</h2>
+                    <div class="empty-state"><p class="empty-text">No hay actividades registradas</p></div>
+                `;
+            }
+
+            return `
+                <h2 class="page-title" style="margin-bottom: 24px;">📜 Registro de Actividades</h2>
+                <div class="logs-list">
+                    ${logs.map(log => `
+                        <div class="log-item">
+                            <div class="log-header">
+                                <span class="log-user">👤 ${log.nombre || ''} (@${log.username || ''})</span>
+                                <span class="log-time">${log.created_at ? formatDate(log.created_at) : ''}</span>
+                            </div>
+                            <div class="log-content">
+                                <span class="log-action">${log.action || ''}</span>
+                                <span class="log-details">${log.details || ''}</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // =====================================================
+        // EVENTOS
+        // =====================================================
+        function attachEvents() {
+            const loginForm = document.getElementById('loginForm');
+            if (loginForm) loginForm.addEventListener('submit', handleLogin);
+
+            const novedadForm = document.getElementById('novedadForm');
+            if (novedadForm) novedadForm.addEventListener('submit', handleSubmitNovedad);
+
+            Object.keys(fieldLabels).forEach(f => {
+                const input = document.getElementById(`newName_${f}`);
+                if (input) {
+                    input.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); addNameToConfig(f); }
+                    });
+                }
+            });
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const btn = document.getElementById('loginBtn');
+            const errorDiv = document.getElementById('loginError');
+            
+            btn.disabled = true;
+            btn.textContent = 'Ingresando...';
+            
+            const user = users.find(u => u.username === username && u.password === password);
+            
+            if (user) {
+                currentUser = user;
+                await addLog('LOGIN', 'Inicio de sesión');
+                showNotification(`Bienvenido, ${user.nombre}`);
+                render();
+            } else {
+                errorDiv.textContent = 'Usuario o contraseña incorrectos';
+                errorDiv.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Iniciar Sesión';
+            }
+        }
+
+        async function handleLogout() {
+            await addLog('LOGOUT', 'Cierre de sesión');
+            currentUser = null;
+            currentView = 'list';
+            showNotification('Sesión cerrada');
+            render();
+        }
+
+        function setView(view) {
+            currentView = view;
+            editingNovedad = null;
+            render();
+        }
+
+        function toggleExpand(id) {
+            expandedId = expandedId === id ? null : id;
+            render();
+        }
+
+        async function toggleCheck(novedadId, checkKey) {
+            const novedad = novedades.find(n => n.id === novedadId);
+            if (!novedad.checks) novedad.checks = {};
+            novedad.checks[checkKey] = !novedad.checks[checkKey];
+            novedad.modificado_por = currentUser.username;
+            await saveNovedad(novedad);
+            await addLog('MARCAR_TAREA', `${novedad.checks[checkKey] ? 'Completó' : 'Desmarcó'} "${checkLabels[checkKey]}" en ${novedad.numero_novedad}`);
+            render();
+        }
+
+        async function handleSubmitNovedad(e) {
+            e.preventDefault();
+            
+            const data = {
+                numero_novedad: document.getElementById('numeroNovedad').value,
+                numero_sgsp: document.getElementById('numeroSgsp').value,
+                informeActuacion: document.getElementById('informeActuacion').value,
+                informeCriminalistico: document.getElementById('informeCriminalistico').value,
+                informePericial: document.getElementById('informePericial').value,
+                croquis: document.getElementById('croquis').value,
+                checks: {
+                    actuacionRealizada: document.getElementById('actuacionRealizada').checked,
+                    criminalisticoRealizado: document.getElementById('criminalisticoRealizado').checked,
+                    pericialRealizado: document.getElementById('pericialRealizado').checked,
+                    croquisRealizado: document.getElementById('croquisRealizado').checked
+                }
+            };
+
+            if (editingNovedad) {
+                Object.assign(editingNovedad, data);
+                editingNovedad.modificado_por = currentUser.username;
+                await saveNovedad(editingNovedad);
+                await addLog('EDITAR_NOVEDAD', `Editó novedad: ${data.numero_novedad}`);
+                showNotification('Novedad actualizada');
+            } else {
+                data.creado_por = currentUser.username;
+                const newNovedad = await saveNovedad(data);
+                if (newNovedad) novedades.unshift(newNovedad);
+                await addLog('CREAR_NOVEDAD', `Creó novedad: ${data.numero_novedad}`);
+                showNotification('Novedad registrada');
+            }
+
+            editingNovedad = null;
+            currentView = 'list';
+            render();
+        }
+
+        function cancelForm() {
+            editingNovedad = null;
+            currentView = 'list';
+            render();
+        }
+
+        function editNovedad(id) {
+            editingNovedad = novedades.find(n => n.id === id);
+            currentView = 'form';
+            render();
+        }
+
+        async function deleteNovedad(id) {
+            if (confirm('¿Está seguro de eliminar este registro?')) {
+                const novedad = novedades.find(n => n.id === id);
+                await deleteNovedadDB(id);
+                novedades = novedades.filter(n => n.id !== id);
+                await addLog('ELIMINAR_NOVEDAD', `Eliminó novedad: ${novedad.numero_novedad}`);
+                showNotification('Registro eliminado');
+                expandedId = null;
+                render();
+            }
+        }
+
+        async function addNameToConfig(field) {
+            const input = document.getElementById(`newName_${field}`);
+            const name = input.value.trim();
+            if (!name) return;
+            config[field].push(name);
+            await saveConfig();
+            await addLog('AGREGAR_NOMBRE', `Agregó "${name}" a ${fieldLabels[field]}`);
+            showNotification('Nombre agregado');
+            render();
+        }
+
+        async function removeName(field, index) {
+            const name = config[field][index];
+            config[field].splice(index, 1);
+            await saveConfig();
+            await addLog('ELIMINAR_NOMBRE', `Eliminó "${name}" de ${fieldLabels[field]}`);
+            showNotification('Nombre eliminado');
+            render();
+        }
+
+        // =====================================================
+        // MODALS
+        // =====================================================
+        function showStatsModal() {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">📊 Estadísticas</h2>
+                        <button class="close-btn" onclick="this.closest('.modal').remove()">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="stat-row"><span>Total de Registros</span><span class="stat-num">${novedades.length}</span></div>
+                        <div class="stat-row"><span>Actuaciones Completadas</span><span class="stat-num">${novedades.filter(n => n.checks?.actuacionRealizada).length}</span></div>
+                        <div class="stat-row"><span>Criminalísticos Completados</span><span class="stat-num">${novedades.filter(n => n.checks?.criminalisticoRealizado).length}</span></div>
+                        <div class="stat-row"><span>Periciales Completados</span><span class="stat-num">${novedades.filter(n => n.checks?.pericialRealizado).length}</span></div>
+                        <div class="stat-row"><span>Croquis Completados</span><span class="stat-num">${novedades.filter(n => n.checks?.croquisRealizado).length}</span></div>
+                        <div class="stat-row" style="border-top:2px solid #e2e8f0;padding-top:12px;margin-top:8px"><span>100% Completadas</span><span class="stat-num green">${novedades.filter(n => getCompletionCount(n) === 4).length}</span></div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function showChangePasswordModal() {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">🔑 Cambiar Contraseña</h2>
+                        <button class="close-btn" onclick="this.closest('.modal').remove()">✕</button>
+                    </div>
+                    <form class="modal-body" onsubmit="handleChangePassword(event)">
+                        <div class="input-group"><label class="input-label">Contraseña Actual</label><input type="password" class="input" id="currentPassword" required></div>
+                        <div class="input-group"><label class="input-label">Nueva Contraseña</label><input type="password" class="input" id="newPassword" required></div>
+                        <div class="input-group"><label class="input-label">Confirmar Contraseña</label><input type="password" class="input" id="confirmPassword" required></div>
+                        <div class="modal-actions"><button type="button" class="btn-secondary" onclick="this.closest('.modal').remove()">Cancelar</button><button type="submit" class="btn-primary">Guardar</button></div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        async function handleChangePassword(e) {
+            e.preventDefault();
+            const current = document.getElementById('currentPassword').value;
+            const newPass = document.getElementById('newPassword').value;
+            const confirm = document.getElementById('confirmPassword').value;
+
+            if (current !== currentUser.password) { showNotification('Contraseña actual incorrecta', 'error'); return; }
+            if (newPass !== confirm) { showNotification('Las contraseñas no coinciden', 'error'); return; }
+            if (newPass.length < 4) { showNotification('Mínimo 4 caracteres', 'error'); return; }
+
+            currentUser.password = newPass;
+            await saveUser(currentUser);
+            const idx = users.findIndex(u => u.id === currentUser.id);
+            users[idx].password = newPass;
+            await addLog('CAMBIO_CONTRASEÑA', 'Cambió su contraseña');
+            showNotification('Contraseña actualizada');
+            document.querySelector('.modal').remove();
+        }
+
+        function showCreateUserModal() {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header"><h2 class="modal-title">👤 Nuevo Usuario</h2><button class="close-btn" onclick="this.closest('.modal').remove()">✕</button></div>
+                    <form class="modal-body" onsubmit="handleCreateUser(event)">
+                        <div class="input-group"><label class="input-label">Nombre de Usuario</label><input type="text" class="input" id="newUsername" required></div>
+                        <div class="input-group"><label class="input-label">Nombre Completo</label><input type="text" class="input" id="newNombre" required></div>
+                        <div class="input-group"><label class="input-label">Contraseña</label><input type="password" class="input" id="newUserPassword" required></div>
+                        <div class="input-group"><label class="input-label">Rol</label><select class="select" id="newUserRole"><option value="user">Usuario</option><option value="admin">Administrador</option></select></div>
+                        <div class="modal-actions"><button type="button" class="btn-secondary" onclick="this.closest('.modal').remove()">Cancelar</button><button type="submit" class="btn-primary">Crear</button></div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        async function handleCreateUser(e) {
+            e.preventDefault();
+            const username = document.getElementById('newUsername').value;
+            const nombre = document.getElementById('newNombre').value;
+            const password = document.getElementById('newUserPassword').value;
+            const role = document.getElementById('newUserRole').value;
+
+            if (users.find(u => u.username === username)) { showNotification('Usuario ya existe', 'error'); return; }
+            if (password.length < 4) { showNotification('Mínimo 4 caracteres', 'error'); return; }
+
+            const newUser = await saveUser({ username, nombre, password, role });
+            if (newUser) users.push(newUser);
+            await addLog('CREAR_USUARIO', `Creó usuario: ${username}`);
+            showNotification('Usuario creado');
+            document.querySelector('.modal').remove();
+            render();
+        }
+
+        function showEditUserModal(id) {
+            const user = users.find(u => u.id === id);
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header"><h2 class="modal-title">✏️ Editar Usuario</h2><button class="close-btn" onclick="this.closest('.modal').remove()">✕</button></div>
+                    <form class="modal-body" onsubmit="handleEditUser(event, ${id})">
+                        <div class="input-group"><label class="input-label">Usuario</label><input type="text" class="input" value="${user.username}" disabled style="background:#f1f5f9"></div>
+                        <div class="input-group"><label class="input-label">Nombre Completo</label><input type="text" class="input" id="editNombre" value="${user.nombre}" required></div>
+                        <div class="input-group"><label class="input-label">Nueva Contraseña (opcional)</label><input type="password" class="input" id="editPassword"></div>
+                        <div class="input-group"><label class="input-label">Rol</label><select class="select" id="editRole"><option value="user" ${user.role==='user'?'selected':''}>Usuario</option><option value="admin" ${user.role==='admin'?'selected':''}>Administrador</option></select></div>
+                        <div class="modal-actions"><button type="button" class="btn-secondary" onclick="this.closest('.modal').remove()">Cancelar</button><button type="submit" class="btn-primary">Guardar</button></div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        async function handleEditUser(e, id) {
+            e.preventDefault();
+            const user = users.find(u => u.id === id);
+            user.nombre = document.getElementById('editNombre').value;
+            user.role = document.getElementById('editRole').value;
+            const newPassword = document.getElementById('editPassword').value;
+            if (newPassword) user.password = newPassword;
+            await saveUser(user);
+            await addLog('EDITAR_USUARIO', `Editó usuario: ${user.username}`);
+            showNotification('Usuario actualizado');
+            document.querySelector('.modal').remove();
+            render();
+        }
+
+        async function deleteUser(id) {
+            const user = users.find(u => u.id === id);
+            if (user.id === currentUser.id) { showNotification('No puedes eliminarte', 'error'); return; }
+            if (user.role === 'admin' && users.filter(u => u.role === 'admin').length === 1) { showNotification('Debe haber al menos un admin', 'error'); return; }
+            if (confirm(`¿Eliminar usuario ${user.username}?`)) {
+                await deleteUserDB(id);
+                users = users.filter(u => u.id !== id);
+                await addLog('ELIMINAR_USUARIO', `Eliminó usuario: ${user.username}`);
+                showNotification('Usuario eliminado');
+                render();
+            }
+        }
+
+        // =====================================================
+        // INICIAR
+        // =====================================================
+        loadData();
+    </script>
+</body>
+</html>
