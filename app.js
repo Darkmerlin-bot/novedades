@@ -17,7 +17,7 @@ const Notification = ({ message, type }) => (
   </div>
 );
 
-// 3. ENCABEZADO MEJORADO
+// 3. ENCABEZADO
 const Header = ({ user, currentView, setView, onLogout, onShowStats, onShowPass }) => (
   <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
     <div className="max-w-5xl mx-auto p-4">
@@ -86,28 +86,14 @@ const App = () => {
 
   const loadData = async () => {
     try {
-      // Cargamos usuarios
       const { data: userData } = await sb.from('users').select('*').order('nombre');
       setUsers(userData || []);
-
-      // Cargamos novedades
       const { data: novData } = await sb.from('novedades').select('*').order('created_at', { ascending: false });
       setNovedades(novData || []);
-
-      // Cargamos configuración con maybeSingle para evitar errores si está vacía
       const { data: confData } = await sb.from('config').select('*').limit(1).maybeSingle();
-      if (confData && confData.data) {
-        setConfig(confData.data);
-      } else {
-        // Valores iniciales si la tabla config está vacía
-        const initialCfg = { informeActuacion: [], informeCriminalistico: [], informePericial: [], croquis: [] };
-        setConfig(initialCfg);
-      }
-
-      // Cargamos logs
+      if (confData && confData.data) setConfig(confData.data);
       const { data: logData } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(100);
       setLogs(logData || []);
-
     } catch (e) {
       console.error("Critical Load Error:", e);
       showNotify("Error al conectar con la base de datos", "error");
@@ -125,7 +111,7 @@ const App = () => {
     if (user) {
       setCurrentUser(user);
       addLog('LOGIN', 'Ingreso exitoso al sistema');
-      showNotify(`Bienvenido, ${user.nombre}`);
+      showNotify('Bienvenido, ' + user.nombre);
     } else {
       showNotify("Usuario o contraseña incorrectos", "error");
     }
@@ -138,7 +124,7 @@ const App = () => {
     const { error } = await sb.from('novedades').update({ checks: newChecks, modificado_por: currentUser.username }).eq('id', id);
     if (!error) {
       setNovedades(novedades.map(n => n.id === id ? { ...n, checks: newChecks } : n));
-      addLog('MARCA_CHECK', `Cambió estado de ${key} en ${nov.numero_novedad}`);
+      addLog('MARCA_CHECK', 'Cambió estado de ' + key + ' en ' + nov.numero_novedad);
     }
   };
 
@@ -172,18 +158,11 @@ const App = () => {
 
   return (
     <div className="pb-20 min-h-screen bg-slate-50 font-sans">
-      <Header 
-        user={currentUser} 
-        currentView={currentView} 
-        setView={v => { setCurrentView(v); setEditingNovedad(null); setEditingUser(null); if(v === 'logs' || v === 'users') loadData(); }} 
-        onLogout={() => { addLog('LOGOUT', 'Cierre de sesión manual'); setCurrentUser(null); }} 
-        onShowStats={() => setShowStats(true)} 
-        onShowPass={() => setShowPassModal(true)}
-      />
+      <Header user={currentUser} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setEditingUser(null); if(v === 'logs' || v === 'users') loadData(); }} onLogout={() => { addLog('LOGOUT', 'Cierre de sesión manual'); setCurrentUser(null); }} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         
-        {/* VISTA LISTA DE NOVEDADES */}
+        {/* VISTA LISTA */}
         {currentView === 'list' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center mb-8">
@@ -212,9 +191,16 @@ const App = () => {
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${compCount === 4 ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
                           {compCount}/4
                         </div>
-                        <div>
-                          <div className="font-black text-slate-800 text-lg leading-none mb-1">{n.numero_novedad}</div>
-                          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">SGSP: {n.numero_sgsp}</div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <span className="font-black text-slate-800 text-lg leading-none">{n.numero_novedad}</span>
+                            {n.titulo && (
+                              <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                                {n.titulo}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">SGSP: {n.numero_sgsp}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
@@ -226,6 +212,12 @@ const App = () => {
                     </div>
                     {isEx && (
                       <div className="px-6 pb-6 border-t border-slate-50 animate-fadeIn">
+                         {n.titulo && (
+                           <div className="py-4 border-b border-slate-50">
+                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Título / Descripción:</span>
+                             <p className="text-slate-700 font-bold mt-1">{n.titulo}</p>
+                           </div>
+                         )}
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
                             <div className="space-y-3">
                               <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-50 pb-2">Asignaciones Personal</h4>
@@ -238,10 +230,10 @@ const App = () => {
                                <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-50 pb-2">Checklist de Tareas</h4>
                                {['actuacionRealizada', 'criminalisticoRealizado', 'pericialRealizado', 'croquisRealizado'].map(key => (
                                  <label key={key} className="flex items-center gap-4 py-2 cursor-pointer group select-none">
-                                   <div onClick={() => handleToggleCheck(n.id, key)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks[key] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}`}>
-                                     {n.checks[key] && <span className="text-white text-[10px]">✓</span>}
+                                   <div onClick={() => handleToggleCheck(n.id, key)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[key] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}`}>
+                                     {n.checks && n.checks[key] && <span className="text-white text-[10px]">✓</span>}
                                    </div>
-                                   <span className={`text-xs font-bold transition-all ${n.checks[key] ? 'text-slate-300 line-through' : 'text-slate-600 group-hover:text-slate-900'}`}>
+                                   <span className={`text-xs font-bold transition-all ${n.checks && n.checks[key] ? 'text-slate-300 line-through' : 'text-slate-600 group-hover:text-slate-900'}`}>
                                      {key.replace(/([A-Z])/g, ' $1').replace('Realizado', ' Realizada').replace('actuacion', 'Actuación')}
                                    </span>
                                  </label>
@@ -255,7 +247,7 @@ const App = () => {
                            </div>
                            <div className="flex gap-2">
                               <button onClick={() => { setEditingNovedad(n); setCurrentView('form'); }} className="text-[10px] bg-slate-100 px-4 py-2 rounded-xl font-black text-slate-600 hover:bg-slate-200 uppercase tracking-widest transition-colors">Editar</button>
-                              <button onClick={async () => { if(confirm("¿Eliminar este registro permanentemente?")){ await sb.from('novedades').delete().eq('id', n.id); addLog('BORRAR_REGISTRO', `Eliminó registro ${n.numero_novedad}`); loadData(); showNotify("Registro eliminado"); } }} className="text-[10px] bg-red-50 px-4 py-2 rounded-xl font-black text-red-500 hover:bg-red-100 uppercase tracking-widest transition-colors">Eliminar</button>
+                              <button onClick={async () => { if(confirm("¿Eliminar este registro permanentemente?")){ await sb.from('novedades').delete().eq('id', n.id); addLog('BORRAR_REGISTRO', 'Eliminó registro ' + n.numero_novedad); loadData(); showNotify("Registro eliminado"); } }} className="text-[10px] bg-red-50 px-4 py-2 rounded-xl font-black text-red-500 hover:bg-red-100 uppercase tracking-widest transition-colors">Eliminar</button>
                            </div>
                          </div>
                       </div>
@@ -267,7 +259,7 @@ const App = () => {
           </div>
         )}
 
-        {/* VISTA FORMULARIO CREAR/EDITAR */}
+        {/* VISTA FORMULARIO */}
         {currentView === 'form' && (
           <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden max-w-2xl mx-auto animate-slideUp border border-slate-100">
             <div className="p-10 bg-slate-900 text-white flex justify-between items-center">
@@ -283,6 +275,7 @@ const App = () => {
               const payload = {
                 numero_novedad: d.get('nov'),
                 numero_sgsp: d.get('sgsp'),
+                titulo: d.get('titulo') || null,
                 informeActuacion: d.get('ia'),
                 informeCriminalistico: d.get('ic'),
                 informePericial: d.get('ip'),
@@ -292,11 +285,11 @@ const App = () => {
               
               if (editingNovedad) {
                 await sb.from('novedades').update({ ...payload, modificado_por: currentUser.username }).eq('id', editingNovedad.id);
-                addLog('EDITAR_REGISTRO', `Editó registro ${payload.numero_novedad}`);
+                addLog('EDITAR_REGISTRO', 'Editó registro ' + payload.numero_novedad);
                 showNotify("Información actualizada con éxito");
               } else {
                 await sb.from('novedades').insert([{ ...payload, creado_por: currentUser.username }]);
-                addLog('CREAR_REGISTRO', `Creó registro ${payload.numero_novedad}`);
+                addLog('CREAR_REGISTRO', 'Creó registro ' + payload.numero_novedad);
                 showNotify("Registro guardado en la base de datos");
               }
               loadData();
@@ -311,6 +304,11 @@ const App = () => {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">N° SGSP *</label>
                   <input name="sgsp" defaultValue={editingNovedad?.numero_sgsp} required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold" placeholder="SGSP-XXXX" />
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Título / Descripción breve</label>
+                <input name="titulo" defaultValue={editingNovedad?.titulo || ''} className="w-full p-4 bg-emerald-50 border border-emerald-100 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold text-emerald-700 placeholder-emerald-300" placeholder="Ej: Robo en comercio, Accidente vehicular, etc." />
               </div>
 
               <div className="space-y-6 pt-4">
@@ -340,7 +338,7 @@ const App = () => {
           </div>
         )}
 
-        {/* VISTA GESTIÓN USUARIOS (Solo Admin) */}
+        {/* VISTA USUARIOS */}
         {currentView === 'users' && currentUser.role === 'admin' && (
           <div className="space-y-6 animate-fadeIn">
             <div className="flex justify-between items-end mb-8">
@@ -354,9 +352,7 @@ const App = () => {
               {users.map(u => (
                 <div key={u.id} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-all">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-lg shadow-lg">
-                      {u.nombre.charAt(0).toUpperCase()}
-                    </div>
+                    <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-lg shadow-lg">{u.nombre.charAt(0).toUpperCase()}</div>
                     <div>
                       <div className="font-black text-slate-800">{u.nombre}</div>
                       <div className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.15em] flex items-center gap-2">
@@ -368,7 +364,7 @@ const App = () => {
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => setEditingUser(u)} className="p-2.5 hover:bg-slate-50 rounded-xl transition-colors">✏️</button>
                     {u.id !== currentUser.id && (
-                      <button onClick={async () => { if(confirm("¿Eliminar acceso para este usuario?")){ await sb.from('users').delete().eq('id', u.id); addLog('BORRAR_USUARIO', `Eliminó acceso de @${u.username}`); loadData(); } }} className="p-2.5 hover:bg-red-50 text-red-400 rounded-xl transition-colors">🗑️</button>
+                      <button onClick={async () => { if(confirm("¿Eliminar acceso para este usuario?")){ await sb.from('users').delete().eq('id', u.id); addLog('BORRAR_USUARIO', 'Eliminó acceso de @' + u.username); loadData(); } }} className="p-2.5 hover:bg-red-50 text-red-400 rounded-xl transition-colors">🗑️</button>
                     )}
                   </div>
                 </div>
@@ -377,76 +373,77 @@ const App = () => {
           </div>
         )}
 
-        {/* VISTA AUDITORÍA LOGS (Solo Admin) */}
+        {/* VISTA LOGS */}
         {currentView === 'logs' && currentUser.role === 'admin' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-3xl font-black text-slate-800 tracking-tight">Auditoría</h2>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Historial de Acciones Recientes</p>
+          <div className="space-y-4 animate-fadeIn">
+            <div className="mb-8">
+              <h2 className="text-3xl font-black text-slate-800 tracking-tight">Auditoría</h2>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Registro de Actividades del Sistema</p>
+            </div>
+            {logs.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-[2rem] border border-slate-100"><p className="text-slate-400 font-bold">No hay registros de auditoría.</p></div>
+            ) : (
+              <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden">
+                <div className="max-h-[600px] overflow-y-auto">
+                  {logs.map((log, i) => (
+                    <div key={log.id || i} className="p-5 border-b border-slate-50 last:border-0 flex items-start gap-4 hover:bg-slate-50/50 transition-colors">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-sm shrink-0">
+                        {log.action === 'LOGIN' ? '🔓' : log.action === 'LOGOUT' ? '🚪' : log.action.includes('CREAR') || log.action.includes('NUEVO') ? '➕' : log.action.includes('EDITAR') || log.action.includes('MOD') ? '✏️' : log.action.includes('BORRAR') ? '🗑️' : '📝'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-black text-slate-800 text-sm">{log.nombre}</span>
+                          <span className="text-[10px] text-slate-400 font-bold">@{log.username}</span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">{log.details}</p>
+                        <span className="text-[9px] text-slate-300 font-bold uppercase tracking-widest mt-2 inline-block">{log.action} • {new Date(log.created_at).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <button onClick={loadData} className="p-3 bg-white border border-slate-100 rounded-2xl shadow-sm hover:bg-slate-50 transition-colors">🔄</button>
-            </div>
-            <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
-               <div className="overflow-x-auto">
-                 <table className="w-full text-left text-xs">
-                   <thead className="bg-slate-900 text-white font-black uppercase tracking-widest">
-                     <tr>
-                       <th className="p-5">Fecha y Hora</th>
-                       <th className="p-5">Personal</th>
-                       <th className="p-5">Acción</th>
-                       <th className="p-5">Detalles</th>
-                     </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-50">
-                     {logs.map(l => (
-                       <tr key={l.id} className="hover:bg-slate-50/50 transition-colors">
-                         <td className="p-5 text-slate-400 font-mono text-[10px]">{new Date(l.created_at).toLocaleString()}</td>
-                         <td className="p-5 font-black text-slate-700">{l.nombre} <span className="text-[9px] text-slate-300 ml-1 font-bold">@{l.username}</span></td>
-                         <td className="p-5"><span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg font-black text-[9px] border border-emerald-100 uppercase tracking-tighter">{l.action}</span></td>
-                         <td className="p-5 text-slate-500 font-medium">{l.details}</td>
-                       </tr>
-                     ))}
-                   </tbody>
-                 </table>
-               </div>
-            </div>
+            )}
           </div>
         )}
 
-        {/* VISTA CONFIG LISTAS (Solo Admin) */}
+        {/* VISTA CONFIG */}
         {currentView === 'config' && currentUser.role === 'admin' && (
-          <div className="space-y-8 animate-fadeIn">
-             <div>
-               <h2 className="text-3xl font-black text-slate-800 tracking-tight">Listas Maestras</h2>
-               <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Configuración de Desplegables</p>
-             </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {['informeActuacion', 'informeCriminalistico', 'informePericial', 'croquis'].map(key => (
-                  <div key={key} className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col h-full">
-                    <h3 className="font-black text-slate-800 mb-5 uppercase tracking-widest text-xs border-b border-slate-50 pb-3">{key.replace(/([A-Z])/g, ' $1').replace('informe', 'Personal')}</h3>
-                    <div className="space-y-2 mb-6 flex-1 max-h-48 overflow-y-auto no-scrollbar pr-2">
-                      {(config[key] || []).map((name, i) => (
-                        <div key={i} className="flex justify-between items-center bg-slate-50 px-4 py-3 rounded-2xl group border border-slate-100">
-                          <span className="text-xs font-bold text-slate-600">{name}</span>
+          <div className="space-y-6 animate-fadeIn">
+            <div className="mb-8">
+              <h2 className="text-3xl font-black text-slate-800 tracking-tight">Configuración</h2>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Administrar listas de personal disponible</p>
+            </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {Object.entries({ informeActuacion: 'Informe Actuación', informeCriminalistico: 'Criminalístico', informePericial: 'Pericial', croquis: 'Croquis' }).map(([key, label]) => (
+                  <div key={key} className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+                    <h3 className="font-black text-slate-800 mb-4 flex items-center gap-2">
+                      <span className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600 text-sm">👤</span>
+                      {label}
+                    </h3>
+                    <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+                      {(config[key] || []).map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group">
+                          <span className="font-bold text-sm text-slate-700">{item}</span>
                           <button onClick={async () => {
-                            const newCfg = { ...config, [key]: config[key].filter((_, idx) => idx !== i) };
+                            const newList = config[key].filter((_, i) => i !== idx);
+                            const newCfg = { ...config, [key]: newList };
                             await sb.from('config').upsert({ id: 1, data: newCfg });
                             setConfig(newCfg);
-                          }} className="text-red-400 opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110">✕</button>
+                            showNotify("Elemento eliminado");
+                          }} className="text-red-400 opacity-0 group-hover:opacity-100 transition-opacity text-sm hover:text-red-600">✕</button>
                         </div>
                       ))}
-                      {(config[key] || []).length === 0 && <p className="text-[10px] text-slate-300 italic py-4">Sin personal registrado.</p>}
+                      {(!config[key] || config[key].length === 0) && (<p className="text-center text-slate-300 text-xs py-4">Lista vacía</p>)}
                     </div>
                     <div className="flex gap-2">
-                       <input id={`in-${key}`} placeholder="Agregar nombre..." className="flex-1 p-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-1 focus:ring-emerald-500" />
+                       <input id={`in-${key}`} placeholder="Nuevo nombre..." className="flex-1 p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
                        <button onClick={async () => {
-                         const val = document.getElementById(`in-${key}`).value.trim();
+                         const val = document.getElementById('in-' + key).value.trim();
                          if(!val) return;
                          const newCfg = { ...config, [key]: [...(config[key] || []), val] };
                          await sb.from('config').upsert({ id: 1, data: newCfg });
                          setConfig(newCfg);
-                         document.getElementById(`in-${key}`).value = '';
+                         document.getElementById('in-' + key).value = '';
                          showNotify("Lista actualizada");
                        }} className="bg-emerald-500 text-white w-12 h-12 rounded-2xl font-black shadow-lg shadow-emerald-500/20 hover:scale-105 transition-transform">+</button>
                     </div>
@@ -457,7 +454,7 @@ const App = () => {
         )}
       </main>
 
-      {/* MODAL GESTIÓN USUARIO */}
+      {/* MODAL USUARIO */}
       {editingUser && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4">
            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
@@ -471,10 +468,10 @@ const App = () => {
                const data = { nombre: f.get('nom'), username: f.get('user'), password: f.get('pass'), role: f.get('role') };
                if (editingUser.id) {
                  await sb.from('users').update(data).eq('id', editingUser.id);
-                 addLog('MOD_USUARIO', `Modificó cuenta de @${data.username}`);
+                 addLog('MOD_USUARIO', 'Modificó cuenta de @' + data.username);
                } else {
                  await sb.from('users').insert([data]);
-                 addLog('NUEVO_USUARIO', `Creó cuenta para @${data.username}`);
+                 addLog('NUEVO_USUARIO', 'Creó cuenta para @' + data.username);
                }
                loadData();
                setEditingUser(null);
@@ -493,7 +490,7 @@ const App = () => {
         </div>
       )}
 
-      {/* MODAL CAMBIO PASSWORD PERSONAL */}
+      {/* MODAL PASSWORD */}
       {showPassModal && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4">
            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
@@ -520,7 +517,7 @@ const App = () => {
         </div>
       )}
 
-      {/* MODAL ESTADÍSTICAS RÁPIDAS */}
+      {/* MODAL STATS */}
       {showStats && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setShowStats(false)}>
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp" onClick={e => e.stopPropagation()}>
@@ -536,9 +533,7 @@ const App = () => {
                   </div>
                   <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100 shadow-sm">
                     <div className="text-4xl font-black text-emerald-600 leading-none mb-1">
-                      {novedades.filter(n => {
-                        try { return Object.values(n.checks || {}).every(v => v); } catch(e) { return false; }
-                      }).length}
+                      {novedades.filter(n => { try { return Object.values(n.checks || {}).every(v => v); } catch(e) { return false; } }).length}
                     </div>
                     <div className="text-[9px] uppercase font-black text-emerald-500 tracking-widest">Terminados</div>
                   </div>
@@ -547,18 +542,12 @@ const App = () => {
                  <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
                    <span>Progreso Global</span>
                    <span className="text-emerald-500">
-                     {novedades.length ? Math.round((novedades.filter(n => {
-                       try { return Object.values(n.checks || {}).every(v => v); } catch(e) { return false; }
-                     }).length / novedades.length) * 100) : 0}%
+                     {novedades.length ? Math.round((novedades.filter(n => { try { return Object.values(n.checks || {}).every(v => v); } catch(e) { return false; } }).length / novedades.length) * 100) : 0}%
                    </span>
                  </div>
                  <div className="h-3 bg-slate-100 rounded-full overflow-hidden p-0.5">
-                   <div 
-                     className="h-full bg-emerald-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                     style={{ width: `${novedades.length ? (novedades.filter(n => {
-                        try { return Object.values(n.checks || {}).every(v => v); } catch(e) { return false; }
-                      }).length / novedades.length) * 100 : 0}%` }}
-                   ></div>
+                   <div className="h-full bg-emerald-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                     style={{ width: (novedades.length ? (novedades.filter(n => { try { return Object.values(n.checks || {}).every(v => v); } catch(e) { return false; } }).length / novedades.length) * 100 : 0) + '%' }}></div>
                  </div>
                </div>
                <button onClick={() => setShowStats(false)} className="w-full py-4 bg-slate-100 rounded-2xl font-black text-slate-400 uppercase tracking-widest text-[10px] hover:bg-slate-200 transition-colors">Cerrar Reporte</button>
@@ -572,6 +561,5 @@ const App = () => {
   );
 };
 
-// Renderizado final
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
