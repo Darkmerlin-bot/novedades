@@ -9,9 +9,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // 2. COMPONENTE DE NOTIFICACIÓN
 const Notification = ({ message, type }) => (
-  <div className={`fixed top-6 right-6 z-[200] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-slideInRight border-l-4 ${
-    type === 'success' ? 'bg-white border-emerald-500 text-slate-800' : 'bg-red-500 border-red-700 text-white'
-  }`}>
+  <div className={`fixed top-6 right-6 z-[200] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-slideInRight border-l-4 ${type === 'success' ? 'bg-white border-emerald-500 text-slate-800' : 'bg-red-500 border-red-700 text-white'}`}>
     <span className="text-xl">{type === 'success' ? '✅' : '⚠️'}</span>
     <span className="font-bold text-sm">{message}</span>
   </div>
@@ -55,7 +53,28 @@ const Header = ({ user, currentView, setView, onLogout, onShowStats, onShowPass 
   </header>
 );
 
-// 4. APLICACIÓN PRINCIPAL
+// 4. MODAL DE PENDIENTES AL INICIAR SESIÓN
+const PendingModal = ({ count, onClose }) => (
+  <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[150] flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
+      <div className="p-8 bg-red-500 text-white text-center">
+        <div className="text-6xl mb-4">⚠️</div>
+        <h3 className="font-black uppercase tracking-widest text-lg">Atención</h3>
+      </div>
+      <div className="p-10 text-center">
+        <p className="text-slate-600 font-bold text-lg mb-2">Tienes tareas pendientes</p>
+        <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 my-6">
+          <span className="text-5xl font-black text-red-500">{count}</span>
+          <p className="text-red-400 font-bold text-sm mt-2 uppercase tracking-widest">{count === 1 ? 'Novedad asignada' : 'Novedades asignadas'}</p>
+        </div>
+        <p className="text-slate-400 text-sm">Las novedades pendientes aparecen marcadas en <span className="text-red-500 font-bold">rojo</span> en la lista.</p>
+        <button onClick={onClose} className="w-full mt-8 py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:bg-slate-800 transition-colors">Entendido</button>
+      </div>
+    </div>
+  </div>
+);
+
+// 5. APLICACIÓN PRINCIPAL
 const App = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [novedades, setNovedades] = useState([]);
@@ -68,6 +87,8 @@ const App = () => {
   const [notification, setNotification] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [showPassModal, setShowPassModal] = useState(false);
+  const [showPendingModal, setShowPendingModal] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const [expandedId, setExpandedId] = useState(null);
 
   const showNotify = (message, type = 'success') => {
@@ -86,7 +107,7 @@ const App = () => {
     try {
       const { data: userData } = await sb.from('users').select('*').order('nombre');
       setUsers(userData || []);
-      const { data: novData } = await sb.from('novedades').select('*').order('created_at', { ascending: false });
+      const { data: novData } = await sb.from('novedades').select('*').order('numero_novedad', { ascending: true });
       setNovedades(novData || []);
       const { data: logData } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(100);
       setLogs(logData || []);
@@ -102,44 +123,45 @@ const App = () => {
 
   useEffect(() => { loadData(); }, []);
 
+  const getUserAssignment = (novedad, user) => {
+    if (!user) return { isAssigned: false, assignments: [] };
+    const userName = user.nombre;
+    const assignments = [];
+    if (novedad.informeActuacion === userName) assignments.push({ field: 'informeActuacion', checkKey: 'actuacionRealizada', label: 'Informe Actuación' });
+    if (novedad.informeCriminalistico === userName) assignments.push({ field: 'informeCriminalistico', checkKey: 'criminalisticoRealizado', label: 'Criminalístico' });
+    if (novedad.informePericial === userName) assignments.push({ field: 'informePericial', checkKey: 'pericialRealizado', label: 'Pericial' });
+    if (novedad.croquis === userName) assignments.push({ field: 'croquis', checkKey: 'croquisRealizado', label: 'Croquis' });
+    return { isAssigned: assignments.length > 0, assignments };
+  };
+
+  const areUserTasksComplete = (novedad, assignments) => {
+    if (assignments.length === 0) return false;
+    return assignments.every(a => novedad.checks && novedad.checks[a.checkKey]);
+  };
+
+  const countPendingTasks = (user, novedadesList) => {
+    let count = 0;
+    novedadesList.forEach(n => {
+      const { isAssigned, assignments } = getUserAssignment(n, user);
+      if (isAssigned && !areUserTasksComplete(n, assignments)) count++;
+    });
+    return count;
+  };
+
   const handleLogin = (u, p) => {
     const user = users.find(usr => usr.username.toLowerCase() === u.toLowerCase() && usr.password === p);
     if (user) {
       setCurrentUser(user);
       addLog('LOGIN', 'Ingreso exitoso al sistema');
       showNotify('Bienvenido, ' + user.nombre);
+      const pending = countPendingTasks(user, novedades);
+      if (pending > 0) {
+        setPendingCount(pending);
+        setShowPendingModal(true);
+      }
     } else {
       showNotify("Usuario o contraseña incorrectos", "error");
     }
-  };
-
-  // Función para verificar si el usuario actual está asignado a una novedad
-  const getUserAssignment = (novedad) => {
-    if (!currentUser) return { isAssigned: false, assignments: [] };
-    
-    const userName = currentUser.nombre;
-    const assignments = [];
-    
-    if (novedad.informeActuacion === userName) {
-      assignments.push({ field: 'informeActuacion', checkKey: 'actuacionRealizada', label: 'Informe Actuación' });
-    }
-    if (novedad.informeCriminalistico === userName) {
-      assignments.push({ field: 'informeCriminalistico', checkKey: 'criminalisticoRealizado', label: 'Criminalístico' });
-    }
-    if (novedad.informePericial === userName) {
-      assignments.push({ field: 'informePericial', checkKey: 'pericialRealizado', label: 'Pericial' });
-    }
-    if (novedad.croquis === userName) {
-      assignments.push({ field: 'croquis', checkKey: 'croquisRealizado', label: 'Croquis' });
-    }
-    
-    return { isAssigned: assignments.length > 0, assignments };
-  };
-
-  // Verificar si todas las tareas asignadas al usuario están completadas
-  const areUserTasksComplete = (novedad, assignments) => {
-    if (assignments.length === 0) return false;
-    return assignments.every(a => novedad.checks && novedad.checks[a.checkKey]);
   };
 
   const handleToggleCheck = async (id, key) => {
@@ -193,25 +215,15 @@ const App = () => {
             <div className="flex justify-between items-center mb-8">
               <div>
                 <h2 className="text-3xl font-black text-slate-800 tracking-tight">Registros</h2>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Historial de Actuaciones</p>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Ordenados por N° de Novedad</p>
               </div>
               <button onClick={() => setCurrentView('form')} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl shadow-slate-900/20 hover:scale-105 transition-transform uppercase tracking-widest">+ Nuevo</button>
             </div>
 
-            {/* LEYENDA DE COLORES */}
             <div className="flex flex-wrap gap-4 mb-6 p-4 bg-white rounded-2xl border border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-red-500"></div>
-                <span className="text-xs font-bold text-slate-600">Asignado a ti (pendiente)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-emerald-500"></div>
-                <span className="text-xs font-bold text-slate-600">Asignado a ti (completado)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-slate-200"></div>
-                <span className="text-xs font-bold text-slate-600">No asignado a ti</span>
-              </div>
+              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-red-500"></div><span className="text-xs font-bold text-slate-600">Asignado a ti (pendiente)</span></div>
+              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-emerald-500"></div><span className="text-xs font-bold text-slate-600">Asignado a ti (completado)</span></div>
+              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-slate-200"></div><span className="text-xs font-bold text-slate-600">No asignado a ti</span></div>
             </div>
             
             {novedades.length === 0 && (
@@ -225,67 +237,38 @@ const App = () => {
               {novedades.map(n => {
                 const compCount = Object.values(n.checks || {}).filter(Boolean).length;
                 const isEx = expandedId === n.id;
-                const { isAssigned, assignments } = getUserAssignment(n);
+                const { isAssigned, assignments } = getUserAssignment(n, currentUser);
                 const userTasksComplete = areUserTasksComplete(n, assignments);
                 
-                // Determinar el color del borde según asignación
-                let borderColor = 'border-slate-100'; // blanco/neutro
-                let bgColor = 'bg-white';
-                let leftBorder = '';
-                
+                let borderColor = 'border-slate-100', bgColor = 'bg-white', leftBorder = '';
                 if (isAssigned) {
-                  if (userTasksComplete) {
-                    borderColor = 'border-emerald-200';
-                    bgColor = 'bg-emerald-50/30';
-                    leftBorder = 'border-l-4 border-l-emerald-500';
-                  } else {
-                    borderColor = 'border-red-200';
-                    bgColor = 'bg-red-50/30';
-                    leftBorder = 'border-l-4 border-l-red-500';
-                  }
+                  if (userTasksComplete) { borderColor = 'border-emerald-200'; bgColor = 'bg-emerald-50/30'; leftBorder = 'border-l-4 border-l-emerald-500'; }
+                  else { borderColor = 'border-red-200'; bgColor = 'bg-red-50/30'; leftBorder = 'border-l-4 border-l-red-500'; }
                 }
                 
                 return (
                   <div key={n.id} className={`${bgColor} rounded-3xl shadow-sm border ${borderColor} ${leftBorder} overflow-hidden transition-all hover:shadow-lg`}>
                     <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setExpandedId(isEx ? null : n.id)}>
                       <div className="flex items-center gap-5">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${compCount === 4 ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
-                          {compCount}/4
-                        </div>
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${compCount === 4 ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>{compCount}/4</div>
                         <div className="flex-1">
                           <div className="flex items-center gap-3 flex-wrap">
                             <span className="font-black text-slate-800 text-lg leading-none">{n.numero_novedad}</span>
-                            {n.titulo && (
-                              <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-                                {n.titulo}
-                              </span>
-                            )}
-                            {isAssigned && (
-                              <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${userTasksComplete ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
-                                {userTasksComplete ? '✓ Completado' : '⚠ Pendiente'}
-                              </span>
-                            )}
+                            {n.titulo && <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">{n.titulo}</span>}
+                            {isAssigned && <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${userTasksComplete ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>{userTasksComplete ? '✓ Completado' : '⚠ Pendiente'}</span>}
                           </div>
                           <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">SGSP: {n.numero_sgsp}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        <span className="hidden sm:inline text-[10px] text-slate-400 font-black uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
-                          {new Date(n.created_at).toLocaleDateString()}
-                        </span>
+                        <span className="hidden sm:inline text-[10px] text-slate-400 font-black uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">{new Date(n.created_at).toLocaleDateString()}</span>
                         <span className={`text-slate-300 text-xs transition-transform duration-300 ${isEx ? 'rotate-180' : ''}`}>▼</span>
                       </div>
                     </div>
                     {isEx && (
                       <div className="px-6 pb-6 border-t border-slate-50 animate-fadeIn">
-                         {n.titulo && (
-                           <div className="py-4 border-b border-slate-50">
-                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Título / Descripción:</span>
-                             <p className="text-slate-700 font-bold mt-1">{n.titulo}</p>
-                           </div>
-                         )}
+                         {n.titulo && <div className="py-4 border-b border-slate-50"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Título / Descripción:</span><p className="text-slate-700 font-bold mt-1">{n.titulo}</p></div>}
                          
-                         {/* Mostrar tareas asignadas al usuario actual */}
                          {isAssigned && (
                            <div className="py-4 border-b border-slate-100 bg-slate-50 -mx-6 px-6 my-4">
                              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">📌 Tus tareas asignadas:</span>
@@ -295,9 +278,7 @@ const App = () => {
                                    <div onClick={() => handleToggleCheck(n.id, a.checkKey)} className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[a.checkKey] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-red-300 bg-red-50 group-hover:border-red-400'}`}>
                                      {n.checks && n.checks[a.checkKey] && <span className="text-white text-sm">✓</span>}
                                    </div>
-                                   <span className={`text-sm font-bold transition-all ${n.checks && n.checks[a.checkKey] ? 'text-emerald-600 line-through' : 'text-red-600 group-hover:text-red-700'}`}>
-                                     {a.label}
-                                   </span>
+                                   <span className={`text-sm font-bold transition-all ${n.checks && n.checks[a.checkKey] ? 'text-emerald-600 line-through' : 'text-red-600 group-hover:text-red-700'}`}>{a.label}</span>
                                  </label>
                                ))}
                              </div>
@@ -307,21 +288,13 @@ const App = () => {
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
                             <div className="space-y-3">
                               <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-50 pb-2">Asignaciones Personal</h4>
-                              {[
-                                { field: 'informeActuacion', label: 'Informe Actuación', checkKey: 'actuacionRealizada' },
-                                { field: 'informeCriminalistico', label: 'Criminalístico', checkKey: 'criminalisticoRealizado' },
-                                { field: 'informePericial', label: 'Pericial', checkKey: 'pericialRealizado' },
-                                { field: 'croquis', label: 'Croquis', checkKey: 'croquisRealizado' }
-                              ].map(item => {
+                              {[{ field: 'informeActuacion', label: 'Informe Actuación', checkKey: 'actuacionRealizada' },{ field: 'informeCriminalistico', label: 'Criminalístico', checkKey: 'criminalisticoRealizado' },{ field: 'informePericial', label: 'Pericial', checkKey: 'pericialRealizado' },{ field: 'croquis', label: 'Croquis', checkKey: 'croquisRealizado' }].map(item => {
                                 const isMe = n[item.field] === currentUser.nombre;
                                 const isDone = n.checks && n.checks[item.checkKey];
                                 return (
                                   <div key={item.field} className={`flex justify-between items-center text-xs py-1.5 px-2 rounded-lg ${isMe ? (isDone ? 'bg-emerald-50' : 'bg-red-50') : ''}`}>
                                     <span className="text-slate-500 font-bold">{item.label}:</span>
-                                    <span className={`font-black ${isMe ? (isDone ? 'text-emerald-600' : 'text-red-600') : 'text-slate-800'}`}>
-                                      {n[item.field] || '---'}
-                                      {isMe && <span className="ml-1">{isDone ? '✓' : '←'}</span>}
-                                    </span>
+                                    <span className={`font-black ${isMe ? (isDone ? 'text-emerald-600' : 'text-red-600') : 'text-slate-800'}`}>{n[item.field] || '---'}{isMe && <span className="ml-1">{isDone ? '✓' : '←'}</span>}</span>
                                   </div>
                                 );
                               })}
@@ -329,14 +302,8 @@ const App = () => {
                             <div className="space-y-3">
                                <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-50 pb-2">Checklist de Tareas</h4>
                                {['actuacionRealizada', 'criminalisticoRealizado', 'pericialRealizado', 'croquisRealizado'].map(key => {
-                                 const fieldMap = {
-                                   actuacionRealizada: 'informeActuacion',
-                                   criminalisticoRealizado: 'informeCriminalistico',
-                                   pericialRealizado: 'informePericial',
-                                   croquisRealizado: 'croquis'
-                                 };
+                                 const fieldMap = { actuacionRealizada: 'informeActuacion', criminalisticoRealizado: 'informeCriminalistico', pericialRealizado: 'informePericial', croquisRealizado: 'croquis' };
                                  const isMyTask = n[fieldMap[key]] === currentUser.nombre;
-                                 
                                  return (
                                    <label key={key} className={`flex items-center gap-4 py-2 cursor-pointer group select-none rounded-lg px-2 ${isMyTask ? 'bg-slate-50' : ''}`}>
                                      <div onClick={() => handleToggleCheck(n.id, key)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[key] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}`}>
@@ -356,12 +323,14 @@ const App = () => {
                              <span className="text-[9px] text-slate-300 font-bold uppercase">Cargado por: {n.creado_por}</span>
                              {n.modificado_por && <span className="text-[9px] text-emerald-400 font-bold uppercase">Últ. Mod: {n.modificado_por}</span>}
                            </div>
-                           {currentUser.role === 'admin' && (
-                             <div className="flex gap-2">
-                                <button onClick={() => { setEditingNovedad(n); setCurrentView('form'); }} className="text-[10px] bg-slate-100 px-4 py-2 rounded-xl font-black text-slate-600 hover:bg-slate-200 uppercase tracking-widest transition-colors">Editar</button>
+                           <div className="flex gap-2">
+                              {/* Todos pueden editar */}
+                              <button onClick={() => { setEditingNovedad(n); setCurrentView('form'); }} className="text-[10px] bg-slate-100 px-4 py-2 rounded-xl font-black text-slate-600 hover:bg-slate-200 uppercase tracking-widest transition-colors">Editar</button>
+                              {/* Solo admin puede eliminar */}
+                              {currentUser.role === 'admin' && (
                                 <button onClick={async () => { if(confirm("¿Eliminar este registro permanentemente?")){ await sb.from('novedades').delete().eq('id', n.id); addLog('BORRAR_REGISTRO', 'Eliminó registro ' + n.numero_novedad); loadData(); showNotify("Registro eliminado"); } }} className="text-[10px] bg-red-50 px-4 py-2 rounded-xl font-black text-red-500 hover:bg-red-100 uppercase tracking-widest transition-colors">Eliminar</button>
-                             </div>
-                           )}
+                              )}
+                           </div>
                          </div>
                       </div>
                     )}
@@ -425,14 +394,9 @@ const App = () => {
               </div>
 
               <div className="space-y-6 pt-4">
-                <h3 className="text-[11px] font-black text-slate-300 uppercase tracking-[0.3em] border-b border-slate-50 pb-3">Personal Asignado (seleccionar de usuarios registrados)</h3>
+                <h3 className="text-[11px] font-black text-slate-300 uppercase tracking-[0.3em] border-b border-slate-50 pb-3">Personal Asignado</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                   {[
-                     { name: 'ia', field: 'informeActuacion', label: 'Informe Actuación' },
-                     { name: 'ic', field: 'informeCriminalistico', label: 'Criminalístico' },
-                     { name: 'ip', field: 'informePericial', label: 'Pericial' },
-                     { name: 'cr', field: 'croquis', label: 'Croquis' }
-                   ].map(item => (
+                   {[{ name: 'ia', field: 'informeActuacion', label: 'Informe Actuación' },{ name: 'ic', field: 'informeCriminalistico', label: 'Criminalístico' },{ name: 'ip', field: 'informePericial', label: 'Pericial' },{ name: 'cr', field: 'croquis', label: 'Croquis' }].map(item => (
                      <div key={item.name} className="space-y-1.5">
                        <label className="text-[10px] font-black text-slate-500 uppercase ml-1">{item.label}</label>
                        <select name={item.name} defaultValue={editingNovedad ? editingNovedad[item.field] : ''} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold text-sm cursor-pointer">
@@ -452,7 +416,7 @@ const App = () => {
           </div>
         )}
 
-        {/* VISTA USUARIOS */}
+        {/* VISTA USUARIOS - Solo Admin */}
         {currentView === 'users' && currentUser.role === 'admin' && (
           <div className="space-y-6 animate-fadeIn">
             <div className="flex justify-between items-end mb-8">
@@ -462,11 +426,9 @@ const App = () => {
               </div>
               <button onClick={() => setEditingUser({ nombre: '', username: '', password: '', role: 'user' })} className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg">+ Nuevo Usuario</button>
             </div>
-            
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6">
               <p className="text-xs text-amber-700 font-bold">💡 Los usuarios registrados aquí aparecerán en las listas desplegables para asignar tareas.</p>
             </div>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {users.map(u => (
                 <div key={u.id} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-all">
@@ -492,7 +454,7 @@ const App = () => {
           </div>
         )}
 
-        {/* VISTA LOGS */}
+        {/* VISTA LOGS - Solo Admin */}
         {currentView === 'logs' && currentUser.role === 'admin' && (
           <div className="space-y-4 animate-fadeIn">
             <div className="mb-8">
@@ -550,13 +512,13 @@ const App = () => {
                showNotify("Datos de usuario guardados");
              }}>
                <input name="nom" defaultValue={editingUser.nombre} placeholder="Nombre Completo (aparecerá en listas)" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm" />
-               <input name="user" defaultValue={editingUser.username} placeholder="Username para login (ej: j.gonzalez)" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm" />
-               <input name="pass" defaultValue={editingUser.password} placeholder="Contraseña de acceso" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm" />
+               <input name="user" defaultValue={editingUser.username} placeholder="Username para login" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm" />
+               <input name="pass" defaultValue={editingUser.password} placeholder="Contraseña" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm" />
                <select name="role" defaultValue={editingUser.role} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm cursor-pointer">
-                 <option value="user">Personal Estándar</option>
-                 <option value="admin">Administrador General</option>
+                 <option value="user">Usuario</option>
+                 <option value="admin">Administrador</option>
                </select>
-               <button className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl mt-4">Confirmar y Guardar</button>
+               <button className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl mt-4">Guardar</button>
              </form>
            </div>
         </div>
@@ -567,23 +529,21 @@ const App = () => {
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4">
            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
              <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
-               <h3 className="font-black uppercase tracking-widest text-sm">Seguridad de Cuenta</h3>
+               <h3 className="font-black uppercase tracking-widest text-sm">Cambiar Contraseña</h3>
                <button onClick={() => setShowPassModal(false)} className="text-slate-500 hover:text-white transition-colors">✕</button>
              </div>
              <form className="p-8 space-y-5" onSubmit={async (e) => {
                e.preventDefault();
                const pass = e.target.pass.value;
-               if(pass.length < 4) return alert("La contraseña debe tener al menos 4 caracteres");
-               const { error } = await sb.from('users').update({ password: pass }).eq('id', currentUser.id);
-               if(!error) {
-                 addLog('CAMBIO_PASS', 'Actualizó su propia clave de acceso');
-                 showNotify("Tu contraseña ha sido actualizada");
-                 setShowPassModal(false);
-               }
+               if(pass.length < 4) return alert("Mínimo 4 caracteres");
+               await sb.from('users').update({ password: pass }).eq('id', currentUser.id);
+               addLog('CAMBIO_PASS', 'Actualizó su contraseña');
+               showNotify("Contraseña actualizada");
+               setShowPassModal(false);
              }}>
-               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed">Establezca una nueva clave privada para su perfil operativo (@{currentUser.username})</p>
-               <input name="pass" type="password" placeholder="Nueva Clave..." required className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold" />
-               <button className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl">Actualizar Clave</button>
+               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Nueva clave para @{currentUser.username}</p>
+               <input name="pass" type="password" placeholder="Nueva Contraseña..." required className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold" />
+               <button className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl">Guardar</button>
              </form>
            </div>
         </div>
@@ -594,7 +554,7 @@ const App = () => {
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setShowStats(false)}>
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp" onClick={e => e.stopPropagation()}>
             <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
-              <h3 className="font-black uppercase tracking-widest text-sm">Rendimiento Operativo</h3>
+              <h3 className="font-black uppercase tracking-widest text-sm">Estadísticas</h3>
               <button onClick={() => setShowStats(false)} className="text-slate-500 hover:text-white transition-colors">✕</button>
             </div>
             <div className="p-10 space-y-8 text-center">
@@ -604,33 +564,31 @@ const App = () => {
                     <div className="text-[9px] uppercase font-black text-slate-400 tracking-widest">Registros</div>
                   </div>
                   <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100 shadow-sm">
-                    <div className="text-4xl font-black text-emerald-600 leading-none mb-1">
-                      {novedades.filter(n => { try { return Object.values(n.checks || {}).every(v => v); } catch(e) { return false; } }).length}
-                    </div>
-                    <div className="text-[9px] uppercase font-black text-emerald-500 tracking-widest">Terminados</div>
+                    <div className="text-4xl font-black text-emerald-600 leading-none mb-1">{novedades.filter(n => Object.values(n.checks || {}).every(v => v)).length}</div>
+                    <div className="text-[9px] uppercase font-black text-emerald-500 tracking-widest">Completados</div>
                   </div>
                </div>
-               
-               {/* Stats del usuario actual */}
                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Tus asignaciones</div>
                  <div className="grid grid-cols-2 gap-3">
                    <div className="bg-red-50 p-3 rounded-xl border border-red-100">
-                     <div className="text-2xl font-black text-red-500">{novedades.filter(n => { const {isAssigned, assignments} = getUserAssignment(n); return isAssigned && !areUserTasksComplete(n, assignments); }).length}</div>
+                     <div className="text-2xl font-black text-red-500">{countPendingTasks(currentUser, novedades)}</div>
                      <div className="text-[8px] font-black text-red-400 uppercase">Pendientes</div>
                    </div>
                    <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                     <div className="text-2xl font-black text-emerald-500">{novedades.filter(n => { const {isAssigned, assignments} = getUserAssignment(n); return isAssigned && areUserTasksComplete(n, assignments); }).length}</div>
+                     <div className="text-2xl font-black text-emerald-500">{novedades.filter(n => { const {isAssigned, assignments} = getUserAssignment(n, currentUser); return isAssigned && areUserTasksComplete(n, assignments); }).length}</div>
                      <div className="text-[8px] font-black text-emerald-400 uppercase">Completadas</div>
                    </div>
                  </div>
                </div>
-               
-               <button onClick={() => setShowStats(false)} className="w-full py-4 bg-slate-100 rounded-2xl font-black text-slate-400 uppercase tracking-widest text-[10px] hover:bg-slate-200 transition-colors">Cerrar Reporte</button>
+               <button onClick={() => setShowStats(false)} className="w-full py-4 bg-slate-100 rounded-2xl font-black text-slate-400 uppercase tracking-widest text-[10px] hover:bg-slate-200 transition-colors">Cerrar</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* MODAL PENDIENTES AL LOGIN */}
+      {showPendingModal && <PendingModal count={pendingCount} onClose={() => setShowPendingModal(false)} />}
 
       {notification && <Notification {...notification} />}
     </div>
