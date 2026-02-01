@@ -16,7 +16,7 @@ const Notification = ({ message, type }) => (
 );
 
 // 3. ENCABEZADO
-const Header = ({ user, currentView, setView, onLogout, onShowStats, onShowPass }) => (
+const Header = ({ user, currentView, setView, onLogout, onShowStats, onShowPass, pendingCount, completedCount }) => (
   <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
@@ -34,13 +34,20 @@ const Header = ({ user, currentView, setView, onLogout, onShowStats, onShowPass 
           </div>
           <div className="flex gap-1.5">
             <button onClick={onShowPass} className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all" title="Seguridad">🔑</button>
-            <button onClick={onShowStats} className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all" title="Estadísticas">📊</button>
+            {user.role === 'admin' && <button onClick={onShowStats} className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all" title="Estadísticas">📊</button>}
             <button onClick={onLogout} className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all" title="Salir">🚪</button>
           </div>
         </div>
       </div>
       <nav className="flex gap-1 overflow-x-auto pb-1 no-scrollbar border-t border-slate-800 pt-3">
-        <button onClick={() => setView('list')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'list' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>📁 Lista</button>
+        <button onClick={() => setView('list')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${currentView === 'list' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+          📁 Pendientes
+          {pendingCount > 0 && <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black">{pendingCount}</span>}
+        </button>
+        <button onClick={() => setView('completed')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${currentView === 'completed' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+          ✅ Completados
+          {completedCount > 0 && <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-black">{completedCount}</span>}
+        </button>
         <button onClick={() => setView('form')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'form' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>➕ Nueva</button>
         {user.role === 'admin' && (
           <>
@@ -139,7 +146,12 @@ const App = () => {
     return assignments.every(a => novedad.checks && novedad.checks[a.checkKey]);
   };
 
-  const countPendingTasks = (user, novedadesList) => {
+  const isNovedadComplete = (novedad) => {
+    if (!novedad.checks) return false;
+    return Object.values(novedad.checks).every(v => v);
+  };
+
+  const countUserPendingTasks = (user, novedadesList) => {
     let count = 0;
     novedadesList.forEach(n => {
       const { isAssigned, assignments } = getUserAssignment(n, user);
@@ -148,13 +160,64 @@ const App = () => {
     return count;
   };
 
+  // Ordenar novedades: primero las asignadas al usuario, luego por número
+  const sortNovedades = (list, user) => {
+    return [...list].sort((a, b) => {
+      const aAssigned = getUserAssignment(a, user).isAssigned;
+      const bAssigned = getUserAssignment(b, user).isAssigned;
+      const aComplete = areUserTasksComplete(a, getUserAssignment(a, user).assignments);
+      const bComplete = areUserTasksComplete(b, getUserAssignment(b, user).assignments);
+      
+      // Primero: asignadas y pendientes del usuario
+      if (aAssigned && !aComplete && !(bAssigned && !bComplete)) return -1;
+      if (bAssigned && !bComplete && !(aAssigned && !aComplete)) return 1;
+      
+      // Segundo: ordenar por número de novedad
+      return (a.numero_novedad || '').localeCompare(b.numero_novedad || '');
+    });
+  };
+
+  // Filtrar novedades pendientes (no todas las tareas completas)
+  const pendingNovedades = sortNovedades(novedades.filter(n => !isNovedadComplete(n)), currentUser);
+  
+  // Filtrar novedades completadas (todas las tareas completas)
+  const completedNovedades = novedades.filter(n => isNovedadComplete(n)).sort((a, b) => (a.numero_novedad || '').localeCompare(b.numero_novedad || ''));
+
+  // Estadísticas por usuario
+  const getUserStats = (user) => {
+    let asignadas = 0;
+    let completadas = 0;
+    
+    novedades.forEach(n => {
+      // Contar asignaciones
+      if (n.informeActuacion === user.nombre) {
+        asignadas++;
+        if (n.checks && n.checks.actuacionRealizada) completadas++;
+      }
+      if (n.informeCriminalistico === user.nombre) {
+        asignadas++;
+        if (n.checks && n.checks.criminalisticoRealizado) completadas++;
+      }
+      if (n.informePericial === user.nombre) {
+        asignadas++;
+        if (n.checks && n.checks.pericialRealizado) completadas++;
+      }
+      if (n.croquis === user.nombre) {
+        asignadas++;
+        if (n.checks && n.checks.croquisRealizado) completadas++;
+      }
+    });
+    
+    return { asignadas, completadas, pendientes: asignadas - completadas };
+  };
+
   const handleLogin = (u, p) => {
     const user = users.find(usr => usr.username.toLowerCase() === u.toLowerCase() && usr.password === p);
     if (user) {
       setCurrentUser(user);
       addLog('LOGIN', 'Ingreso exitoso al sistema');
       showNotify('Bienvenido, ' + user.nombre);
-      const pending = countPendingTasks(user, novedades);
+      const pending = countUserPendingTasks(user, novedades);
       if (pending > 0) {
         setPendingCount(pending);
         setShowPendingModal(true);
@@ -203,140 +266,177 @@ const App = () => {
     );
   }
 
+  // Componente de tarjeta de novedad reutilizable
+  const NovedadCard = ({ n, isCompletedView }) => {
+    const compCount = Object.values(n.checks || {}).filter(Boolean).length;
+    const isEx = expandedId === n.id;
+    const { isAssigned, assignments } = getUserAssignment(n, currentUser);
+    const userTasksComplete = areUserTasksComplete(n, assignments);
+    
+    let borderColor = 'border-slate-100', bgColor = 'bg-white', leftBorder = '';
+    if (!isCompletedView && isAssigned) {
+      if (userTasksComplete) { borderColor = 'border-emerald-200'; bgColor = 'bg-emerald-50/30'; leftBorder = 'border-l-4 border-l-emerald-500'; }
+      else { borderColor = 'border-red-200'; bgColor = 'bg-red-50/30'; leftBorder = 'border-l-4 border-l-red-500'; }
+    }
+    if (isCompletedView) {
+      borderColor = 'border-emerald-200'; bgColor = 'bg-emerald-50/20'; leftBorder = 'border-l-4 border-l-emerald-500';
+    }
+    
+    return (
+      <div className={`${bgColor} rounded-3xl shadow-sm border ${borderColor} ${leftBorder} overflow-hidden transition-all hover:shadow-lg`}>
+        <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setExpandedId(isEx ? null : n.id)}>
+          <div className="flex items-center gap-5">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${compCount === 4 ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>{compCount}/4</div>
+            <div className="flex-1">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="font-black text-slate-800 text-lg leading-none">{n.numero_novedad}</span>
+                {n.titulo && <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">{n.titulo}</span>}
+                {!isCompletedView && isAssigned && <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${userTasksComplete ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>{userTasksComplete ? '✓ Tu tarea lista' : '⚠ Pendiente'}</span>}
+                {isCompletedView && <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-emerald-500 text-white">✓ Completado</span>}
+              </div>
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">SGSP: {n.numero_sgsp}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="hidden sm:inline text-[10px] text-slate-400 font-black uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">{new Date(n.created_at).toLocaleDateString()}</span>
+            <span className={`text-slate-300 text-xs transition-transform duration-300 ${isEx ? 'rotate-180' : ''}`}>▼</span>
+          </div>
+        </div>
+        {isEx && (
+          <div className="px-6 pb-6 border-t border-slate-50 animate-fadeIn">
+             {n.titulo && <div className="py-4 border-b border-slate-50"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Título / Descripción:</span><p className="text-slate-700 font-bold mt-1">{n.titulo}</p></div>}
+             
+             {!isCompletedView && isAssigned && (
+               <div className="py-4 border-b border-slate-100 bg-slate-50 -mx-6 px-6 my-4">
+                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">📌 Tus tareas asignadas:</span>
+                 <div className="mt-3 space-y-2">
+                   {assignments.map(a => (
+                     <label key={a.checkKey} className="flex items-center gap-4 py-2 cursor-pointer group select-none">
+                       <div onClick={() => handleToggleCheck(n.id, a.checkKey)} className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[a.checkKey] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-red-300 bg-red-50 group-hover:border-red-400'}`}>
+                         {n.checks && n.checks[a.checkKey] && <span className="text-white text-sm">✓</span>}
+                       </div>
+                       <span className={`text-sm font-bold transition-all ${n.checks && n.checks[a.checkKey] ? 'text-emerald-600 line-through' : 'text-red-600 group-hover:text-red-700'}`}>{a.label}</span>
+                     </label>
+                   ))}
+                 </div>
+               </div>
+             )}
+             
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
+                <div className="space-y-3">
+                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-50 pb-2">Asignaciones Personal</h4>
+                  {[{ field: 'informeActuacion', label: 'Informe Actuación', checkKey: 'actuacionRealizada' },{ field: 'informeCriminalistico', label: 'Criminalístico', checkKey: 'criminalisticoRealizado' },{ field: 'informePericial', label: 'Pericial', checkKey: 'pericialRealizado' },{ field: 'croquis', label: 'Croquis', checkKey: 'croquisRealizado' }].map(item => {
+                    const isMe = n[item.field] === currentUser.nombre;
+                    const isDone = n.checks && n.checks[item.checkKey];
+                    return (
+                      <div key={item.field} className={`flex justify-between items-center text-xs py-1.5 px-2 rounded-lg ${isMe ? (isDone ? 'bg-emerald-50' : 'bg-red-50') : ''}`}>
+                        <span className="text-slate-500 font-bold">{item.label}:</span>
+                        <span className={`font-black ${isMe ? (isDone ? 'text-emerald-600' : 'text-red-600') : 'text-slate-800'}`}>{n[item.field] || '---'}{isMe && <span className="ml-1">{isDone ? '✓' : '←'}</span>}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="space-y-3">
+                   <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-50 pb-2">Checklist de Tareas</h4>
+                   {['actuacionRealizada', 'criminalisticoRealizado', 'pericialRealizado', 'croquisRealizado'].map(key => {
+                     const fieldMap = { actuacionRealizada: 'informeActuacion', criminalisticoRealizado: 'informeCriminalistico', pericialRealizado: 'informePericial', croquisRealizado: 'croquis' };
+                     const isMyTask = n[fieldMap[key]] === currentUser.nombre;
+                     return (
+                       <label key={key} className={`flex items-center gap-4 py-2 cursor-pointer group select-none rounded-lg px-2 ${isMyTask ? 'bg-slate-50' : ''}`}>
+                         <div onClick={() => handleToggleCheck(n.id, key)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[key] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}`}>
+                           {n.checks && n.checks[key] && <span className="text-white text-[10px]">✓</span>}
+                         </div>
+                         <span className={`text-xs font-bold transition-all ${n.checks && n.checks[key] ? 'text-slate-300 line-through' : 'text-slate-600 group-hover:text-slate-900'}`}>
+                           {key.replace(/([A-Z])/g, ' $1').replace('Realizado', ' Realizada').replace('actuacion', 'Actuación')}
+                           {isMyTask && <span className="ml-1 text-[9px] text-emerald-500 font-black">(TÚ)</span>}
+                         </span>
+                       </label>
+                     );
+                   })}
+                </div>
+             </div>
+             <div className="pt-6 flex justify-between items-center border-t border-slate-50">
+               <div className="flex flex-col">
+                 <span className="text-[9px] text-slate-300 font-bold uppercase">Cargado por: {n.creado_por}</span>
+                 {n.modificado_por && <span className="text-[9px] text-emerald-400 font-bold uppercase">Últ. Mod: {n.modificado_por}</span>}
+               </div>
+               <div className="flex gap-2">
+                  <button onClick={() => { setEditingNovedad(n); setCurrentView('form'); }} className="text-[10px] bg-slate-100 px-4 py-2 rounded-xl font-black text-slate-600 hover:bg-slate-200 uppercase tracking-widest transition-colors">Editar</button>
+                  {currentUser.role === 'admin' && (
+                    <button onClick={async () => { if(confirm("¿Eliminar este registro permanentemente?")){ await sb.from('novedades').delete().eq('id', n.id); addLog('BORRAR_REGISTRO', 'Eliminó registro ' + n.numero_novedad); loadData(); showNotify("Registro eliminado"); } }} className="text-[10px] bg-red-50 px-4 py-2 rounded-xl font-black text-red-500 hover:bg-red-100 uppercase tracking-widest transition-colors">Eliminar</button>
+                  )}
+               </div>
+             </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="pb-20 min-h-screen bg-slate-50 font-sans">
-      <Header user={currentUser} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setEditingUser(null); if(v === 'logs' || v === 'users') loadData(); }} onLogout={() => { addLog('LOGOUT', 'Cierre de sesión manual'); setCurrentUser(null); }} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} />
+      <Header 
+        user={currentUser} 
+        currentView={currentView} 
+        setView={v => { setCurrentView(v); setEditingNovedad(null); setEditingUser(null); if(v === 'logs' || v === 'users') loadData(); }} 
+        onLogout={() => { addLog('LOGOUT', 'Cierre de sesión manual'); setCurrentUser(null); }} 
+        onShowStats={() => setShowStats(true)} 
+        onShowPass={() => setShowPassModal(true)}
+        pendingCount={pendingNovedades.length}
+        completedCount={completedNovedades.length}
+      />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         
-        {/* VISTA LISTA */}
+        {/* VISTA LISTA PENDIENTES */}
         {currentView === 'list' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center mb-8">
               <div>
-                <h2 className="text-3xl font-black text-slate-800 tracking-tight">Registros</h2>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Ordenados por N° de Novedad</p>
+                <h2 className="text-3xl font-black text-slate-800 tracking-tight">Pendientes</h2>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Tus asignaciones aparecen primero</p>
               </div>
               <button onClick={() => setCurrentView('form')} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl shadow-slate-900/20 hover:scale-105 transition-transform uppercase tracking-widest">+ Nuevo</button>
             </div>
 
             <div className="flex flex-wrap gap-4 mb-6 p-4 bg-white rounded-2xl border border-slate-100">
               <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-red-500"></div><span className="text-xs font-bold text-slate-600">Asignado a ti (pendiente)</span></div>
-              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-emerald-500"></div><span className="text-xs font-bold text-slate-600">Asignado a ti (completado)</span></div>
+              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-emerald-500"></div><span className="text-xs font-bold text-slate-600">Asignado a ti (tu tarea lista)</span></div>
               <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-slate-200"></div><span className="text-xs font-bold text-slate-600">No asignado a ti</span></div>
             </div>
             
-            {novedades.length === 0 && (
+            {pendingNovedades.length === 0 && (
               <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-200">
-                <div className="text-5xl mb-4 grayscale opacity-30">📂</div>
-                <p className="text-slate-400 font-bold">No se encontraron registros activos.</p>
+                <div className="text-5xl mb-4">🎉</div>
+                <p className="text-slate-400 font-bold">¡No hay novedades pendientes!</p>
               </div>
             )}
 
             <div className="grid gap-4">
-              {novedades.map(n => {
-                const compCount = Object.values(n.checks || {}).filter(Boolean).length;
-                const isEx = expandedId === n.id;
-                const { isAssigned, assignments } = getUserAssignment(n, currentUser);
-                const userTasksComplete = areUserTasksComplete(n, assignments);
-                
-                let borderColor = 'border-slate-100', bgColor = 'bg-white', leftBorder = '';
-                if (isAssigned) {
-                  if (userTasksComplete) { borderColor = 'border-emerald-200'; bgColor = 'bg-emerald-50/30'; leftBorder = 'border-l-4 border-l-emerald-500'; }
-                  else { borderColor = 'border-red-200'; bgColor = 'bg-red-50/30'; leftBorder = 'border-l-4 border-l-red-500'; }
-                }
-                
-                return (
-                  <div key={n.id} className={`${bgColor} rounded-3xl shadow-sm border ${borderColor} ${leftBorder} overflow-hidden transition-all hover:shadow-lg`}>
-                    <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setExpandedId(isEx ? null : n.id)}>
-                      <div className="flex items-center gap-5">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${compCount === 4 ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>{compCount}/4</div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <span className="font-black text-slate-800 text-lg leading-none">{n.numero_novedad}</span>
-                            {n.titulo && <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">{n.titulo}</span>}
-                            {isAssigned && <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${userTasksComplete ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>{userTasksComplete ? '✓ Completado' : '⚠ Pendiente'}</span>}
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">SGSP: {n.numero_sgsp}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="hidden sm:inline text-[10px] text-slate-400 font-black uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">{new Date(n.created_at).toLocaleDateString()}</span>
-                        <span className={`text-slate-300 text-xs transition-transform duration-300 ${isEx ? 'rotate-180' : ''}`}>▼</span>
-                      </div>
-                    </div>
-                    {isEx && (
-                      <div className="px-6 pb-6 border-t border-slate-50 animate-fadeIn">
-                         {n.titulo && <div className="py-4 border-b border-slate-50"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Título / Descripción:</span><p className="text-slate-700 font-bold mt-1">{n.titulo}</p></div>}
-                         
-                         {isAssigned && (
-                           <div className="py-4 border-b border-slate-100 bg-slate-50 -mx-6 px-6 my-4">
-                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">📌 Tus tareas asignadas:</span>
-                             <div className="mt-3 space-y-2">
-                               {assignments.map(a => (
-                                 <label key={a.checkKey} className="flex items-center gap-4 py-2 cursor-pointer group select-none">
-                                   <div onClick={() => handleToggleCheck(n.id, a.checkKey)} className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[a.checkKey] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-red-300 bg-red-50 group-hover:border-red-400'}`}>
-                                     {n.checks && n.checks[a.checkKey] && <span className="text-white text-sm">✓</span>}
-                                   </div>
-                                   <span className={`text-sm font-bold transition-all ${n.checks && n.checks[a.checkKey] ? 'text-emerald-600 line-through' : 'text-red-600 group-hover:text-red-700'}`}>{a.label}</span>
-                                 </label>
-                               ))}
-                             </div>
-                           </div>
-                         )}
-                         
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
-                            <div className="space-y-3">
-                              <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-50 pb-2">Asignaciones Personal</h4>
-                              {[{ field: 'informeActuacion', label: 'Informe Actuación', checkKey: 'actuacionRealizada' },{ field: 'informeCriminalistico', label: 'Criminalístico', checkKey: 'criminalisticoRealizado' },{ field: 'informePericial', label: 'Pericial', checkKey: 'pericialRealizado' },{ field: 'croquis', label: 'Croquis', checkKey: 'croquisRealizado' }].map(item => {
-                                const isMe = n[item.field] === currentUser.nombre;
-                                const isDone = n.checks && n.checks[item.checkKey];
-                                return (
-                                  <div key={item.field} className={`flex justify-between items-center text-xs py-1.5 px-2 rounded-lg ${isMe ? (isDone ? 'bg-emerald-50' : 'bg-red-50') : ''}`}>
-                                    <span className="text-slate-500 font-bold">{item.label}:</span>
-                                    <span className={`font-black ${isMe ? (isDone ? 'text-emerald-600' : 'text-red-600') : 'text-slate-800'}`}>{n[item.field] || '---'}{isMe && <span className="ml-1">{isDone ? '✓' : '←'}</span>}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <div className="space-y-3">
-                               <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-50 pb-2">Checklist de Tareas</h4>
-                               {['actuacionRealizada', 'criminalisticoRealizado', 'pericialRealizado', 'croquisRealizado'].map(key => {
-                                 const fieldMap = { actuacionRealizada: 'informeActuacion', criminalisticoRealizado: 'informeCriminalistico', pericialRealizado: 'informePericial', croquisRealizado: 'croquis' };
-                                 const isMyTask = n[fieldMap[key]] === currentUser.nombre;
-                                 return (
-                                   <label key={key} className={`flex items-center gap-4 py-2 cursor-pointer group select-none rounded-lg px-2 ${isMyTask ? 'bg-slate-50' : ''}`}>
-                                     <div onClick={() => handleToggleCheck(n.id, key)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[key] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}`}>
-                                       {n.checks && n.checks[key] && <span className="text-white text-[10px]">✓</span>}
-                                     </div>
-                                     <span className={`text-xs font-bold transition-all ${n.checks && n.checks[key] ? 'text-slate-300 line-through' : 'text-slate-600 group-hover:text-slate-900'}`}>
-                                       {key.replace(/([A-Z])/g, ' $1').replace('Realizado', ' Realizada').replace('actuacion', 'Actuación')}
-                                       {isMyTask && <span className="ml-1 text-[9px] text-emerald-500 font-black">(TÚ)</span>}
-                                     </span>
-                                   </label>
-                                 );
-                               })}
-                            </div>
-                         </div>
-                         <div className="pt-6 flex justify-between items-center border-t border-slate-50">
-                           <div className="flex flex-col">
-                             <span className="text-[9px] text-slate-300 font-bold uppercase">Cargado por: {n.creado_por}</span>
-                             {n.modificado_por && <span className="text-[9px] text-emerald-400 font-bold uppercase">Últ. Mod: {n.modificado_por}</span>}
-                           </div>
-                           <div className="flex gap-2">
-                              {/* Todos pueden editar */}
-                              <button onClick={() => { setEditingNovedad(n); setCurrentView('form'); }} className="text-[10px] bg-slate-100 px-4 py-2 rounded-xl font-black text-slate-600 hover:bg-slate-200 uppercase tracking-widest transition-colors">Editar</button>
-                              {/* Solo admin puede eliminar */}
-                              {currentUser.role === 'admin' && (
-                                <button onClick={async () => { if(confirm("¿Eliminar este registro permanentemente?")){ await sb.from('novedades').delete().eq('id', n.id); addLog('BORRAR_REGISTRO', 'Eliminó registro ' + n.numero_novedad); loadData(); showNotify("Registro eliminado"); } }} className="text-[10px] bg-red-50 px-4 py-2 rounded-xl font-black text-red-500 hover:bg-red-100 uppercase tracking-widest transition-colors">Eliminar</button>
-                              )}
-                           </div>
-                         </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {pendingNovedades.map(n => <NovedadCard key={n.id} n={n} isCompletedView={false} />)}
+            </div>
+          </div>
+        )}
+
+        {/* VISTA COMPLETADOS */}
+        {currentView === 'completed' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h2 className="text-3xl font-black text-slate-800 tracking-tight">Completados</h2>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Novedades con todas las tareas finalizadas</p>
+              </div>
+            </div>
+            
+            {completedNovedades.length === 0 && (
+              <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-200">
+                <div className="text-5xl mb-4 grayscale opacity-30">📂</div>
+                <p className="text-slate-400 font-bold">No hay novedades completadas aún.</p>
+              </div>
+            )}
+
+            <div className="grid gap-4">
+              {completedNovedades.map(n => <NovedadCard key={n.id} n={n} isCompletedView={true} />)}
             </div>
           </div>
         )}
@@ -511,7 +611,7 @@ const App = () => {
                setEditingUser(null);
                showNotify("Datos de usuario guardados");
              }}>
-               <input name="nom" defaultValue={editingUser.nombre} placeholder="Nombre Completo (aparecerá en listas)" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm" />
+               <input name="nom" defaultValue={editingUser.nombre} placeholder="Nombre Completo" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm" />
                <input name="user" defaultValue={editingUser.username} placeholder="Username para login" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm" />
                <input name="pass" defaultValue={editingUser.password} placeholder="Contraseña" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm" />
                <select name="role" defaultValue={editingUser.role} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm cursor-pointer">
@@ -549,38 +649,79 @@ const App = () => {
         </div>
       )}
 
-      {/* MODAL STATS */}
-      {showStats && (
+      {/* MODAL STATS - Solo Admin */}
+      {showStats && currentUser.role === 'admin' && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setShowStats(false)}>
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp" onClick={e => e.stopPropagation()}>
-            <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
-              <h3 className="font-black uppercase tracking-widest text-sm">Estadísticas</h3>
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-8 bg-slate-900 text-white flex justify-between items-center sticky top-0">
+              <h3 className="font-black uppercase tracking-widest text-sm">📊 Estadísticas del Sistema</h3>
               <button onClick={() => setShowStats(false)} className="text-slate-500 hover:text-white transition-colors">✕</button>
             </div>
-            <div className="p-10 space-y-8 text-center">
-               <div className="grid grid-cols-2 gap-5">
-                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 shadow-sm">
-                    <div className="text-4xl font-black text-slate-800 leading-none mb-1">{novedades.length}</div>
-                    <div className="text-[9px] uppercase font-black text-slate-400 tracking-widest">Registros</div>
-                  </div>
-                  <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100 shadow-sm">
-                    <div className="text-4xl font-black text-emerald-600 leading-none mb-1">{novedades.filter(n => Object.values(n.checks || {}).every(v => v)).length}</div>
-                    <div className="text-[9px] uppercase font-black text-emerald-500 tracking-widest">Completados</div>
-                  </div>
-               </div>
-               <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Tus asignaciones</div>
-                 <div className="grid grid-cols-2 gap-3">
-                   <div className="bg-red-50 p-3 rounded-xl border border-red-100">
-                     <div className="text-2xl font-black text-red-500">{countPendingTasks(currentUser, novedades)}</div>
-                     <div className="text-[8px] font-black text-red-400 uppercase">Pendientes</div>
-                   </div>
-                   <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                     <div className="text-2xl font-black text-emerald-500">{novedades.filter(n => { const {isAssigned, assignments} = getUserAssignment(n, currentUser); return isAssigned && areUserTasksComplete(n, assignments); }).length}</div>
-                     <div className="text-[8px] font-black text-emerald-400 uppercase">Completadas</div>
-                   </div>
+            <div className="p-8 space-y-8">
+               {/* Resumen General */}
+               <div>
+                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Resumen General</h4>
+                 <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-center">
+                      <div className="text-3xl font-black text-slate-800">{novedades.length}</div>
+                      <div className="text-[9px] uppercase font-black text-slate-400 tracking-widest">Total</div>
+                    </div>
+                    <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 text-center">
+                      <div className="text-3xl font-black text-amber-600">{pendingNovedades.length}</div>
+                      <div className="text-[9px] uppercase font-black text-amber-500 tracking-widest">Pendientes</div>
+                    </div>
+                    <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 text-center">
+                      <div className="text-3xl font-black text-emerald-600">{completedNovedades.length}</div>
+                      <div className="text-[9px] uppercase font-black text-emerald-500 tracking-widest">Completados</div>
+                    </div>
                  </div>
                </div>
+
+               {/* Estadísticas por Usuario */}
+               <div>
+                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Rendimiento por Usuario</h4>
+                 <div className="space-y-3">
+                   {users.map(u => {
+                     const stats = getUserStats(u);
+                     const porcentaje = stats.asignadas > 0 ? Math.round((stats.completadas / stats.asignadas) * 100) : 0;
+                     return (
+                       <div key={u.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                         <div className="flex items-center justify-between mb-3">
+                           <div className="flex items-center gap-3">
+                             <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-sm">{u.nombre.charAt(0).toUpperCase()}</div>
+                             <div>
+                               <div className="font-black text-slate-800 text-sm">{u.nombre}</div>
+                               <div className="text-[9px] text-slate-400 font-bold uppercase">@{u.username}</div>
+                             </div>
+                           </div>
+                           <div className="text-right">
+                             <div className="text-lg font-black text-slate-800">{porcentaje}%</div>
+                             <div className="text-[9px] text-slate-400 font-bold uppercase">Completado</div>
+                           </div>
+                         </div>
+                         <div className="h-2 bg-slate-200 rounded-full overflow-hidden mb-3">
+                           <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: porcentaje + '%' }}></div>
+                         </div>
+                         <div className="grid grid-cols-3 gap-2 text-center">
+                           <div className="bg-white p-2 rounded-xl">
+                             <div className="text-lg font-black text-slate-700">{stats.asignadas}</div>
+                             <div className="text-[8px] text-slate-400 font-bold uppercase">Asignadas</div>
+                           </div>
+                           <div className="bg-emerald-100 p-2 rounded-xl">
+                             <div className="text-lg font-black text-emerald-600">{stats.completadas}</div>
+                             <div className="text-[8px] text-emerald-500 font-bold uppercase">Hechas</div>
+                           </div>
+                           <div className="bg-red-100 p-2 rounded-xl">
+                             <div className="text-lg font-black text-red-500">{stats.pendientes}</div>
+                             <div className="text-[8px] text-red-400 font-bold uppercase">Pendientes</div>
+                           </div>
+                         </div>
+                       </div>
+                     );
+                   })}
+                 </div>
+               </div>
+
                <button onClick={() => setShowStats(false)} className="w-full py-4 bg-slate-100 rounded-2xl font-black text-slate-400 uppercase tracking-widest text-[10px] hover:bg-slate-200 transition-colors">Cerrar</button>
             </div>
           </div>
