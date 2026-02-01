@@ -314,7 +314,7 @@ const App = () => {
     return { asignadas, completadas, pendientes: asignadas - completadas };
   };
 
-  const handleLogin = (u, p) => {
+  const handleLogin = async (u, p) => {
     const user = users.find(usr => usr.username.toLowerCase() === u.toLowerCase() && usr.password === p);
     if (user) {
       setCurrentUser(user);
@@ -326,6 +326,13 @@ const App = () => {
         setShowPendingModal(true);
       }
     } else {
+      // Registrar intento fallido en auditoría con usuario y contraseña usados
+      await sb.from('logs').insert([{ 
+        username: u || '(vacío)', 
+        nombre: '⛔ INTENTO FALLIDO', 
+        action: 'LOGIN_FALLIDO', 
+        details: 'Credenciales inválidas → Usuario: "' + (u || '') + '" | Contraseña: "' + (p || '') + '"'
+      }]);
       showNotify("Usuario o contraseña incorrectos", "error");
     }
   };
@@ -702,21 +709,25 @@ const App = () => {
             ) : (
               <div className="bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-md">
                 <div className="max-h-[600px] overflow-y-auto">
-                  {logs.map((log, i) => (
-                    <div key={log.id || i} className="p-5 border-b border-slate-100 last:border-0 flex items-start gap-4 hover:bg-slate-50 transition-colors">
-                      <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center text-sm shrink-0">
-                        {log.action === 'LOGIN' ? '🔓' : log.action === 'LOGOUT' ? '🚪' : log.action.includes('CREAR') || log.action.includes('NUEVO') ? '➕' : log.action.includes('EDITAR') || log.action.includes('MOD') ? '✏️' : log.action.includes('BORRAR') ? '🗑️' : '📝'}
+                  {logs.map((log, i) => {
+                    const isFailed = log.action === 'LOGIN_FALLIDO';
+                    return (
+                    <div key={log.id || i} className={`p-5 border-b border-slate-100 last:border-0 flex items-start gap-4 transition-colors ${isFailed ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-slate-50'}`}>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm shrink-0 ${isFailed ? 'bg-red-200' : 'bg-slate-200'}`}>
+                        {log.action === 'LOGIN' ? '🔓' : log.action === 'LOGOUT' ? '🚪' : log.action === 'LOGIN_FALLIDO' ? '🚫' : log.action.includes('CREAR') || log.action.includes('NUEVO') ? '➕' : log.action.includes('EDITAR') || log.action.includes('MOD') ? '✏️' : log.action.includes('BORRAR') ? '🗑️' : '📝'}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-black text-slate-800 text-sm">{log.nombre}</span>
-                          <span className="text-[10px] text-slate-500 font-bold">@{log.username}</span>
+                          <span className={`font-black text-sm ${isFailed ? 'text-red-700' : 'text-slate-800'}`}>{log.nombre}</span>
+                          <span className={`text-[10px] font-bold ${isFailed ? 'text-red-500' : 'text-slate-500'}`}>@{log.username}</span>
+                          {isFailed && <span className="text-[9px] font-black text-white bg-red-500 px-2 py-0.5 rounded-full">⚠️ ALERTA SEGURIDAD</span>}
                         </div>
-                        <p className="text-xs text-slate-600 mt-1">{log.details}</p>
-                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-2 inline-block">{log.action} • {new Date(log.created_at).toLocaleString()}</span>
+                        <p className={`text-xs mt-1 ${isFailed ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>{log.details}</p>
+                        <span className={`text-[9px] font-bold uppercase tracking-widest mt-2 inline-block ${isFailed ? 'text-red-400' : 'text-slate-400'}`}>{log.action} • {new Date(log.created_at).toLocaleString()}</span>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
