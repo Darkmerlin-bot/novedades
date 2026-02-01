@@ -81,7 +81,31 @@ const PendingModal = ({ count, onClose }) => (
   </div>
 );
 
-// 5. APLICACIÓN PRINCIPAL
+// 5. COMPONENTE DE BÚSQUEDA
+const SearchBar = ({ value, onChange }) => (
+  <div className="relative mb-6">
+    <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+      <span className="text-slate-400">🔍</span>
+    </div>
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="Buscar por N° Novedad, SGSP o Título..."
+      className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all font-bold text-slate-700 placeholder-slate-400"
+    />
+    {value && (
+      <button
+        onClick={() => onChange('')}
+        className="absolute inset-y-0 right-4 flex items-center text-slate-400 hover:text-slate-600"
+      >
+        ✕
+      </button>
+    )}
+  </div>
+);
+
+// 6. APLICACIÓN PRINCIPAL
 const App = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [novedades, setNovedades] = useState([]);
@@ -97,6 +121,7 @@ const App = () => {
   const [showPendingModal, setShowPendingModal] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [expandedId, setExpandedId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const showNotify = (message, type = 'success') => {
     setNotification({ message, type });
@@ -130,6 +155,24 @@ const App = () => {
 
   useEffect(() => { loadData(); }, []);
 
+  // Obtener las tareas asignadas de una novedad (solo las que tienen persona asignada)
+  const getAssignedTasks = (novedad) => {
+    const tasks = [];
+    if (novedad.informeActuacion) tasks.push({ field: 'informeActuacion', checkKey: 'actuacionRealizada', label: 'Informe Actuación', person: novedad.informeActuacion });
+    if (novedad.informeCriminalistico) tasks.push({ field: 'informeCriminalistico', checkKey: 'criminalisticoRealizado', label: 'Criminalístico', person: novedad.informeCriminalistico });
+    if (novedad.informePericial) tasks.push({ field: 'informePericial', checkKey: 'pericialRealizado', label: 'Pericial', person: novedad.informePericial });
+    if (novedad.croquis) tasks.push({ field: 'croquis', checkKey: 'croquisRealizado', label: 'Croquis', person: novedad.croquis });
+    return tasks;
+  };
+
+  // Contar tareas completadas vs total asignadas
+  const getTaskCounts = (novedad) => {
+    const assignedTasks = getAssignedTasks(novedad);
+    const total = assignedTasks.length;
+    const completed = assignedTasks.filter(t => novedad.checks && novedad.checks[t.checkKey]).length;
+    return { completed, total };
+  };
+
   const getUserAssignment = (novedad, user) => {
     if (!user) return { isAssigned: false, assignments: [] };
     const userName = user.nombre;
@@ -146,9 +189,10 @@ const App = () => {
     return assignments.every(a => novedad.checks && novedad.checks[a.checkKey]);
   };
 
+  // Verificar si la novedad está completa (todas las tareas ASIGNADAS completadas)
   const isNovedadComplete = (novedad) => {
-    if (!novedad.checks) return false;
-    return Object.values(novedad.checks).every(v => v);
+    const { completed, total } = getTaskCounts(novedad);
+    return total > 0 && completed === total;
   };
 
   const countUserPendingTasks = (user, novedadesList) => {
@@ -160,6 +204,17 @@ const App = () => {
     return count;
   };
 
+  // Filtrar novedades por búsqueda
+  const filterNovedades = (list) => {
+    if (!searchTerm.trim()) return list;
+    const term = searchTerm.toLowerCase().trim();
+    return list.filter(n => 
+      (n.numero_novedad && n.numero_novedad.toLowerCase().includes(term)) ||
+      (n.numero_sgsp && n.numero_sgsp.toLowerCase().includes(term)) ||
+      (n.titulo && n.titulo.toLowerCase().includes(term))
+    );
+  };
+
   // Ordenar novedades: primero las asignadas al usuario, luego por número
   const sortNovedades = (list, user) => {
     return [...list].sort((a, b) => {
@@ -168,20 +223,20 @@ const App = () => {
       const aComplete = areUserTasksComplete(a, getUserAssignment(a, user).assignments);
       const bComplete = areUserTasksComplete(b, getUserAssignment(b, user).assignments);
       
-      // Primero: asignadas y pendientes del usuario
       if (aAssigned && !aComplete && !(bAssigned && !bComplete)) return -1;
       if (bAssigned && !bComplete && !(aAssigned && !aComplete)) return 1;
       
-      // Segundo: ordenar por número de novedad
       return (a.numero_novedad || '').localeCompare(b.numero_novedad || '');
     });
   };
 
-  // Filtrar novedades pendientes (no todas las tareas completas)
-  const pendingNovedades = sortNovedades(novedades.filter(n => !isNovedadComplete(n)), currentUser);
-  
-  // Filtrar novedades completadas (todas las tareas completas)
-  const completedNovedades = novedades.filter(n => isNovedadComplete(n)).sort((a, b) => (a.numero_novedad || '').localeCompare(b.numero_novedad || ''));
+  // Filtrar y ordenar novedades
+  const pendingNovedades = sortNovedades(filterNovedades(novedades.filter(n => !isNovedadComplete(n))), currentUser);
+  const completedNovedades = filterNovedades(novedades.filter(n => isNovedadComplete(n))).sort((a, b) => (a.numero_novedad || '').localeCompare(b.numero_novedad || ''));
+
+  // Contadores sin filtro de búsqueda
+  const totalPending = novedades.filter(n => !isNovedadComplete(n)).length;
+  const totalCompleted = novedades.filter(n => isNovedadComplete(n)).length;
 
   // Estadísticas por usuario
   const getUserStats = (user) => {
@@ -189,7 +244,6 @@ const App = () => {
     let completadas = 0;
     
     novedades.forEach(n => {
-      // Contar asignaciones
       if (n.informeActuacion === user.nombre) {
         asignadas++;
         if (n.checks && n.checks.actuacionRealizada) completadas++;
@@ -266,12 +320,13 @@ const App = () => {
     );
   }
 
-  // Componente de tarjeta de novedad reutilizable
+  // Componente de tarjeta de novedad
   const NovedadCard = ({ n, isCompletedView }) => {
-    const compCount = Object.values(n.checks || {}).filter(Boolean).length;
+    const { completed, total } = getTaskCounts(n);
     const isEx = expandedId === n.id;
     const { isAssigned, assignments } = getUserAssignment(n, currentUser);
     const userTasksComplete = areUserTasksComplete(n, assignments);
+    const assignedTasks = getAssignedTasks(n);
     
     let borderColor = 'border-slate-100', bgColor = 'bg-white', leftBorder = '';
     if (!isCompletedView && isAssigned) {
@@ -286,7 +341,9 @@ const App = () => {
       <div className={`${bgColor} rounded-3xl shadow-sm border ${borderColor} ${leftBorder} overflow-hidden transition-all hover:shadow-lg`}>
         <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setExpandedId(isEx ? null : n.id)}>
           <div className="flex items-center gap-5">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${compCount === 4 ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>{compCount}/4</div>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${completed === total && total > 0 ? 'bg-emerald-100 text-emerald-600' : total === 0 ? 'bg-slate-100 text-slate-400' : 'bg-amber-100 text-amber-600'}`}>
+              {total > 0 ? `${completed}/${total}` : 'N/A'}
+            </div>
             <div className="flex-1">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="font-black text-slate-800 text-lg leading-none">{n.numero_novedad}</span>
@@ -328,31 +385,39 @@ const App = () => {
                   {[{ field: 'informeActuacion', label: 'Informe Actuación', checkKey: 'actuacionRealizada' },{ field: 'informeCriminalistico', label: 'Criminalístico', checkKey: 'criminalisticoRealizado' },{ field: 'informePericial', label: 'Pericial', checkKey: 'pericialRealizado' },{ field: 'croquis', label: 'Croquis', checkKey: 'croquisRealizado' }].map(item => {
                     const isMe = n[item.field] === currentUser.nombre;
                     const isDone = n.checks && n.checks[item.checkKey];
+                    const hasAssignment = !!n[item.field];
                     return (
                       <div key={item.field} className={`flex justify-between items-center text-xs py-1.5 px-2 rounded-lg ${isMe ? (isDone ? 'bg-emerald-50' : 'bg-red-50') : ''}`}>
                         <span className="text-slate-500 font-bold">{item.label}:</span>
-                        <span className={`font-black ${isMe ? (isDone ? 'text-emerald-600' : 'text-red-600') : 'text-slate-800'}`}>{n[item.field] || '---'}{isMe && <span className="ml-1">{isDone ? '✓' : '←'}</span>}</span>
+                        <span className={`font-black ${!hasAssignment ? 'text-slate-300 italic' : isMe ? (isDone ? 'text-emerald-600' : 'text-red-600') : 'text-slate-800'}`}>
+                          {n[item.field] || 'Sin asignar'}
+                          {isMe && hasAssignment && <span className="ml-1">{isDone ? '✓' : '←'}</span>}
+                        </span>
                       </div>
                     );
                   })}
                 </div>
                 <div className="space-y-3">
-                   <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-50 pb-2">Checklist de Tareas</h4>
-                   {['actuacionRealizada', 'criminalisticoRealizado', 'pericialRealizado', 'croquisRealizado'].map(key => {
-                     const fieldMap = { actuacionRealizada: 'informeActuacion', criminalisticoRealizado: 'informeCriminalistico', pericialRealizado: 'informePericial', croquisRealizado: 'croquis' };
-                     const isMyTask = n[fieldMap[key]] === currentUser.nombre;
-                     return (
-                       <label key={key} className={`flex items-center gap-4 py-2 cursor-pointer group select-none rounded-lg px-2 ${isMyTask ? 'bg-slate-50' : ''}`}>
-                         <div onClick={() => handleToggleCheck(n.id, key)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[key] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}`}>
-                           {n.checks && n.checks[key] && <span className="text-white text-[10px]">✓</span>}
-                         </div>
-                         <span className={`text-xs font-bold transition-all ${n.checks && n.checks[key] ? 'text-slate-300 line-through' : 'text-slate-600 group-hover:text-slate-900'}`}>
-                           {key.replace(/([A-Z])/g, ' $1').replace('Realizado', ' Realizada').replace('actuacion', 'Actuación')}
-                           {isMyTask && <span className="ml-1 text-[9px] text-emerald-500 font-black">(TÚ)</span>}
-                         </span>
-                       </label>
-                     );
-                   })}
+                   <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-50 pb-2">Checklist de Tareas ({completed}/{total})</h4>
+                   {assignedTasks.length === 0 ? (
+                     <p className="text-slate-400 text-xs italic py-4 text-center">No hay tareas asignadas</p>
+                   ) : (
+                     assignedTasks.map(task => {
+                       const isMyTask = task.person === currentUser.nombre;
+                       return (
+                         <label key={task.checkKey} className={`flex items-center gap-4 py-2 cursor-pointer group select-none rounded-lg px-2 ${isMyTask ? 'bg-slate-50' : ''}`}>
+                           <div onClick={() => handleToggleCheck(n.id, task.checkKey)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[task.checkKey] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}`}>
+                             {n.checks && n.checks[task.checkKey] && <span className="text-white text-[10px]">✓</span>}
+                           </div>
+                           <span className={`text-xs font-bold transition-all ${n.checks && n.checks[task.checkKey] ? 'text-slate-300 line-through' : 'text-slate-600 group-hover:text-slate-900'}`}>
+                             {task.label}
+                             {isMyTask && <span className="ml-1 text-[9px] text-emerald-500 font-black">(TÚ)</span>}
+                             <span className="ml-2 text-[9px] text-slate-400">- {task.person}</span>
+                           </span>
+                         </label>
+                       );
+                     })
+                   )}
                 </div>
              </div>
              <div className="pt-6 flex justify-between items-center border-t border-slate-50">
@@ -378,12 +443,12 @@ const App = () => {
       <Header 
         user={currentUser} 
         currentView={currentView} 
-        setView={v => { setCurrentView(v); setEditingNovedad(null); setEditingUser(null); if(v === 'logs' || v === 'users') loadData(); }} 
+        setView={v => { setCurrentView(v); setEditingNovedad(null); setEditingUser(null); setSearchTerm(''); if(v === 'logs' || v === 'users') loadData(); }} 
         onLogout={() => { addLog('LOGOUT', 'Cierre de sesión manual'); setCurrentUser(null); }} 
         onShowStats={() => setShowStats(true)} 
         onShowPass={() => setShowPassModal(true)}
-        pendingCount={pendingNovedades.length}
-        completedCount={completedNovedades.length}
+        pendingCount={totalPending}
+        completedCount={totalCompleted}
       />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
@@ -391,13 +456,15 @@ const App = () => {
         {/* VISTA LISTA PENDIENTES */}
         {currentView === 'list' && (
           <div className="space-y-4">
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center mb-6">
               <div>
                 <h2 className="text-3xl font-black text-slate-800 tracking-tight">Pendientes</h2>
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Tus asignaciones aparecen primero</p>
               </div>
               <button onClick={() => setCurrentView('form')} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl shadow-slate-900/20 hover:scale-105 transition-transform uppercase tracking-widest">+ Nuevo</button>
             </div>
+
+            <SearchBar value={searchTerm} onChange={setSearchTerm} />
 
             <div className="flex flex-wrap gap-4 mb-6 p-4 bg-white rounded-2xl border border-slate-100">
               <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-red-500"></div><span className="text-xs font-bold text-slate-600">Asignado a ti (pendiente)</span></div>
@@ -407,8 +474,8 @@ const App = () => {
             
             {pendingNovedades.length === 0 && (
               <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-200">
-                <div className="text-5xl mb-4">🎉</div>
-                <p className="text-slate-400 font-bold">¡No hay novedades pendientes!</p>
+                <div className="text-5xl mb-4">{searchTerm ? '🔍' : '🎉'}</div>
+                <p className="text-slate-400 font-bold">{searchTerm ? 'No se encontraron resultados' : '¡No hay novedades pendientes!'}</p>
               </div>
             )}
 
@@ -421,17 +488,19 @@ const App = () => {
         {/* VISTA COMPLETADOS */}
         {currentView === 'completed' && (
           <div className="space-y-4">
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center mb-6">
               <div>
                 <h2 className="text-3xl font-black text-slate-800 tracking-tight">Completados</h2>
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Novedades con todas las tareas finalizadas</p>
               </div>
             </div>
+
+            <SearchBar value={searchTerm} onChange={setSearchTerm} />
             
             {completedNovedades.length === 0 && (
               <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-200">
-                <div className="text-5xl mb-4 grayscale opacity-30">📂</div>
-                <p className="text-slate-400 font-bold">No hay novedades completadas aún.</p>
+                <div className="text-5xl mb-4">{searchTerm ? '🔍' : '📂'}</div>
+                <p className="text-slate-400 font-bold">{searchTerm ? 'No se encontraron resultados' : 'No hay novedades completadas aún.'}</p>
               </div>
             )}
 
@@ -494,7 +563,7 @@ const App = () => {
               </div>
 
               <div className="space-y-6 pt-4">
-                <h3 className="text-[11px] font-black text-slate-300 uppercase tracking-[0.3em] border-b border-slate-50 pb-3">Personal Asignado</h3>
+                <h3 className="text-[11px] font-black text-slate-300 uppercase tracking-[0.3em] border-b border-slate-50 pb-3">Personal Asignado (opcional)</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                    {[{ name: 'ia', field: 'informeActuacion', label: 'Informe Actuación' },{ name: 'ic', field: 'informeCriminalistico', label: 'Criminalístico' },{ name: 'ip', field: 'informePericial', label: 'Pericial' },{ name: 'cr', field: 'croquis', label: 'Croquis' }].map(item => (
                      <div key={item.name} className="space-y-1.5">
@@ -516,7 +585,7 @@ const App = () => {
           </div>
         )}
 
-        {/* VISTA USUARIOS - Solo Admin */}
+        {/* VISTA USUARIOS */}
         {currentView === 'users' && currentUser.role === 'admin' && (
           <div className="space-y-6 animate-fadeIn">
             <div className="flex justify-between items-end mb-8">
@@ -554,7 +623,7 @@ const App = () => {
           </div>
         )}
 
-        {/* VISTA LOGS - Solo Admin */}
+        {/* VISTA LOGS */}
         {currentView === 'logs' && currentUser.role === 'admin' && (
           <div className="space-y-4 animate-fadeIn">
             <div className="mb-8">
@@ -649,7 +718,7 @@ const App = () => {
         </div>
       )}
 
-      {/* MODAL STATS - Solo Admin */}
+      {/* MODAL STATS */}
       {showStats && currentUser.role === 'admin' && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setShowStats(false)}>
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -658,7 +727,6 @@ const App = () => {
               <button onClick={() => setShowStats(false)} className="text-slate-500 hover:text-white transition-colors">✕</button>
             </div>
             <div className="p-8 space-y-8">
-               {/* Resumen General */}
                <div>
                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Resumen General</h4>
                  <div className="grid grid-cols-3 gap-4">
@@ -667,17 +735,16 @@ const App = () => {
                       <div className="text-[9px] uppercase font-black text-slate-400 tracking-widest">Total</div>
                     </div>
                     <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 text-center">
-                      <div className="text-3xl font-black text-amber-600">{pendingNovedades.length}</div>
+                      <div className="text-3xl font-black text-amber-600">{totalPending}</div>
                       <div className="text-[9px] uppercase font-black text-amber-500 tracking-widest">Pendientes</div>
                     </div>
                     <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 text-center">
-                      <div className="text-3xl font-black text-emerald-600">{completedNovedades.length}</div>
+                      <div className="text-3xl font-black text-emerald-600">{totalCompleted}</div>
                       <div className="text-[9px] uppercase font-black text-emerald-500 tracking-widest">Completados</div>
                     </div>
                  </div>
                </div>
 
-               {/* Estadísticas por Usuario */}
                <div>
                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Rendimiento por Usuario</h4>
                  <div className="space-y-3">
