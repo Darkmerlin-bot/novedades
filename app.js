@@ -7,6 +7,13 @@ const SUPABASE_URL = 'https://whfrenunfcrcrljithex.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJlbnVuZmNyY3Jsaml0aGV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2Njk5ODUsImV4cCI6MjA4NTI0NTk4NX0.MMbKQxmSL_7UPNcEh_F1NofVPa13Trz3sedDALvgvPs';
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Obtener años disponibles (desde 2020 hasta el año actual + 1)
+const currentYear = new Date().getFullYear();
+const availableYears = [];
+for (let y = currentYear + 1; y >= 2020; y--) {
+  availableYears.push(y);
+}
+
 // 2. COMPONENTE DE NOTIFICACIÓN
 const Notification = ({ message, type }) => (
   <div className={`fixed top-6 right-6 z-[200] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-slideInRight border-l-4 ${type === 'success' ? 'bg-white border-emerald-500 text-slate-800' : 'bg-red-500 border-red-700 text-white'}`}>
@@ -35,7 +42,9 @@ const Header = ({ user, currentView, setView, onLogout, onShowStats, onShowPass,
           <div className="flex gap-1.5">
             <button onClick={onShowPass} className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all" title="Seguridad">🔑</button>
             {user.role === 'admin' && <button onClick={onShowStats} className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all" title="Estadísticas">📊</button>}
-            <button onClick={onLogout} className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all" title="Salir">🚪</button>
+            <button onClick={onLogout} className="px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all font-bold text-sm flex items-center gap-2 shadow-lg" title="Cerrar Sesión">
+              🚪 Salir
+            </button>
           </div>
         </div>
       </div>
@@ -60,7 +69,7 @@ const Header = ({ user, currentView, setView, onLogout, onShowStats, onShowPass,
   </header>
 );
 
-// 4. MODAL DE PENDIENTES AL INICIAR SESIÓN
+// 4. MODAL DE PENDIENTES
 const PendingModal = ({ count, onClose }) => (
   <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[150] flex items-center justify-center p-4">
     <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
@@ -81,27 +90,37 @@ const PendingModal = ({ count, onClose }) => (
   </div>
 );
 
-// 5. COMPONENTE DE BÚSQUEDA
-const SearchBar = ({ value, onChange }) => (
-  <div className="relative mb-6">
-    <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-      <span className="text-slate-400">🔍</span>
+// 5. BÚSQUEDA Y FILTRO DE AÑO
+const SearchAndFilter = ({ searchTerm, onSearchChange, selectedYear, onYearChange }) => (
+  <div className="flex flex-col sm:flex-row gap-4 mb-6">
+    <div className="relative flex-1">
+      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+        <span className="text-slate-400">🔍</span>
+      </div>
+      <input
+        type="text"
+        value={searchTerm}
+        onChange={(e) => onSearchChange(e.target.value)}
+        placeholder="Buscar por N° Novedad, SGSP o Título..."
+        className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all font-bold text-slate-700 placeholder-slate-400 shadow-sm"
+      />
+      {searchTerm && (
+        <button onClick={() => onSearchChange('')} className="absolute inset-y-0 right-4 flex items-center text-slate-400 hover:text-slate-600">✕</button>
+      )}
     </div>
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="Buscar por N° Novedad, SGSP o Título..."
-      className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all font-bold text-slate-700 placeholder-slate-400"
-    />
-    {value && (
-      <button
-        onClick={() => onChange('')}
-        className="absolute inset-y-0 right-4 flex items-center text-slate-400 hover:text-slate-600"
+    <div className="relative">
+      <select
+        value={selectedYear}
+        onChange={(e) => onYearChange(e.target.value)}
+        className="appearance-none w-full sm:w-40 px-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold text-slate-700 cursor-pointer shadow-sm"
       >
-        ✕
-      </button>
-    )}
+        <option value="">Todos los años</option>
+        {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+      </select>
+      <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
+        <span className="text-slate-400">📅</span>
+      </div>
+    </div>
   </div>
 );
 
@@ -122,6 +141,7 @@ const App = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const [expandedId, setExpandedId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
 
   const showNotify = (message, type = 'success') => {
     setNotification({ message, type });
@@ -139,7 +159,7 @@ const App = () => {
     try {
       const { data: userData } = await sb.from('users').select('*').order('nombre');
       setUsers(userData || []);
-      const { data: novData } = await sb.from('novedades').select('*').order('numero_novedad', { ascending: true });
+      const { data: novData } = await sb.from('novedades').select('*');
       setNovedades(novData || []);
       const { data: logData } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(100);
       setLogs(logData || []);
@@ -155,7 +175,30 @@ const App = () => {
 
   useEffect(() => { loadData(); }, []);
 
-  // Obtener las tareas asignadas de una novedad (solo las que tienen persona asignada)
+  // Extraer número para ordenamiento (convierte "NOV-06" o "6" o "006" a 6)
+  const extractNumber = (str) => {
+    if (!str) return 0;
+    const matches = str.match(/\d+/g);
+    if (matches && matches.length > 0) {
+      return parseInt(matches[matches.length - 1], 10);
+    }
+    return 0;
+  };
+
+  // Extraer año de la novedad
+  const extractYear = (novedad) => {
+    if (novedad.anio) return novedad.anio.toString();
+    if (novedad.created_at) return new Date(novedad.created_at).getFullYear().toString();
+    return '';
+  };
+
+  // Ordenar novedades numéricamente
+  const sortByNovedadNumber = (a, b) => {
+    const numA = extractNumber(a.numero_novedad);
+    const numB = extractNumber(b.numero_novedad);
+    return numA - numB;
+  };
+
   const getAssignedTasks = (novedad) => {
     const tasks = [];
     if (novedad.informeActuacion) tasks.push({ field: 'informeActuacion', checkKey: 'actuacionRealizada', label: 'Informe Actuación', person: novedad.informeActuacion });
@@ -165,7 +208,6 @@ const App = () => {
     return tasks;
   };
 
-  // Contar tareas completadas vs total asignadas
   const getTaskCounts = (novedad) => {
     const assignedTasks = getAssignedTasks(novedad);
     const total = assignedTasks.length;
@@ -189,7 +231,6 @@ const App = () => {
     return assignments.every(a => novedad.checks && novedad.checks[a.checkKey]);
   };
 
-  // Verificar si la novedad está completa (todas las tareas ASIGNADAS completadas)
   const isNovedadComplete = (novedad) => {
     const { completed, total } = getTaskCounts(novedad);
     return total > 0 && completed === total;
@@ -204,15 +245,26 @@ const App = () => {
     return count;
   };
 
-  // Filtrar novedades por búsqueda
+  // Filtrar por búsqueda y año
   const filterNovedades = (list) => {
-    if (!searchTerm.trim()) return list;
-    const term = searchTerm.toLowerCase().trim();
-    return list.filter(n => 
-      (n.numero_novedad && n.numero_novedad.toLowerCase().includes(term)) ||
-      (n.numero_sgsp && n.numero_sgsp.toLowerCase().includes(term)) ||
-      (n.titulo && n.titulo.toLowerCase().includes(term))
-    );
+    let filtered = list;
+    
+    // Filtrar por año
+    if (selectedYear) {
+      filtered = filtered.filter(n => extractYear(n) === selectedYear);
+    }
+    
+    // Filtrar por búsqueda
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(n => 
+        (n.numero_novedad && n.numero_novedad.toLowerCase().includes(term)) ||
+        (n.numero_sgsp && n.numero_sgsp.toLowerCase().includes(term)) ||
+        (n.titulo && n.titulo.toLowerCase().includes(term))
+      );
+    }
+    
+    return filtered;
   };
 
   // Ordenar novedades: primero las asignadas al usuario, luego por número
@@ -226,19 +278,16 @@ const App = () => {
       if (aAssigned && !aComplete && !(bAssigned && !bComplete)) return -1;
       if (bAssigned && !bComplete && !(aAssigned && !aComplete)) return 1;
       
-      return (a.numero_novedad || '').localeCompare(b.numero_novedad || '');
+      return sortByNovedadNumber(a, b);
     });
   };
 
-  // Filtrar y ordenar novedades
   const pendingNovedades = sortNovedades(filterNovedades(novedades.filter(n => !isNovedadComplete(n))), currentUser);
-  const completedNovedades = filterNovedades(novedades.filter(n => isNovedadComplete(n))).sort((a, b) => (a.numero_novedad || '').localeCompare(b.numero_novedad || ''));
+  const completedNovedades = filterNovedades(novedades.filter(n => isNovedadComplete(n))).sort(sortByNovedadNumber);
 
-  // Contadores sin filtro de búsqueda
   const totalPending = novedades.filter(n => !isNovedadComplete(n)).length;
   const totalCompleted = novedades.filter(n => isNovedadComplete(n)).length;
 
-  // Estadísticas por usuario
   const getUserStats = (user) => {
     let asignadas = 0;
     let completadas = 0;
@@ -296,7 +345,7 @@ const App = () => {
 
   if (!currentUser) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-900 p-4 font-sans">
+      <div className="flex items-center justify-center min-h-screen bg-slate-800 p-4 font-sans">
         <div className="w-full max-w-md bg-white rounded-[2.5rem] p-10 shadow-2xl animate-slideUp">
           <div className="text-center mb-8">
             <div className="inline-block p-5 bg-emerald-50 rounded-full text-5xl mb-4 border border-emerald-100 shadow-sm">📋</div>
@@ -328,48 +377,49 @@ const App = () => {
     const userTasksComplete = areUserTasksComplete(n, assignments);
     const assignedTasks = getAssignedTasks(n);
     
-    let borderColor = 'border-slate-100', bgColor = 'bg-white', leftBorder = '';
+    let borderColor = 'border-slate-200', bgColor = 'bg-white', leftBorder = '';
     if (!isCompletedView && isAssigned) {
-      if (userTasksComplete) { borderColor = 'border-emerald-200'; bgColor = 'bg-emerald-50/30'; leftBorder = 'border-l-4 border-l-emerald-500'; }
-      else { borderColor = 'border-red-200'; bgColor = 'bg-red-50/30'; leftBorder = 'border-l-4 border-l-red-500'; }
+      if (userTasksComplete) { borderColor = 'border-emerald-300'; bgColor = 'bg-emerald-50'; leftBorder = 'border-l-4 border-l-emerald-500'; }
+      else { borderColor = 'border-red-300'; bgColor = 'bg-red-50'; leftBorder = 'border-l-4 border-l-red-500'; }
     }
     if (isCompletedView) {
-      borderColor = 'border-emerald-200'; bgColor = 'bg-emerald-50/20'; leftBorder = 'border-l-4 border-l-emerald-500';
+      borderColor = 'border-emerald-300'; bgColor = 'bg-emerald-50'; leftBorder = 'border-l-4 border-l-emerald-500';
     }
     
     return (
-      <div className={`${bgColor} rounded-3xl shadow-sm border ${borderColor} ${leftBorder} overflow-hidden transition-all hover:shadow-lg`}>
+      <div className={`${bgColor} rounded-3xl shadow-md border ${borderColor} ${leftBorder} overflow-hidden transition-all hover:shadow-xl`}>
         <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setExpandedId(isEx ? null : n.id)}>
           <div className="flex items-center gap-5">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${completed === total && total > 0 ? 'bg-emerald-100 text-emerald-600' : total === 0 ? 'bg-slate-100 text-slate-400' : 'bg-amber-100 text-amber-600'}`}>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${completed === total && total > 0 ? 'bg-emerald-500 text-white' : total === 0 ? 'bg-slate-300 text-slate-500' : 'bg-amber-400 text-white'}`}>
               {total > 0 ? `${completed}/${total}` : 'N/A'}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="font-black text-slate-800 text-lg leading-none">{n.numero_novedad}</span>
-                {n.titulo && <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">{n.titulo}</span>}
+                {n.anio && <span className="text-[10px] font-black text-slate-500 bg-slate-200 px-2 py-1 rounded-full">{n.anio}</span>}
+                {n.titulo && <span className="text-sm font-bold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-200">{n.titulo}</span>}
                 {!isCompletedView && isAssigned && <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${userTasksComplete ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>{userTasksComplete ? '✓ Tu tarea lista' : '⚠ Pendiente'}</span>}
                 {isCompletedView && <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-emerald-500 text-white">✓ Completado</span>}
               </div>
-              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">SGSP: {n.numero_sgsp}</div>
+              <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">SGSP: {n.numero_sgsp}</div>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <span className="hidden sm:inline text-[10px] text-slate-400 font-black uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">{new Date(n.created_at).toLocaleDateString()}</span>
-            <span className={`text-slate-300 text-xs transition-transform duration-300 ${isEx ? 'rotate-180' : ''}`}>▼</span>
+            <span className="hidden sm:inline text-[10px] text-slate-500 font-black uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">{new Date(n.created_at).toLocaleDateString()}</span>
+            <span className={`text-slate-400 text-xs transition-transform duration-300 ${isEx ? 'rotate-180' : ''}`}>▼</span>
           </div>
         </div>
         {isEx && (
-          <div className="px-6 pb-6 border-t border-slate-50 animate-fadeIn">
-             {n.titulo && <div className="py-4 border-b border-slate-50"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Título / Descripción:</span><p className="text-slate-700 font-bold mt-1">{n.titulo}</p></div>}
+          <div className="px-6 pb-6 border-t border-slate-100 animate-fadeIn bg-white/50">
+             {n.titulo && <div className="py-4 border-b border-slate-100"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Título / Descripción:</span><p className="text-slate-700 font-bold mt-1">{n.titulo}</p></div>}
              
              {!isCompletedView && isAssigned && (
-               <div className="py-4 border-b border-slate-100 bg-slate-50 -mx-6 px-6 my-4">
-                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">📌 Tus tareas asignadas:</span>
+               <div className="py-4 border-b border-slate-200 bg-slate-100 -mx-6 px-6 my-4">
+                 <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">📌 Tus tareas asignadas:</span>
                  <div className="mt-3 space-y-2">
                    {assignments.map(a => (
                      <label key={a.checkKey} className="flex items-center gap-4 py-2 cursor-pointer group select-none">
-                       <div onClick={() => handleToggleCheck(n.id, a.checkKey)} className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[a.checkKey] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-red-300 bg-red-50 group-hover:border-red-400'}`}>
+                       <div onClick={() => handleToggleCheck(n.id, a.checkKey)} className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[a.checkKey] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-red-400 bg-red-100 group-hover:border-red-500'}`}>
                          {n.checks && n.checks[a.checkKey] && <span className="text-white text-sm">✓</span>}
                        </div>
                        <span className={`text-sm font-bold transition-all ${n.checks && n.checks[a.checkKey] ? 'text-emerald-600 line-through' : 'text-red-600 group-hover:text-red-700'}`}>{a.label}</span>
@@ -381,15 +431,15 @@ const App = () => {
              
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
                 <div className="space-y-3">
-                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-50 pb-2">Asignaciones Personal</h4>
+                  <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 border-b border-slate-200 pb-2">Asignaciones Personal</h4>
                   {[{ field: 'informeActuacion', label: 'Informe Actuación', checkKey: 'actuacionRealizada' },{ field: 'informeCriminalistico', label: 'Criminalístico', checkKey: 'criminalisticoRealizado' },{ field: 'informePericial', label: 'Pericial', checkKey: 'pericialRealizado' },{ field: 'croquis', label: 'Croquis', checkKey: 'croquisRealizado' }].map(item => {
                     const isMe = n[item.field] === currentUser.nombre;
                     const isDone = n.checks && n.checks[item.checkKey];
                     const hasAssignment = !!n[item.field];
                     return (
-                      <div key={item.field} className={`flex justify-between items-center text-xs py-1.5 px-2 rounded-lg ${isMe ? (isDone ? 'bg-emerald-50' : 'bg-red-50') : ''}`}>
-                        <span className="text-slate-500 font-bold">{item.label}:</span>
-                        <span className={`font-black ${!hasAssignment ? 'text-slate-300 italic' : isMe ? (isDone ? 'text-emerald-600' : 'text-red-600') : 'text-slate-800'}`}>
+                      <div key={item.field} className={`flex justify-between items-center text-xs py-2 px-3 rounded-lg ${isMe ? (isDone ? 'bg-emerald-100 border border-emerald-200' : 'bg-red-100 border border-red-200') : 'bg-slate-50'}`}>
+                        <span className="text-slate-600 font-bold">{item.label}:</span>
+                        <span className={`font-black ${!hasAssignment ? 'text-slate-400 italic' : isMe ? (isDone ? 'text-emerald-600' : 'text-red-600') : 'text-slate-800'}`}>
                           {n[item.field] || 'Sin asignar'}
                           {isMe && hasAssignment && <span className="ml-1">{isDone ? '✓' : '←'}</span>}
                         </span>
@@ -398,20 +448,20 @@ const App = () => {
                   })}
                 </div>
                 <div className="space-y-3">
-                   <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-50 pb-2">Checklist de Tareas ({completed}/{total})</h4>
+                   <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 border-b border-slate-200 pb-2">Checklist de Tareas ({completed}/{total})</h4>
                    {assignedTasks.length === 0 ? (
-                     <p className="text-slate-400 text-xs italic py-4 text-center">No hay tareas asignadas</p>
+                     <p className="text-slate-400 text-xs italic py-4 text-center bg-slate-50 rounded-xl">No hay tareas asignadas</p>
                    ) : (
                      assignedTasks.map(task => {
                        const isMyTask = task.person === currentUser.nombre;
                        return (
-                         <label key={task.checkKey} className={`flex items-center gap-4 py-2 cursor-pointer group select-none rounded-lg px-2 ${isMyTask ? 'bg-slate-50' : ''}`}>
-                           <div onClick={() => handleToggleCheck(n.id, task.checkKey)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[task.checkKey] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}`}>
+                         <label key={task.checkKey} className={`flex items-center gap-4 py-2 cursor-pointer group select-none rounded-lg px-3 ${isMyTask ? 'bg-slate-100' : 'bg-slate-50'}`}>
+                           <div onClick={() => handleToggleCheck(n.id, task.checkKey)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${n.checks && n.checks[task.checkKey] ? 'bg-emerald-500 border-emerald-500 shadow-md shadow-emerald-200' : 'border-slate-300 bg-white group-hover:border-slate-400'}`}>
                              {n.checks && n.checks[task.checkKey] && <span className="text-white text-[10px]">✓</span>}
                            </div>
-                           <span className={`text-xs font-bold transition-all ${n.checks && n.checks[task.checkKey] ? 'text-slate-300 line-through' : 'text-slate-600 group-hover:text-slate-900'}`}>
+                           <span className={`text-xs font-bold transition-all ${n.checks && n.checks[task.checkKey] ? 'text-slate-400 line-through' : 'text-slate-700 group-hover:text-slate-900'}`}>
                              {task.label}
-                             {isMyTask && <span className="ml-1 text-[9px] text-emerald-500 font-black">(TÚ)</span>}
+                             {isMyTask && <span className="ml-1 text-[9px] text-emerald-600 font-black">(TÚ)</span>}
                              <span className="ml-2 text-[9px] text-slate-400">- {task.person}</span>
                            </span>
                          </label>
@@ -420,15 +470,15 @@ const App = () => {
                    )}
                 </div>
              </div>
-             <div className="pt-6 flex justify-between items-center border-t border-slate-50">
+             <div className="pt-6 flex justify-between items-center border-t border-slate-200">
                <div className="flex flex-col">
-                 <span className="text-[9px] text-slate-300 font-bold uppercase">Cargado por: {n.creado_por}</span>
-                 {n.modificado_por && <span className="text-[9px] text-emerald-400 font-bold uppercase">Últ. Mod: {n.modificado_por}</span>}
+                 <span className="text-[9px] text-slate-400 font-bold uppercase">Cargado por: {n.creado_por}</span>
+                 {n.modificado_por && <span className="text-[9px] text-emerald-500 font-bold uppercase">Últ. Mod: {n.modificado_por}</span>}
                </div>
                <div className="flex gap-2">
-                  <button onClick={() => { setEditingNovedad(n); setCurrentView('form'); }} className="text-[10px] bg-slate-100 px-4 py-2 rounded-xl font-black text-slate-600 hover:bg-slate-200 uppercase tracking-widest transition-colors">Editar</button>
+                  <button onClick={() => { setEditingNovedad(n); setCurrentView('form'); }} className="text-[10px] bg-slate-200 px-4 py-2 rounded-xl font-black text-slate-700 hover:bg-slate-300 uppercase tracking-widest transition-colors">Editar</button>
                   {currentUser.role === 'admin' && (
-                    <button onClick={async () => { if(confirm("¿Eliminar este registro permanentemente?")){ await sb.from('novedades').delete().eq('id', n.id); addLog('BORRAR_REGISTRO', 'Eliminó registro ' + n.numero_novedad); loadData(); showNotify("Registro eliminado"); } }} className="text-[10px] bg-red-50 px-4 py-2 rounded-xl font-black text-red-500 hover:bg-red-100 uppercase tracking-widest transition-colors">Eliminar</button>
+                    <button onClick={async () => { if(confirm("¿Eliminar este registro permanentemente?")){ await sb.from('novedades').delete().eq('id', n.id); addLog('BORRAR_REGISTRO', 'Eliminó registro ' + n.numero_novedad); loadData(); showNotify("Registro eliminado"); } }} className="text-[10px] bg-red-100 px-4 py-2 rounded-xl font-black text-red-600 hover:bg-red-200 uppercase tracking-widest transition-colors">Eliminar</button>
                   )}
                </div>
              </div>
@@ -439,11 +489,11 @@ const App = () => {
   };
 
   return (
-    <div className="pb-20 min-h-screen bg-slate-50 font-sans">
+    <div className="pb-20 min-h-screen bg-slate-300 font-sans">
       <Header 
         user={currentUser} 
         currentView={currentView} 
-        setView={v => { setCurrentView(v); setEditingNovedad(null); setEditingUser(null); setSearchTerm(''); if(v === 'logs' || v === 'users') loadData(); }} 
+        setView={v => { setCurrentView(v); setEditingNovedad(null); setEditingUser(null); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users') loadData(); }} 
         onLogout={() => { addLog('LOGOUT', 'Cierre de sesión manual'); setCurrentUser(null); }} 
         onShowStats={() => setShowStats(true)} 
         onShowPass={() => setShowPassModal(true)}
@@ -459,23 +509,28 @@ const App = () => {
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h2 className="text-3xl font-black text-slate-800 tracking-tight">Pendientes</h2>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Tus asignaciones aparecen primero</p>
+                <p className="text-xs text-slate-600 font-bold uppercase tracking-widest mt-1">Tus asignaciones aparecen primero</p>
               </div>
               <button onClick={() => setCurrentView('form')} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl shadow-slate-900/20 hover:scale-105 transition-transform uppercase tracking-widest">+ Nuevo</button>
             </div>
 
-            <SearchBar value={searchTerm} onChange={setSearchTerm} />
+            <SearchAndFilter 
+              searchTerm={searchTerm} 
+              onSearchChange={setSearchTerm}
+              selectedYear={selectedYear}
+              onYearChange={setSelectedYear}
+            />
 
-            <div className="flex flex-wrap gap-4 mb-6 p-4 bg-white rounded-2xl border border-slate-100">
+            <div className="flex flex-wrap gap-4 mb-6 p-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
               <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-red-500"></div><span className="text-xs font-bold text-slate-600">Asignado a ti (pendiente)</span></div>
               <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-emerald-500"></div><span className="text-xs font-bold text-slate-600">Asignado a ti (tu tarea lista)</span></div>
-              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-slate-200"></div><span className="text-xs font-bold text-slate-600">No asignado a ti</span></div>
+              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-slate-300"></div><span className="text-xs font-bold text-slate-600">No asignado a ti</span></div>
             </div>
             
             {pendingNovedades.length === 0 && (
-              <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-200">
-                <div className="text-5xl mb-4">{searchTerm ? '🔍' : '🎉'}</div>
-                <p className="text-slate-400 font-bold">{searchTerm ? 'No se encontraron resultados' : '¡No hay novedades pendientes!'}</p>
+              <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-300 shadow-sm">
+                <div className="text-5xl mb-4">{searchTerm || selectedYear ? '🔍' : '🎉'}</div>
+                <p className="text-slate-500 font-bold">{searchTerm || selectedYear ? 'No se encontraron resultados' : '¡No hay novedades pendientes!'}</p>
               </div>
             )}
 
@@ -491,16 +546,21 @@ const App = () => {
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h2 className="text-3xl font-black text-slate-800 tracking-tight">Completados</h2>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Novedades con todas las tareas finalizadas</p>
+                <p className="text-xs text-slate-600 font-bold uppercase tracking-widest mt-1">Novedades con todas las tareas finalizadas</p>
               </div>
             </div>
 
-            <SearchBar value={searchTerm} onChange={setSearchTerm} />
+            <SearchAndFilter 
+              searchTerm={searchTerm} 
+              onSearchChange={setSearchTerm}
+              selectedYear={selectedYear}
+              onYearChange={setSelectedYear}
+            />
             
             {completedNovedades.length === 0 && (
-              <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-200">
-                <div className="text-5xl mb-4">{searchTerm ? '🔍' : '📂'}</div>
-                <p className="text-slate-400 font-bold">{searchTerm ? 'No se encontraron resultados' : 'No hay novedades completadas aún.'}</p>
+              <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-300 shadow-sm">
+                <div className="text-5xl mb-4">{searchTerm || selectedYear ? '🔍' : '📂'}</div>
+                <p className="text-slate-500 font-bold">{searchTerm || selectedYear ? 'No se encontraron resultados' : 'No hay novedades completadas aún.'}</p>
               </div>
             )}
 
@@ -512,7 +572,7 @@ const App = () => {
 
         {/* VISTA FORMULARIO */}
         {currentView === 'form' && (
-          <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden max-w-2xl mx-auto animate-slideUp border border-slate-100">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden max-w-2xl mx-auto animate-slideUp border border-slate-200">
             <div className="p-10 bg-slate-900 text-white flex justify-between items-center">
               <div>
                 <h2 className="text-3xl font-black tracking-tight">{editingNovedad ? 'Editar Registro' : 'Nuevo Registro'}</h2>
@@ -526,6 +586,7 @@ const App = () => {
               const payload = {
                 numero_novedad: d.get('nov'),
                 numero_sgsp: d.get('sgsp'),
+                anio: parseInt(d.get('anio')) || currentYear,
                 titulo: d.get('titulo') || null,
                 informeActuacion: d.get('ia') || null,
                 informeCriminalistico: d.get('ic') || null,
@@ -546,29 +607,35 @@ const App = () => {
               loadData();
               setCurrentView('list');
             }}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">N° Novedad *</label>
-                  <input name="nov" defaultValue={editingNovedad?.numero_novedad} required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold" placeholder="NOV-XXXX" />
+                  <input name="nov" defaultValue={editingNovedad?.numero_novedad} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold" placeholder="Ej: 001" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Año *</label>
+                  <select name="anio" defaultValue={editingNovedad?.anio || currentYear} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold cursor-pointer">
+                    {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">N° SGSP *</label>
-                  <input name="sgsp" defaultValue={editingNovedad?.numero_sgsp} required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold" placeholder="SGSP-XXXX" />
+                  <input name="sgsp" defaultValue={editingNovedad?.numero_sgsp} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold" placeholder="SGSP-XXXX" />
                 </div>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Título / Descripción breve</label>
-                <input name="titulo" defaultValue={editingNovedad?.titulo || ''} className="w-full p-4 bg-emerald-50 border border-emerald-100 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold text-emerald-700 placeholder-emerald-300" placeholder="Ej: Robo en comercio, Accidente vehicular, etc." />
+                <input name="titulo" defaultValue={editingNovedad?.titulo || ''} className="w-full p-4 bg-emerald-50 border border-emerald-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold text-emerald-700 placeholder-emerald-400" placeholder="Ej: Robo en comercio, Accidente vehicular, etc." />
               </div>
 
               <div className="space-y-6 pt-4">
-                <h3 className="text-[11px] font-black text-slate-300 uppercase tracking-[0.3em] border-b border-slate-50 pb-3">Personal Asignado (opcional)</h3>
+                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] border-b border-slate-100 pb-3">Personal Asignado (opcional)</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                    {[{ name: 'ia', field: 'informeActuacion', label: 'Informe Actuación' },{ name: 'ic', field: 'informeCriminalistico', label: 'Criminalístico' },{ name: 'ip', field: 'informePericial', label: 'Pericial' },{ name: 'cr', field: 'croquis', label: 'Croquis' }].map(item => (
                      <div key={item.name} className="space-y-1.5">
                        <label className="text-[10px] font-black text-slate-500 uppercase ml-1">{item.label}</label>
-                       <select name={item.name} defaultValue={editingNovedad ? editingNovedad[item.field] : ''} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold text-sm cursor-pointer">
+                       <select name={item.name} defaultValue={editingNovedad ? editingNovedad[item.field] : ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold text-sm cursor-pointer">
                          <option value="">-- Sin asignar --</option>
                          {users.map(u => <option key={u.id} value={u.nombre}>{u.nombre}</option>)}
                        </select>
@@ -578,7 +645,7 @@ const App = () => {
               </div>
 
               <div className="flex gap-4 pt-10">
-                 <button type="button" onClick={() => setCurrentView('list')} className="flex-1 p-5 bg-slate-100 rounded-[1.5rem] font-black text-slate-500 uppercase tracking-widest text-xs hover:bg-slate-200 transition-colors">Cancelar</button>
+                 <button type="button" onClick={() => setCurrentView('list')} className="flex-1 p-5 bg-slate-200 rounded-[1.5rem] font-black text-slate-600 uppercase tracking-widest text-xs hover:bg-slate-300 transition-colors">Cancelar</button>
                  <button className="flex-1 p-5 bg-emerald-500 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs shadow-xl shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all">Guardar Datos</button>
               </div>
             </form>
@@ -591,30 +658,30 @@ const App = () => {
             <div className="flex justify-between items-end mb-8">
               <div>
                 <h2 className="text-3xl font-black text-slate-800 tracking-tight">Personal</h2>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Gestión de Usuarios del Sistema</p>
+                <p className="text-xs text-slate-600 font-bold uppercase tracking-widest mt-1">Gestión de Usuarios del Sistema</p>
               </div>
               <button onClick={() => setEditingUser({ nombre: '', username: '', password: '', role: 'user' })} className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg">+ Nuevo Usuario</button>
             </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6">
-              <p className="text-xs text-amber-700 font-bold">💡 Los usuarios registrados aquí aparecerán en las listas desplegables para asignar tareas.</p>
+            <div className="bg-amber-100 border border-amber-300 rounded-2xl p-4 mb-6">
+              <p className="text-xs text-amber-800 font-bold">💡 Los usuarios registrados aquí aparecerán en las listas desplegables para asignar tareas.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {users.map(u => (
-                <div key={u.id} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-all">
+                <div key={u.id} className="bg-white p-5 rounded-3xl shadow-md border border-slate-200 flex items-center justify-between group hover:shadow-lg transition-all">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-lg shadow-lg">{u.nombre.charAt(0).toUpperCase()}</div>
                     <div>
                       <div className="font-black text-slate-800">{u.nombre}</div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.15em] flex items-center gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full ${u.role === 'admin' ? 'bg-purple-400' : 'bg-emerald-400'}`}></span>
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.15em] flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full ${u.role === 'admin' ? 'bg-purple-500' : 'bg-emerald-500'}`}></span>
                         {u.role} • @{u.username}
                       </div>
                     </div>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => setEditingUser(u)} className="p-2.5 hover:bg-slate-50 rounded-xl transition-colors">✏️</button>
+                    <button onClick={() => setEditingUser(u)} className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors">✏️</button>
                     {u.id !== currentUser.id && (
-                      <button onClick={async () => { if(confirm("¿Eliminar acceso para este usuario?")){ await sb.from('users').delete().eq('id', u.id); addLog('BORRAR_USUARIO', 'Eliminó acceso de @' + u.username); loadData(); } }} className="p-2.5 hover:bg-red-50 text-red-400 rounded-xl transition-colors">🗑️</button>
+                      <button onClick={async () => { if(confirm("¿Eliminar acceso para este usuario?")){ await sb.from('users').delete().eq('id', u.id); addLog('BORRAR_USUARIO', 'Eliminó acceso de @' + u.username); loadData(); } }} className="p-2.5 hover:bg-red-100 text-red-500 rounded-xl transition-colors">🗑️</button>
                     )}
                   </div>
                 </div>
@@ -628,25 +695,25 @@ const App = () => {
           <div className="space-y-4 animate-fadeIn">
             <div className="mb-8">
               <h2 className="text-3xl font-black text-slate-800 tracking-tight">Auditoría</h2>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Registro de Actividades del Sistema</p>
+              <p className="text-xs text-slate-600 font-bold uppercase tracking-widest mt-1">Registro de Actividades del Sistema</p>
             </div>
             {logs.length === 0 ? (
-              <div className="text-center py-16 bg-white rounded-[2rem] border border-slate-100"><p className="text-slate-400 font-bold">No hay registros de auditoría.</p></div>
+              <div className="text-center py-16 bg-white rounded-[2rem] border border-slate-200 shadow-sm"><p className="text-slate-500 font-bold">No hay registros de auditoría.</p></div>
             ) : (
-              <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden">
+              <div className="bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-md">
                 <div className="max-h-[600px] overflow-y-auto">
                   {logs.map((log, i) => (
-                    <div key={log.id || i} className="p-5 border-b border-slate-50 last:border-0 flex items-start gap-4 hover:bg-slate-50/50 transition-colors">
-                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-sm shrink-0">
+                    <div key={log.id || i} className="p-5 border-b border-slate-100 last:border-0 flex items-start gap-4 hover:bg-slate-50 transition-colors">
+                      <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center text-sm shrink-0">
                         {log.action === 'LOGIN' ? '🔓' : log.action === 'LOGOUT' ? '🚪' : log.action.includes('CREAR') || log.action.includes('NUEVO') ? '➕' : log.action.includes('EDITAR') || log.action.includes('MOD') ? '✏️' : log.action.includes('BORRAR') ? '🗑️' : '📝'}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-black text-slate-800 text-sm">{log.nombre}</span>
-                          <span className="text-[10px] text-slate-400 font-bold">@{log.username}</span>
+                          <span className="text-[10px] text-slate-500 font-bold">@{log.username}</span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">{log.details}</p>
-                        <span className="text-[9px] text-slate-300 font-bold uppercase tracking-widest mt-2 inline-block">{log.action} • {new Date(log.created_at).toLocaleString()}</span>
+                        <p className="text-xs text-slate-600 mt-1">{log.details}</p>
+                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-2 inline-block">{log.action} • {new Date(log.created_at).toLocaleString()}</span>
                       </div>
                     </div>
                   ))}
@@ -680,10 +747,10 @@ const App = () => {
                setEditingUser(null);
                showNotify("Datos de usuario guardados");
              }}>
-               <input name="nom" defaultValue={editingUser.nombre} placeholder="Nombre Completo" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm" />
-               <input name="user" defaultValue={editingUser.username} placeholder="Username para login" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm" />
-               <input name="pass" defaultValue={editingUser.password} placeholder="Contraseña" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm" />
-               <select name="role" defaultValue={editingUser.role} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm cursor-pointer">
+               <input name="nom" defaultValue={editingUser.nombre} placeholder="Nombre Completo" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
+               <input name="user" defaultValue={editingUser.username} placeholder="Username para login" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
+               <input name="pass" defaultValue={editingUser.password} placeholder="Contraseña" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm" />
+               <select name="role" defaultValue={editingUser.role} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm cursor-pointer">
                  <option value="user">Usuario</option>
                  <option value="admin">Administrador</option>
                </select>
@@ -710,8 +777,8 @@ const App = () => {
                showNotify("Contraseña actualizada");
                setShowPassModal(false);
              }}>
-               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Nueva clave para @{currentUser.username}</p>
-               <input name="pass" type="password" placeholder="Nueva Contraseña..." required className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold" />
+               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Nueva clave para @{currentUser.username}</p>
+               <input name="pass" type="password" placeholder="Nueva Contraseña..." required className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold" />
                <button className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl">Guardar</button>
              </form>
            </div>
@@ -728,59 +795,59 @@ const App = () => {
             </div>
             <div className="p-8 space-y-8">
                <div>
-                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Resumen General</h4>
+                 <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Resumen General</h4>
                  <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-center">
+                    <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200 text-center">
                       <div className="text-3xl font-black text-slate-800">{novedades.length}</div>
-                      <div className="text-[9px] uppercase font-black text-slate-400 tracking-widest">Total</div>
+                      <div className="text-[9px] uppercase font-black text-slate-500 tracking-widest">Total</div>
                     </div>
-                    <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 text-center">
-                      <div className="text-3xl font-black text-amber-600">{totalPending}</div>
-                      <div className="text-[9px] uppercase font-black text-amber-500 tracking-widest">Pendientes</div>
+                    <div className="bg-amber-100 p-5 rounded-2xl border border-amber-200 text-center">
+                      <div className="text-3xl font-black text-amber-700">{totalPending}</div>
+                      <div className="text-[9px] uppercase font-black text-amber-600 tracking-widest">Pendientes</div>
                     </div>
-                    <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 text-center">
-                      <div className="text-3xl font-black text-emerald-600">{totalCompleted}</div>
-                      <div className="text-[9px] uppercase font-black text-emerald-500 tracking-widest">Completados</div>
+                    <div className="bg-emerald-100 p-5 rounded-2xl border border-emerald-200 text-center">
+                      <div className="text-3xl font-black text-emerald-700">{totalCompleted}</div>
+                      <div className="text-[9px] uppercase font-black text-emerald-600 tracking-widest">Completados</div>
                     </div>
                  </div>
                </div>
 
                <div>
-                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Rendimiento por Usuario</h4>
+                 <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Rendimiento por Usuario</h4>
                  <div className="space-y-3">
                    {users.map(u => {
                      const stats = getUserStats(u);
                      const porcentaje = stats.asignadas > 0 ? Math.round((stats.completadas / stats.asignadas) * 100) : 0;
                      return (
-                       <div key={u.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                       <div key={u.id} className="bg-slate-100 p-4 rounded-2xl border border-slate-200">
                          <div className="flex items-center justify-between mb-3">
                            <div className="flex items-center gap-3">
                              <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-sm">{u.nombre.charAt(0).toUpperCase()}</div>
                              <div>
                                <div className="font-black text-slate-800 text-sm">{u.nombre}</div>
-                               <div className="text-[9px] text-slate-400 font-bold uppercase">@{u.username}</div>
+                               <div className="text-[9px] text-slate-500 font-bold uppercase">@{u.username}</div>
                              </div>
                            </div>
                            <div className="text-right">
                              <div className="text-lg font-black text-slate-800">{porcentaje}%</div>
-                             <div className="text-[9px] text-slate-400 font-bold uppercase">Completado</div>
+                             <div className="text-[9px] text-slate-500 font-bold uppercase">Completado</div>
                            </div>
                          </div>
-                         <div className="h-2 bg-slate-200 rounded-full overflow-hidden mb-3">
+                         <div className="h-2 bg-slate-300 rounded-full overflow-hidden mb-3">
                            <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: porcentaje + '%' }}></div>
                          </div>
                          <div className="grid grid-cols-3 gap-2 text-center">
-                           <div className="bg-white p-2 rounded-xl">
+                           <div className="bg-white p-2 rounded-xl border border-slate-200">
                              <div className="text-lg font-black text-slate-700">{stats.asignadas}</div>
-                             <div className="text-[8px] text-slate-400 font-bold uppercase">Asignadas</div>
+                             <div className="text-[8px] text-slate-500 font-bold uppercase">Asignadas</div>
                            </div>
-                           <div className="bg-emerald-100 p-2 rounded-xl">
-                             <div className="text-lg font-black text-emerald-600">{stats.completadas}</div>
-                             <div className="text-[8px] text-emerald-500 font-bold uppercase">Hechas</div>
+                           <div className="bg-emerald-100 p-2 rounded-xl border border-emerald-200">
+                             <div className="text-lg font-black text-emerald-700">{stats.completadas}</div>
+                             <div className="text-[8px] text-emerald-600 font-bold uppercase">Hechas</div>
                            </div>
-                           <div className="bg-red-100 p-2 rounded-xl">
-                             <div className="text-lg font-black text-red-500">{stats.pendientes}</div>
-                             <div className="text-[8px] text-red-400 font-bold uppercase">Pendientes</div>
+                           <div className="bg-red-100 p-2 rounded-xl border border-red-200">
+                             <div className="text-lg font-black text-red-600">{stats.pendientes}</div>
+                             <div className="text-[8px] text-red-500 font-bold uppercase">Pendientes</div>
                            </div>
                          </div>
                        </div>
@@ -789,7 +856,7 @@ const App = () => {
                  </div>
                </div>
 
-               <button onClick={() => setShowStats(false)} className="w-full py-4 bg-slate-100 rounded-2xl font-black text-slate-400 uppercase tracking-widest text-[10px] hover:bg-slate-200 transition-colors">Cerrar</button>
+               <button onClick={() => setShowStats(false)} className="w-full py-4 bg-slate-200 rounded-2xl font-black text-slate-600 uppercase tracking-widest text-[10px] hover:bg-slate-300 transition-colors">Cerrar</button>
             </div>
           </div>
         </div>
