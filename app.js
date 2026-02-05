@@ -20,7 +20,7 @@ const Notification = ({ message, type }) => (
 );
 
 // 3. ENCABEZADO
-const Header = ({ user, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, pendingCount, completedCount }) => (
+const Header = ({ user, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount }) => (
   <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50 print:hidden">
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
@@ -42,6 +42,7 @@ const Header = ({ user, currentView, setView, onLogout, onShowStats, onShowPass,
               <>
                 <button onClick={onShowStats} className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all" title="Estadísticas">📊</button>
                 <button onClick={onShowReport} className="p-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl transition-all" title="Imprimir Reporte">🖨️</button>
+                <button onClick={onBackup} className="p-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all" title="Descargar Respaldo">💾</button>
               </>
             )}
             <button onClick={onLogout} className="px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all font-bold text-sm flex items-center gap-2 shadow-lg" title="Cerrar Sesión">
@@ -323,6 +324,54 @@ const App = () => {
     window.print();
   };
 
+  const handleBackup = async () => {
+    try {
+      showNotify("Generando respaldo...", "success");
+      
+      // Obtener todos los datos
+      const { data: allNovedades } = await sb.from('novedades').select('*');
+      const { data: allUsers } = await sb.from('users').select('*');
+      const { data: allLogs } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(500);
+      
+      // Crear objeto de respaldo
+      const backup = {
+        fecha_respaldo: new Date().toISOString(),
+        generado_por: currentUser.nombre,
+        version: '1.0',
+        datos: {
+          novedades: allNovedades || [],
+          usuarios: allUsers || [],
+          logs: allLogs || []
+        },
+        resumen: {
+          total_novedades: (allNovedades || []).length,
+          total_usuarios: (allUsers || []).length,
+          total_logs: (allLogs || []).length
+        }
+      };
+      
+      // Convertir a JSON
+      const jsonString = JSON.stringify(backup, null, 2);
+      
+      // Crear blob y descargar
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `respaldo_novedades_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      addLog('RESPALDO', 'Descargó respaldo de la base de datos');
+      showNotify("Respaldo descargado correctamente", "success");
+    } catch (error) {
+      console.error("Error al generar respaldo:", error);
+      showNotify("Error al generar respaldo", "error");
+    }
+  };
+
   if (isLoading) return null;
 
   if (!currentUser) {
@@ -460,7 +509,7 @@ const App = () => {
 
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header user={currentUser} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setEditingUser(null); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users') loadData(); }} onLogout={() => { addLog('LOGOUT', 'Cierre de sesión'); setCurrentUser(null); }} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} pendingCount={totalPending} completedCount={totalCompleted} />
+      <Header user={currentUser} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setEditingUser(null); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users') loadData(); }} onLogout={() => { addLog('LOGOUT', 'Cierre de sesión'); setCurrentUser(null); }} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         
