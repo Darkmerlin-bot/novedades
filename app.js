@@ -539,6 +539,9 @@ const App = () => {
                     {p.id !== userProfile.id && (
                       <button onClick={() => setEditingProfile(p)} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Editar</button>
                     )}
+                    {p.id === userProfile.id && (
+                      <button onClick={() => setEditingProfile({...p, isSelf: true})} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Mi Perfil</button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -575,16 +578,23 @@ const App = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Rol</label>
-                  <select name="role" defaultValue={editingProfile.role} onChange={async (e) => {
-                    const newRole = e.target.value;
-                    await sb.from('profiles').update({ role: newRole }).eq('id', editingProfile.id);
-                    await addLog('CAMBIO_ROL', `${editingProfile.nombre} ahora es ${newRole}`);
-                    showNotify("Rol actualizado");
-                    loadData();
-                  }} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer">
-                    <option value="user">Usuario</option>
-                    <option value="admin">Administrador</option>
-                  </select>
+                  {editingProfile.isSelf ? (
+                    <div>
+                      <input value={editingProfile.role === 'admin' ? 'Administrador' : 'Usuario'} disabled className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-400" />
+                      <p className="text-[9px] text-slate-400 ml-1">No podés cambiar tu propio rol</p>
+                    </div>
+                  ) : (
+                    <select name="role" defaultValue={editingProfile.role} onChange={async (e) => {
+                      const newRole = e.target.value;
+                      await sb.from('profiles').update({ role: newRole }).eq('id', editingProfile.id);
+                      await addLog('CAMBIO_ROL', `${editingProfile.nombre} ahora es ${newRole}`);
+                      showNotify("Rol actualizado");
+                      loadData();
+                    }} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer">
+                      <option value="user">Usuario</option>
+                      <option value="admin">Administrador</option>
+                    </select>
+                  )}
                 </div>
                 <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl">Guardar Cambios</button>
               </form>
