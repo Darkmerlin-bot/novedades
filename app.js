@@ -124,9 +124,11 @@ const App = () => {
   const [expandedId, setExpandedId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
-  const [loginEmail, setLoginEmail] = useState('');
+  const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(null);
+  const [newUserData, setNewUserData] = useState({ nombre: '', password: '' });
 
   const showNotify = (message, type = 'success') => {
     setNotification({ message, type });
@@ -165,10 +167,11 @@ const App = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginLoading(true);
-    const { data, error } = await sb.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
+    const email = loginUsername.toLowerCase().trim() + '@local.com';
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: loginPassword });
     if (error) {
-      await sb.from('logs').insert([{ action: 'LOGIN_FALLIDO', details: 'Intento fallido: ' + loginEmail }]);
-      showNotify(error.message || "Credenciales incorrectas", "error");
+      await sb.from('logs').insert([{ action: 'LOGIN_FALLIDO', details: 'Intento fallido: ' + loginUsername }]);
+      showNotify("Usuario o contraseña incorrectos", "error");
     } else {
       showNotify("Bienvenido!");
     }
@@ -323,8 +326,8 @@ const App = () => {
           </div>
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Email</label>
-              <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="usuario@novedades.local" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700" required />
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Usuario</label>
+              <input type="text" value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} placeholder="Tu nombre de usuario" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700" required />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Contraseña</label>
@@ -518,21 +521,73 @@ const App = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-end mb-8">
               <div><h2 className="text-3xl font-black text-slate-800">Personal</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Usuarios del sistema</p></div>
-              <button onClick={() => setShowNewUser(true)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase shadow-lg">+ Nuevo Usuario</button>
             </div>
-            <div className="bg-amber-100 border border-amber-300 rounded-2xl p-4 mb-6"><p className="text-xs text-amber-800 font-bold">💡 Para crear usuarios, ve a Supabase {">"} Authentication {">"} Users. El perfil se crea automáticamente.</p></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {profiles.map(p => (
-                <div key={p.id} className="bg-white p-5 rounded-3xl shadow-md border border-slate-200 flex items-center justify-between group hover:shadow-lg">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-lg">{p.nombre?.charAt(0).toUpperCase()}</div>
-                    <div><div className="font-black text-slate-800">{p.nombre}</div><div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2"><span className={`w-1.5 h-1.5 rounded-full ${p.role === 'admin' ? 'bg-purple-500' : 'bg-emerald-500'}`}></span>{p.role} • {p.email}</div></div>
+                <div key={p.id} className="bg-white p-5 rounded-3xl shadow-md border border-slate-200 group hover:shadow-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-lg">{p.nombre?.charAt(0).toUpperCase()}</div>
+                      <div>
+                        <div className="font-black text-slate-800">{p.nombre}</div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full ${p.role === 'admin' ? 'bg-purple-500' : 'bg-emerald-500'}`}></span>
+                          {p.role} • {p.email?.split('@')[0]}
+                        </div>
+                      </div>
+                    </div>
+                    {p.id !== userProfile.id && (
+                      <button onClick={() => setEditingProfile(p)} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Editar</button>
+                    )}
                   </div>
-                  {userProfile.role === 'admin' && p.id !== userProfile.id && (
-                    <button onClick={async () => { const newRole = p.role === 'admin' ? 'user' : 'admin'; await sb.from('profiles').update({ role: newRole }).eq('id', p.id); await addLog('CAMBIO_ROL', `${p.nombre} ahora es ${newRole}`); loadData(); showNotify("Rol actualizado"); }} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200 opacity-0 group-hover:opacity-100">{p.role === 'admin' ? 'Quitar Admin' : 'Hacer Admin'}</button>
-                  )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* MODAL EDITAR USUARIO */}
+        {editingProfile && (
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setEditingProfile(null)}>
+            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp" onClick={e => e.stopPropagation()}>
+              <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
+                <h3 className="font-black uppercase text-sm">✏️ Editar Usuario</h3>
+                <button onClick={() => setEditingProfile(null)} className="text-slate-500 hover:text-white">✕</button>
+              </div>
+              <form className="p-8 space-y-5" onSubmit={async (e) => {
+                e.preventDefault();
+                const nombre = e.target.nombre.value.trim();
+                if (!nombre) return;
+                await sb.from('profiles').update({ nombre }).eq('id', editingProfile.id);
+                await addLog('EDITAR_USUARIO', `Cambió nombre de ${editingProfile.nombre} a ${nombre}`);
+                showNotify("Usuario actualizado");
+                setEditingProfile(null);
+                loadData();
+              }}>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nombre</label>
+                  <input name="nombre" defaultValue={editingProfile.nombre} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Usuario (login)</label>
+                  <input value={editingProfile.email?.split('@')[0]} disabled className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-400" />
+                  <p className="text-[9px] text-slate-400 ml-1">El usuario de login no se puede cambiar</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Rol</label>
+                  <select name="role" defaultValue={editingProfile.role} onChange={async (e) => {
+                    const newRole = e.target.value;
+                    await sb.from('profiles').update({ role: newRole }).eq('id', editingProfile.id);
+                    await addLog('CAMBIO_ROL', `${editingProfile.nombre} ahora es ${newRole}`);
+                    showNotify("Rol actualizado");
+                    loadData();
+                  }} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer">
+                    <option value="user">Usuario</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+                <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl">Guardar Cambios</button>
+              </form>
             </div>
           </div>
         )}
