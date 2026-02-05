@@ -129,6 +129,14 @@ const App = () => {
   const [loginLoading, setLoginLoading] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
   const [newUserData, setNewUserData] = useState({ nombre: '', password: '' });
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_SIZE = 50;
 
   const showNotify = (message, type = 'success') => {
     setNotification({ message, type });
@@ -189,17 +197,101 @@ const App = () => {
     await sb.from('logs').insert([{ user_id: session.user.id, user_email: session.user.email, user_nombre: userProfile.nombre, action, details }]);
   };
 
-  const loadData = async () => {
+  const loadData = async (reset = true) => {
     if (!session) return;
-    const { data: novData } = await sb.from('novedades').select('*');
-    setNovedades(novData || []);
+    
+    if (reset) {
+      setPage(0);
+      setHasMore(true);
+    }
+    
+    const from = reset ? 0 : page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    
+    const { data: novData, error } = await sb
+      .from('novedades')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    
+    if (novData) {
+      if (reset) {
+        setNovedades(novData);
+      } else {
+        setNovedades(prev => [...prev, ...novData]);
+      }
+      setHasMore(novData.length === PAGE_SIZE);
+    }
+    
     const { data: profilesData } = await sb.from('profiles').select('*').order('nombre');
     setProfiles(profilesData || []);
+    
     if (userProfile?.role === 'admin') {
       const { data: logData } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(100);
       setLogs(logData || []);
     }
   };
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    setPage(nextPage);
+    
+    const from = nextPage * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    
+    const { data: novData } = await sb
+      .from('novedades')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    
+    if (novData) {
+      setNovedades(prev => [...prev, ...novData]);
+      setHasMore(novData.length === PAGE_SIZE);
+    }
+    setLoadingMore(false);
+  };
+
+  // Validación de duplicados en servidor
+  const checkDuplicateServer = async (num, anio, excludeId) => {
+    let query = sb
+      .from('novedades')
+      .select('id')
+      .ilike('numero_novedad', num)
+      .eq('anio', parseInt(anio));
+    
+    if (excludeId) query = query.neq('id', excludeId);
+    
+    const { data } = await query.maybeSingle();
+    return !!data;
+  };
+
+  // Realtime - escuchar cambios en novedades
+  useEffect(() => {
+    if (!session) return;
+    
+    const channel = sb
+      .channel('novedades-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'novedades' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setNovedades(prev => [payload.new, ...prev]);
+          } else if (payload.eventType === 'UPDATE') {
+            setNovedades(prev => prev.map(n => n.id === payload.new.id ? payload.new : n));
+          } else if (payload.eventType === 'DELETE') {
+            setNovedades(prev => prev.filter(n => n.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      sb.removeChannel(channel);
+    };
+  }, [session]);
 
   useEffect(() => {
     if (session && userProfile) {
@@ -267,7 +359,7 @@ const App = () => {
   const totalPending = novedades.filter(n => !isNovedadComplete(n)).length;
   const totalCompleted = novedades.filter(n => isNovedadComplete(n)).length;
 
-  const checkDuplicate = (num, anio, excludeId) => novedades.some(n => n.numero_novedad?.toLowerCase() === num?.toLowerCase() && (n.anio || new Date(n.created_at).getFullYear()) === parseInt(anio) && n.id !== excludeId);
+  const checkDuplicate = checkDuplicateServer;
 
   const handleToggleCheck = async (id, checkKey, checkKeyOld) => {
     const n = novedades.find(x => x.id === id);
@@ -460,6 +552,13 @@ const App = () => {
               <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-slate-300"></div><span className="text-xs font-bold text-slate-600">No asignado</span></div>
             </div>
             {pendingNovedades.length === 0 ? <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-300"><div className="text-5xl mb-4">{searchTerm || selectedYear ? '🔍' : '🎉'}</div><p className="text-slate-500 font-bold">{searchTerm || selectedYear ? 'Sin resultados' : '¡No hay pendientes!'}</p></div> : <div className="grid gap-4">{pendingNovedades.map(n => <NovedadCard key={n.id} n={n} isCompletedView={false} />)}</div>}
+            {hasMore && !searchTerm && !selectedYear && pendingNovedades.length > 0 && (
+              <div className="text-center pt-6">
+                <button onClick={loadMore} disabled={loadingMore} className="px-8 py-4 bg-slate-200 hover:bg-slate-300 rounded-2xl font-bold text-slate-600 text-sm disabled:opacity-50">
+                  {loadingMore ? '⏳ Cargando...' : '📥 Cargar más novedades'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -469,6 +568,13 @@ const App = () => {
             <div className="mb-6"><h2 className="text-3xl font-black text-slate-800">Completados</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tareas finalizadas</p></div>
             <SearchAndFilter searchTerm={searchTerm} onSearchChange={setSearchTerm} selectedYear={selectedYear} onYearChange={setSelectedYear} />
             {completedNovedades.length === 0 ? <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-300"><div className="text-5xl mb-4">📂</div><p className="text-slate-500 font-bold">Sin completados</p></div> : <div className="grid gap-4">{completedNovedades.map(n => <NovedadCard key={n.id} n={n} isCompletedView={true} />)}</div>}
+            {hasMore && !searchTerm && !selectedYear && completedNovedades.length > 0 && (
+              <div className="text-center pt-6">
+                <button onClick={loadMore} disabled={loadingMore} className="px-8 py-4 bg-slate-200 hover:bg-slate-300 rounded-2xl font-bold text-slate-600 text-sm disabled:opacity-50">
+                  {loadingMore ? '⏳ Cargando...' : '📥 Cargar más novedades'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -483,7 +589,8 @@ const App = () => {
               e.preventDefault();
               const d = new FormData(e.target);
               const num = d.get('nov'), anio = d.get('anio');
-              if (checkDuplicate(num, anio, editingNovedad?.id)) { showNotify("Ya existe esa novedad en " + anio, "error"); return; }
+              const isDuplicate = await checkDuplicate(num, anio, editingNovedad?.id);
+              if (isDuplicate) { showNotify("Ya existe esa novedad en " + anio, "error"); return; }
               const payload = { numero_novedad: num, numero_sgsp: d.get('sgsp'), anio: parseInt(anio), titulo: d.get('titulo') || null, informe_actuacion: d.get('ia') || null, informe_criminalistico: d.get('ic') || null, informe_pericial: d.get('ip') || null, croquis: d.get('cr') || null };
               if (editingNovedad) {
                 await sb.from('novedades').update({ ...payload, modificado_por: userProfile.nombre }).eq('id', editingNovedad.id);
