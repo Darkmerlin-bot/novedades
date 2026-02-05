@@ -19,19 +19,15 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         @media print {
-            body * { visibility: hidden; }
-            #report-content, #report-content * { visibility: visible; }
-            #report-content { 
-                position: absolute; 
-                left: 0; 
-                top: 0; 
-                width: 100%;
-                padding: 20px;
-            }
-            .print\\:hidden { display: none !important; }
-            .no-print { display: none !important; }
+            body { background: white !important; }
+            .no-print, header, .print\\:hidden { display: none !important; }
+            #root > div { background: white !important; }
+            #root > div > div:first-child { display: none !important; }
+            main { display: none !important; }
+            .fixed { position: relative !important; background: white !important; }
+            .fixed > div { max-height: none !important; overflow: visible !important; border-radius: 0 !important; }
             table { page-break-inside: auto; }
-            tr { page-break-inside: avoid; page-break-after: auto; }
+            tr { page-break-inside: avoid; }
             thead { display: table-header-group; }
         }
     </style>
