@@ -133,11 +133,20 @@ const App = () => {
     setTimeout(() => setNotification(null), 3000);
   };
 
+  // Ocultar pantalla de carga inicial
+  useEffect(() => {
+    const loadingScreen = document.getElementById('loading-screen');
+    if (loadingScreen) loadingScreen.style.display = 'none';
+  }, []);
+
   // AUTENTICACIÓN
   useEffect(() => {
     sb.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) loadUserProfile(session.user.id);
+      setAuthLoading(false);
+    }).catch(err => {
+      console.error('Error de sesión:', err);
       setAuthLoading(false);
     });
     const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
