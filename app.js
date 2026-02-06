@@ -233,38 +233,6 @@ const App = () => {
     }
   };
 
-  // Realtime - escuchar cambios en novedades (opcional)
-  useEffect(() => {
-    if (!session) return;
-    
-    let channel;
-    try {
-      channel = sb
-        .channel('novedades-changes')
-        .on('postgres_changes', 
-          { event: '*', schema: 'public', table: 'novedades' },
-          (payload) => {
-            if (payload.eventType === 'INSERT') {
-              setNovedades(prev => [payload.new, ...prev]);
-            } else if (payload.eventType === 'UPDATE') {
-              setNovedades(prev => prev.map(n => n.id === payload.new.id ? payload.new : n));
-            } else if (payload.eventType === 'DELETE') {
-              setNovedades(prev => prev.filter(n => n.id !== payload.old.id));
-            }
-          }
-        )
-        .subscribe();
-    } catch (err) {
-      console.log('Realtime no disponible:', err);
-    }
-    
-    return () => {
-      if (channel) {
-        try { sb.removeChannel(channel); } catch(e) {}
-      }
-    };
-  }, [session]);
-
   useEffect(() => {
     if (session && userProfile) {
       loadData();
