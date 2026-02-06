@@ -212,16 +212,25 @@ const App = () => {
 
   // Validación de duplicados en servidor
   const checkDuplicateServer = async (num, anio, excludeId) => {
-    let query = sb
-      .from('novedades')
-      .select('id')
-      .ilike('numero_novedad', num)
-      .eq('anio', parseInt(anio));
-    
-    if (excludeId) query = query.neq('id', excludeId);
-    
-    const { data } = await query.maybeSingle();
-    return !!data;
+    try {
+      let query = sb
+        .from('novedades')
+        .select('id')
+        .ilike('numero_novedad', num)
+        .eq('anio', parseInt(anio));
+      
+      if (excludeId) query = query.neq('id', excludeId);
+      
+      const { data, error } = await query.limit(1);
+      if (error) {
+        console.error('Error validando duplicado:', error);
+        return false;
+      }
+      return data && data.length > 0;
+    } catch (err) {
+      console.error('Error en checkDuplicate:', err);
+      return false;
+    }
   };
 
   // Realtime - escuchar cambios en novedades (opcional)
@@ -544,14 +553,22 @@ const App = () => {
               const isDuplicate = await checkDuplicate(num, anio, editingNovedad?.id);
               if (isDuplicate) { showNotify("Ya existe esa novedad en " + anio, "error"); return; }
               const payload = { numero_novedad: num, numero_sgsp: d.get('sgsp'), anio: parseInt(anio), titulo: d.get('titulo') || null, informe_actuacion: d.get('ia') || null, informe_criminalistico: d.get('ic') || null, informe_pericial: d.get('ip') || null, croquis: d.get('cr') || null };
-              if (editingNovedad) {
-                await sb.from('novedades').update({ ...payload, modificado_por: userProfile.nombre }).eq('id', editingNovedad.id);
-                await addLog('EDITAR', 'Editó ' + num); showNotify("Actualizado");
-              } else {
-                await sb.from('novedades').insert([{ ...payload, creado_por: userProfile.nombre, actuacion_realizada: false, criminalistico_realizado: false, pericial_realizado: false, croquis_realizado: false }]);
-                await addLog('CREAR', 'Creó ' + num); showNotify("Guardado");
+              try {
+                if (editingNovedad) {
+                  const { error } = await sb.from('novedades').update({ ...payload, modificado_por: userProfile.nombre }).eq('id', editingNovedad.id);
+                  if (error) { showNotify("Error al actualizar: " + error.message, "error"); return; }
+                  await addLog('EDITAR', 'Editó ' + num); showNotify("Actualizado");
+                } else {
+                  const { error } = await sb.from('novedades').insert([{ ...payload, creado_por: userProfile.nombre, actuacion_realizada: false, criminalistico_realizado: false, pericial_realizado: false, croquis_realizado: false }]);
+                  if (error) { showNotify("Error al crear: " + error.message, "error"); return; }
+                  await addLog('CREAR', 'Creó ' + num); showNotify("Guardado");
+                }
+                setEditingNovedad(null);
+                setCurrentView('list');
+                loadData();
+              } catch (err) {
+                showNotify("Error: " + err.message, "error");
               }
-              loadData(); setCurrentView('list');
             }}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">N° Novedad *</label><input name="nov" defaultValue={editingNovedad?.numero_novedad} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="001" /></div>
