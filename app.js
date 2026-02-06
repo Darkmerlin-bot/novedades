@@ -307,8 +307,6 @@ const App = () => {
     const currentVal = n[checkKey] || (n.checks && n.checks[checkKeyOld]) || false;
     const newVal = !currentVal;
     
-    console.log('Actualizando:', { id, checkKey, currentVal, newVal });
-    
     // Actualizar columna booleana nueva
     const { data, error } = await sb.from('novedades').update({ [checkKey]: newVal, modificado_por: userProfile?.nombre }).eq('id', id).select();
     
@@ -318,10 +316,11 @@ const App = () => {
       return;
     }
     
-    console.log('Respuesta:', data);
-    setNovedades(novedades.map(x => x.id === id ? { ...x, [checkKey]: newVal } : x));
+    // Actualizar estado local con los datos devueltos por el servidor
+    if (data && data.length > 0) {
+      setNovedades(prev => prev.map(x => x.id === id ? data[0] : x));
+    }
     await addLog('MARCA_CHECK', 'Cambió ' + checkKey + ' en ' + n.numero_novedad);
-    showNotify("Actualizado");
   };
 
   const handleBackup = async () => {
