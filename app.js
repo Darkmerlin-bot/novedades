@@ -303,16 +303,25 @@ const App = () => {
 
   const handleToggleCheck = async (id, checkKey, checkKeyOld) => {
     const n = novedades.find(x => x.id === id);
-    if (!n) return;
+    if (!n) { console.error('No se encontró la novedad'); return; }
     const currentVal = n[checkKey] || (n.checks && n.checks[checkKeyOld]) || false;
     const newVal = !currentVal;
     
+    console.log('Actualizando:', { id, checkKey, currentVal, newVal });
+    
     // Actualizar columna booleana nueva
-    const { error } = await sb.from('novedades').update({ [checkKey]: newVal, modificado_por: userProfile?.nombre }).eq('id', id);
-    if (!error) {
-      setNovedades(novedades.map(x => x.id === id ? { ...x, [checkKey]: newVal } : x));
-      await addLog('MARCA_CHECK', 'Cambió ' + checkKey + ' en ' + n.numero_novedad);
+    const { data, error } = await sb.from('novedades').update({ [checkKey]: newVal, modificado_por: userProfile?.nombre }).eq('id', id).select();
+    
+    if (error) {
+      console.error('Error al actualizar:', error);
+      showNotify("Error al actualizar: " + error.message, "error");
+      return;
     }
+    
+    console.log('Respuesta:', data);
+    setNovedades(novedades.map(x => x.id === id ? { ...x, [checkKey]: newVal } : x));
+    await addLog('MARCA_CHECK', 'Cambió ' + checkKey + ' en ' + n.numero_novedad);
+    showNotify("Actualizado");
   };
 
   const handleBackup = async () => {
