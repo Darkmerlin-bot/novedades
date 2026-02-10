@@ -192,6 +192,7 @@ const App = () => {
   
   // Estados para Auditoría
   const [selectedAuditUser, setSelectedAuditUser] = useState(null);
+  const [statsYear, setStatsYear] = useState('todos');
 
   const showNotify = (message, type = 'success') => {
     setNotification({ message, type });
@@ -435,17 +436,50 @@ const App = () => {
     showNotify("Respaldo descargado");
   };
 
-  const getUserDetailedStats = (profile) => {
-    const stats = { informeActuacion: { a: 0, c: 0 }, informeCriminalistico: { a: 0, c: 0 }, informePericial: { a: 0, c: 0 }, croquis: { a: 0, c: 0 } };
-    novedades.forEach(n => {
+  const getUserDetailedStats = (profile, filterYear = 'todos') => {
+    const stats = { informeActuacion: { a: 0, c: 0 }, informeCriminalistico: { a: 0, c: 0 }, informePericial: { a: 0, c: 0 }, croquis: { a: 0, c: 0 }, juicios: 0 };
+    
+    // Filtrar novedades por año
+    const filteredNovedades = filterYear === 'todos' ? novedades : novedades.filter(n => n.anio?.toString() === filterYear);
+    
+    filteredNovedades.forEach(n => {
       if ((n.informe_actuacion || n.informeActuacion) === profile.nombre) { stats.informeActuacion.a++; if (isTaskDone(n, { checkKey: 'actuacion_realizada', checkKeyOld: 'actuacionRealizada' })) stats.informeActuacion.c++; }
       if ((n.informe_criminalistico || n.informeCriminalistico) === profile.nombre) { stats.informeCriminalistico.a++; if (isTaskDone(n, { checkKey: 'criminalistico_realizado', checkKeyOld: 'criminalisticoRealizado' })) stats.informeCriminalistico.c++; }
       if ((n.informe_pericial || n.informePericial) === profile.nombre) { stats.informePericial.a++; if (isTaskDone(n, { checkKey: 'pericial_realizado', checkKeyOld: 'pericialRealizado' })) stats.informePericial.c++; }
       if (n.croquis === profile.nombre) { stats.croquis.a++; if (isTaskDone(n, { checkKey: 'croquis_realizado', checkKeyOld: 'croquisRealizado' })) stats.croquis.c++; }
     });
+    
+    // Contar juicios donde el usuario está citado
+    const filteredJuicios = filterYear === 'todos' ? juicios : juicios.filter(j => {
+      const year = new Date(j.fecha_juicio).getFullYear().toString();
+      return year === filterYear;
+    });
+    stats.juicios = filteredJuicios.filter(j => (j.citados || []).includes(profile.nombre)).length;
+    
     const total = stats.informeActuacion.a + stats.informeCriminalistico.a + stats.informePericial.a + stats.croquis.a;
     const done = stats.informeActuacion.c + stats.informeCriminalistico.c + stats.informePericial.c + stats.croquis.c;
     return { ...stats, total, done, pending: total - done };
+  };
+  
+  // Obtener años disponibles para el filtro
+  const getAvailableStatsYears = () => {
+    const years = new Set();
+    novedades.forEach(n => { if (n.anio) years.add(n.anio.toString()); });
+    juicios.forEach(j => { if (j.fecha_juicio) years.add(new Date(j.fecha_juicio).getFullYear().toString()); });
+    return Array.from(years).sort((a, b) => b - a);
+  };
+  
+  // Estadísticas filtradas por año
+  const getFilteredStats = () => {
+    const filteredNovedades = statsYear === 'todos' ? novedades : novedades.filter(n => n.anio?.toString() === statsYear);
+    const filteredJuicios = statsYear === 'todos' ? juicios : juicios.filter(j => new Date(j.fecha_juicio).getFullYear().toString() === statsYear);
+    
+    return {
+      totalNovedades: filteredNovedades.length,
+      pendientes: filteredNovedades.filter(n => !isNovedadComplete(n)).length,
+      completadas: filteredNovedades.filter(n => isNovedadComplete(n)).length,
+      totalJuicios: filteredJuicios.length
+    };
   };
 
   // PANTALLA CARGA
@@ -1103,45 +1137,125 @@ const App = () => {
 
       {/* MODAL ESTADÍSTICAS */}
       {showStats && userProfile.role === 'admin' && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => { setShowStats(false); setSelectedUserStats(null); }}>
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); }}>
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-8 bg-slate-900 text-white flex justify-between items-center sticky top-0"><h3 className="font-black uppercase text-sm">📊 Estadísticas</h3><button onClick={() => { setShowStats(false); setSelectedUserStats(null); }} className="text-slate-500 hover:text-white">✕</button></div>
+            <div className="p-8 bg-slate-900 text-white flex justify-between items-center sticky top-0 z-10">
+              <h3 className="font-black uppercase text-sm">📊 Estadísticas</h3>
+              <button onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); }} className="text-slate-500 hover:text-white">✕</button>
+            </div>
             <div className="p-8 space-y-8">
+              {/* Selector de año */}
+              <div className="flex items-center gap-4">
+                <label className="text-[10px] font-black text-slate-500 uppercase">Filtrar por año:</label>
+                <select 
+                  value={statsYear} 
+                  onChange={(e) => setStatsYear(e.target.value)}
+                  className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
+                >
+                  <option value="todos">Todos los años</option>
+                  {getAvailableStatsYears().map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              
+              {/* Resumen general */}
               <div>
-                <h4 className="text-[10px] font-black text-slate-500 uppercase mb-4">Resumen</h4>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-slate-100 p-5 rounded-2xl text-center"><div className="text-3xl font-black text-slate-800">{novedades.length}</div><div className="text-[9px] uppercase font-black text-slate-500">Total</div></div>
-                  <div className="bg-amber-100 p-5 rounded-2xl text-center"><div className="text-3xl font-black text-amber-700">{totalPending}</div><div className="text-[9px] uppercase font-black text-amber-600">Pendientes</div></div>
-                  <div className="bg-emerald-100 p-5 rounded-2xl text-center"><div className="text-3xl font-black text-emerald-700">{totalCompleted}</div><div className="text-[9px] uppercase font-black text-emerald-600">Completados</div></div>
+                <h4 className="text-[10px] font-black text-slate-500 uppercase mb-4">Resumen {statsYear !== 'todos' && `(${statsYear})`}</h4>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="bg-slate-100 p-4 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-slate-800">{getFilteredStats().totalNovedades}</div>
+                    <div className="text-[8px] uppercase font-black text-slate-500">Novedades</div>
+                  </div>
+                  <div className="bg-amber-100 p-4 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-amber-700">{getFilteredStats().pendientes}</div>
+                    <div className="text-[8px] uppercase font-black text-amber-600">Pendientes</div>
+                  </div>
+                  <div className="bg-emerald-100 p-4 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-emerald-700">{getFilteredStats().completadas}</div>
+                    <div className="text-[8px] uppercase font-black text-emerald-600">Completadas</div>
+                  </div>
+                  <div className="bg-blue-100 p-4 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-blue-700">{getFilteredStats().totalJuicios}</div>
+                    <div className="text-[8px] uppercase font-black text-blue-600">Juicios</div>
+                  </div>
                 </div>
               </div>
+              
+              {/* Por usuario */}
               <div>
                 <h4 className="text-[10px] font-black text-slate-500 uppercase mb-4">Por Usuario (clic para detalle)</h4>
                 <div className="space-y-3">
                   {profiles.map(p => {
-                    const stats = getUserDetailedStats(p);
+                    const stats = getUserDetailedStats(p, statsYear);
                     const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
                     const isSel = selectedUserStats?.id === p.id;
                     return (
                       <div key={p.id} className={`bg-slate-100 p-4 rounded-2xl cursor-pointer ${isSel ? 'ring-2 ring-emerald-500' : 'hover:bg-slate-200'}`} onClick={() => setSelectedUserStats(isSel ? null : p)}>
                         <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-sm">{p.nombre?.charAt(0).toUpperCase()}</div><div><div className="font-black text-slate-800 text-sm">{p.nombre}</div><div className="text-[9px] text-slate-500 font-bold uppercase">{p.role}</div></div></div>
-                          <div className="text-right"><div className="text-lg font-black text-slate-800">{pct}%</div><div className="text-[9px] text-slate-500 font-bold uppercase">Completado</div></div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-sm">{p.nombre?.charAt(0).toUpperCase()}</div>
+                            <div>
+                              <div className="font-black text-slate-800 text-sm">{p.nombre}</div>
+                              <div className="text-[9px] text-slate-500 font-bold uppercase">{p.role}</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-black text-slate-800">{pct}%</div>
+                            <div className="text-[9px] text-slate-500 font-bold uppercase">Completado</div>
+                          </div>
                         </div>
-                        <div className="h-2 bg-slate-300 rounded-full overflow-hidden mb-3"><div className="h-full bg-emerald-500 rounded-full" style={{ width: pct + '%' }}></div></div>
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          <div className="bg-white p-2 rounded-xl"><div className="text-lg font-black text-slate-700">{stats.total}</div><div className="text-[8px] text-slate-500 font-bold uppercase">Asignadas</div></div>
-                          <div className="bg-emerald-100 p-2 rounded-xl"><div className="text-lg font-black text-emerald-700">{stats.done}</div><div className="text-[8px] text-emerald-600 font-bold uppercase">Hechas</div></div>
-                          <div className="bg-red-100 p-2 rounded-xl"><div className="text-lg font-black text-red-600">{stats.pending}</div><div className="text-[8px] text-red-500 font-bold uppercase">Pendientes</div></div>
+                        <div className="h-2 bg-slate-300 rounded-full overflow-hidden mb-3">
+                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: pct + '%' }}></div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          <div className="bg-white p-2 rounded-xl">
+                            <div className="text-lg font-black text-slate-700">{stats.total}</div>
+                            <div className="text-[8px] text-slate-500 font-bold uppercase">Tareas</div>
+                          </div>
+                          <div className="bg-emerald-100 p-2 rounded-xl">
+                            <div className="text-lg font-black text-emerald-700">{stats.done}</div>
+                            <div className="text-[8px] text-emerald-600 font-bold uppercase">Hechas</div>
+                          </div>
+                          <div className="bg-red-100 p-2 rounded-xl">
+                            <div className="text-lg font-black text-red-600">{stats.pending}</div>
+                            <div className="text-[8px] text-red-500 font-bold uppercase">Pend.</div>
+                          </div>
+                          <div className="bg-blue-100 p-2 rounded-xl">
+                            <div className="text-lg font-black text-blue-700">{stats.juicios}</div>
+                            <div className="text-[8px] text-blue-600 font-bold uppercase">Juicios</div>
+                          </div>
                         </div>
                         {isSel && (
                           <div className="mt-4 pt-4 border-t border-slate-300 animate-fadeIn">
-                            <h5 className="text-[9px] font-black text-slate-600 uppercase mb-3">📋 Desglose:</h5>
+                            <h5 className="text-[9px] font-black text-slate-600 uppercase mb-3">📋 Desglose de tareas:</h5>
                             <div className="grid grid-cols-2 gap-2">
-                              <div className="bg-white p-3 rounded-xl"><div className="text-[10px] font-bold text-slate-600 mb-1">Inf. Actuación</div><div className="flex justify-between"><span className="text-emerald-600 font-black">{stats.informeActuacion.c} ✓</span><span className="text-red-500 font-black">{stats.informeActuacion.a - stats.informeActuacion.c} ✗</span></div></div>
-                              <div className="bg-white p-3 rounded-xl"><div className="text-[10px] font-bold text-slate-600 mb-1">Criminalístico</div><div className="flex justify-between"><span className="text-emerald-600 font-black">{stats.informeCriminalistico.c} ✓</span><span className="text-red-500 font-black">{stats.informeCriminalistico.a - stats.informeCriminalistico.c} ✗</span></div></div>
-                              <div className="bg-white p-3 rounded-xl"><div className="text-[10px] font-bold text-slate-600 mb-1">Pericial</div><div className="flex justify-between"><span className="text-emerald-600 font-black">{stats.informePericial.c} ✓</span><span className="text-red-500 font-black">{stats.informePericial.a - stats.informePericial.c} ✗</span></div></div>
-                              <div className="bg-white p-3 rounded-xl"><div className="text-[10px] font-bold text-slate-600 mb-1">Croquis</div><div className="flex justify-between"><span className="text-emerald-600 font-black">{stats.croquis.c} ✓</span><span className="text-red-500 font-black">{stats.croquis.a - stats.croquis.c} ✗</span></div></div>
+                              <div className="bg-white p-3 rounded-xl">
+                                <div className="text-[10px] font-bold text-slate-600 mb-1">Inf. Actuación</div>
+                                <div className="flex justify-between">
+                                  <span className="text-emerald-600 font-black">{stats.informeActuacion.c} ✓</span>
+                                  <span className="text-red-500 font-black">{stats.informeActuacion.a - stats.informeActuacion.c} ✗</span>
+                                </div>
+                              </div>
+                              <div className="bg-white p-3 rounded-xl">
+                                <div className="text-[10px] font-bold text-slate-600 mb-1">Criminalístico</div>
+                                <div className="flex justify-between">
+                                  <span className="text-emerald-600 font-black">{stats.informeCriminalistico.c} ✓</span>
+                                  <span className="text-red-500 font-black">{stats.informeCriminalistico.a - stats.informeCriminalistico.c} ✗</span>
+                                </div>
+                              </div>
+                              <div className="bg-white p-3 rounded-xl">
+                                <div className="text-[10px] font-bold text-slate-600 mb-1">Pericial</div>
+                                <div className="flex justify-between">
+                                  <span className="text-emerald-600 font-black">{stats.informePericial.c} ✓</span>
+                                  <span className="text-red-500 font-black">{stats.informePericial.a - stats.informePericial.c} ✗</span>
+                                </div>
+                              </div>
+                              <div className="bg-white p-3 rounded-xl">
+                                <div className="text-[10px] font-bold text-slate-600 mb-1">Croquis</div>
+                                <div className="flex justify-between">
+                                  <span className="text-emerald-600 font-black">{stats.croquis.c} ✓</span>
+                                  <span className="text-red-500 font-black">{stats.croquis.a - stats.croquis.c} ✗</span>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -1150,7 +1264,7 @@ const App = () => {
                   })}
                 </div>
               </div>
-              <button onClick={() => { setShowStats(false); setSelectedUserStats(null); }} className="w-full py-4 bg-slate-200 rounded-2xl font-black text-slate-600 uppercase text-[10px]">Cerrar</button>
+              <button onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); }} className="w-full py-4 bg-slate-200 rounded-2xl font-black text-slate-600 uppercase text-[10px]">Cerrar</button>
             </div>
           </div>
         </div>
