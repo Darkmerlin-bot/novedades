@@ -56,10 +56,10 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
         <button onClick={() => setView('completed')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${currentView === 'completed' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
           ✅ Completados {completedCount > 0 && <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-black">{completedCount}</span>}
         </button>
+        <button onClick={() => setView('juicios')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'juicios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>⚖️ Juicios</button>
         {userProfile?.role === 'admin' && (
           <>
             <button onClick={() => setView('form')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'form' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>➕ Nueva</button>
-            <button onClick={() => setView('juicios')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'juicios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>⚖️ Juicios</button>
             <button onClick={() => setView('auditoria')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'auditoria' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>🔍 Auditar</button>
             <button onClick={() => setView('users')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'users' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>👥 Personal</button>
             <button onClick={() => setView('logs')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'logs' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>📜 Logs</button>
@@ -815,11 +815,11 @@ const App = () => {
           </div>
         )}
 
-        {/* JUICIOS (Admin) */}
-        {currentView === 'juicios' && userProfile?.role === 'admin' && (
+        {/* JUICIOS (Todos pueden acceder) */}
+        {currentView === 'juicios' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center mb-6">
-              <div><h2 className="text-3xl font-black text-slate-800">⚖️ Juicios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Citaciones programadas</p></div>
+              <div><h2 className="text-3xl font-black text-slate-800">⚖️ Juicios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">{userProfile?.role === 'admin' ? 'Todas las citaciones' : 'Tus citaciones'}</p></div>
               <button onClick={() => { setEditingJuicio({}); setSelectedCitados([]); }} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo Juicio</button>
             </div>
             
@@ -917,70 +917,86 @@ const App = () => {
             )}
 
             {/* Lista de juicios */}
-            {juicios.length === 0 ? (
-              <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-300">
-                <div className="text-5xl mb-4">⚖️</div>
-                <p className="text-slate-500 font-bold">No hay juicios programados</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {juicios.map(j => {
-                  const fecha = new Date(j.fecha_juicio);
-                  const hoy = new Date();
-                  hoy.setHours(0,0,0,0);
-                  fecha.setHours(0,0,0,0);
-                  const diasRestantes = Math.ceil((fecha - hoy) / (1000 * 60 * 60 * 24));
-                  const isPast = diasRestantes < 0;
-                  const isClose = diasRestantes >= 0 && diasRestantes <= 5;
-                  const citados = j.citados || [];
-                  
-                  return (
-                    <div key={j.id} className={`bg-white rounded-2xl p-6 shadow-md border-2 ${isPast ? 'border-slate-300 opacity-60' : isClose ? 'border-amber-400' : 'border-slate-200'}`}>
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className="text-2xl">{isPast ? '📁' : isClose ? '⚠️' : '⚖️'}</span>
-                            <div>
-                              <h3 className="font-black text-slate-800 text-lg">Novedad {j.numero_novedad}</h3>
-                              <p className="text-xs text-slate-500">SGSP: {j.numero_sgsp}</p>
-                            </div>
-                          </div>
-                          {j.descripcion && <p className="text-sm text-slate-600 mt-2 bg-slate-50 p-3 rounded-xl">{j.descripcion}</p>}
-                          {citados.length > 0 && (
-                            <div className="mt-3">
-                              <p className="text-[9px] text-slate-400 uppercase font-bold mb-1">Citados:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {citados.map((c, i) => (
-                                  <span key={i} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg font-bold">{c}</span>
-                                ))}
+            {(() => {
+              // Filtrar juicios: admin ve todos, usuario solo donde está citado
+              const juiciosVisibles = userProfile?.role === 'admin' 
+                ? juicios 
+                : juicios.filter(j => (j.citados || []).includes(userProfile?.nombre));
+              
+              if (juiciosVisibles.length === 0) {
+                return (
+                  <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-300">
+                    <div className="text-5xl mb-4">⚖️</div>
+                    <p className="text-slate-500 font-bold">{userProfile?.role === 'admin' ? 'No hay juicios programados' : 'No tienes citaciones pendientes'}</p>
+                  </div>
+                );
+              }
+              
+              return (
+                <div className="grid gap-4">
+                  {juiciosVisibles.map(j => {
+                    const fecha = new Date(j.fecha_juicio);
+                    const hoy = new Date();
+                    hoy.setHours(0,0,0,0);
+                    fecha.setHours(0,0,0,0);
+                    const diasRestantes = Math.ceil((fecha - hoy) / (1000 * 60 * 60 * 24));
+                    const isPast = diasRestantes < 0;
+                    const isClose = diasRestantes >= 0 && diasRestantes <= 5;
+                    const citados = j.citados || [];
+                    const canEdit = userProfile?.role === 'admin' || j.creado_por === userProfile?.nombre;
+                    const isMe = citados.includes(userProfile?.nombre);
+                    
+                    return (
+                      <div key={j.id} className={`bg-white rounded-2xl p-6 shadow-md border-2 ${isPast ? 'border-slate-300 opacity-60' : isClose ? 'border-amber-400' : 'border-slate-200'} ${isMe && !isPast ? 'ring-2 ring-blue-400' : ''}`}>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="text-2xl">{isPast ? '📁' : isClose ? '⚠️' : '⚖️'}</span>
+                              <div>
+                                <h3 className="font-black text-slate-800 text-lg">Novedad {j.numero_novedad}</h3>
+                                <p className="text-xs text-slate-500">SGSP: {j.numero_sgsp}</p>
                               </div>
+                              {isMe && !isPast && <span className="text-[9px] bg-blue-500 text-white px-2 py-1 rounded-full font-black uppercase">Estás citado</span>}
                             </div>
-                          )}
-                          <p className="text-[9px] text-slate-400 mt-3 uppercase font-bold">Cargado por: {j.creado_por}</p>
-                        </div>
-                        <div className="text-right ml-4">
-                          <p className="text-sm font-bold text-slate-700">{fecha.toLocaleDateString()}</p>
-                          <p className={`text-xs font-black mt-1 ${isPast ? 'text-slate-400' : isClose ? 'text-amber-600' : 'text-emerald-600'}`}>
-                            {isPast ? 'Pasado' : diasRestantes === 0 ? '¡HOY!' : diasRestantes === 1 ? 'Mañana' : `En ${diasRestantes} días`}
-                          </p>
-                          <div className="flex gap-2 mt-3 justify-end">
-                            <button onClick={() => { setEditingJuicio(j); setSelectedCitados(j.citados || []); }} className="text-[10px] bg-slate-200 px-3 py-1.5 rounded-lg font-black text-slate-700 hover:bg-slate-300">Editar</button>
-                            <button onClick={async () => {
-                              if (confirm("¿Eliminar este juicio?")) {
-                                await sb.from('juicios').delete().eq('id', j.id);
-                                await addLog('BORRAR_JUICIO', 'Eliminó juicio Nov. ' + j.numero_novedad);
-                                showNotify("Juicio eliminado");
-                                loadData();
-                              }
-                            }} className="text-[10px] bg-red-100 px-3 py-1.5 rounded-lg font-black text-red-600 hover:bg-red-200">Eliminar</button>
+                            {j.descripcion && <p className="text-sm text-slate-600 mt-2 bg-slate-50 p-3 rounded-xl">{j.descripcion}</p>}
+                            {citados.length > 0 && (
+                              <div className="mt-3">
+                                <p className="text-[9px] text-slate-400 uppercase font-bold mb-1">Citados:</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {citados.map((c, i) => (
+                                    <span key={i} className={`text-xs px-2 py-1 rounded-lg font-bold ${c === userProfile?.nombre ? 'bg-blue-500 text-white' : 'bg-blue-100 text-blue-700'}`}>{c}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            <p className="text-[9px] text-slate-400 mt-3 uppercase font-bold">Cargado por: {j.creado_por}</p>
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="text-sm font-bold text-slate-700">{fecha.toLocaleDateString()}</p>
+                            <p className={`text-xs font-black mt-1 ${isPast ? 'text-slate-400' : isClose ? 'text-amber-600' : 'text-emerald-600'}`}>
+                              {isPast ? 'Pasado' : diasRestantes === 0 ? '¡HOY!' : diasRestantes === 1 ? 'Mañana' : `En ${diasRestantes} días`}
+                            </p>
+                            {canEdit && (
+                              <div className="flex gap-2 mt-3 justify-end">
+                                <button onClick={() => { setEditingJuicio(j); setSelectedCitados(j.citados || []); }} className="text-[10px] bg-slate-200 px-3 py-1.5 rounded-lg font-black text-slate-700 hover:bg-slate-300">Editar</button>
+                                <button onClick={async () => {
+                                  if (confirm("¿Eliminar este juicio?")) {
+                                    await sb.from('juicios').delete().eq('id', j.id);
+                                    await addLog('BORRAR_JUICIO', 'Eliminó juicio Nov. ' + j.numero_novedad);
+                                    showNotify("Juicio eliminado");
+                                    loadData();
+                                  }
+                                }} className="text-[10px] bg-red-100 px-3 py-1.5 rounded-lg font-black text-red-600 hover:bg-red-200">Eliminar</button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
