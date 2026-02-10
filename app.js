@@ -99,6 +99,7 @@ const PendingModal = ({ count, juiciosProximos, onClose }) => (
                 hoy.setHours(0,0,0,0);
                 fecha.setHours(0,0,0,0);
                 const diasRestantes = Math.ceil((fecha - hoy) / (1000 * 60 * 60 * 24));
+                const citados = j.citados || [];
                 return (
                   <div key={j.id} className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
                     <div className="flex justify-between items-start">
@@ -106,6 +107,13 @@ const PendingModal = ({ count, juiciosProximos, onClose }) => (
                         <p className="font-black text-slate-800">Nov. {j.numero_novedad}</p>
                         <p className="text-xs text-slate-500">SGSP: {j.numero_sgsp}</p>
                         {j.descripcion && <p className="text-xs text-slate-600 mt-1">{j.descripcion}</p>}
+                        {citados.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {citados.map((c, i) => (
+                              <span key={i} className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">{c}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="text-right">
                         <p className="text-xs font-bold text-amber-700">{fecha.toLocaleDateString()}</p>
@@ -180,6 +188,7 @@ const App = () => {
   const [juicios, setJuicios] = useState([]);
   const [editingJuicio, setEditingJuicio] = useState(null);
   const [upcomingJuicios, setUpcomingJuicios] = useState([]);
+  const [selectedCitados, setSelectedCitados] = useState([]);
   
   // Estados para Auditoría
   const [selectedAuditUser, setSelectedAuditUser] = useState(null);
@@ -256,26 +265,38 @@ const App = () => {
     const { data: juiciosData } = await sb.from('juicios').select('*').order('fecha_juicio', { ascending: true });
     setJuicios(juiciosData || []);
     
-    // Calcular juicios próximos (5 días)
-    if (juiciosData) {
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      const en5Dias = new Date(hoy);
-      en5Dias.setDate(en5Dias.getDate() + 5);
-      
-      const proximos = juiciosData.filter(j => {
-        const fechaJuicio = new Date(j.fecha_juicio);
-        fechaJuicio.setHours(0, 0, 0, 0);
-        return fechaJuicio >= hoy && fechaJuicio <= en5Dias;
-      });
-      setUpcomingJuicios(proximos);
-    }
-    
     if (userProfile?.role === 'admin') {
       const { data: logData } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(100);
       setLogs(logData || []);
     }
   };
+
+  // Calcular juicios próximos (5 días) - filtrar por usuario citado
+  useEffect(() => {
+    if (!userProfile || juicios.length === 0) {
+      setUpcomingJuicios([]);
+      return;
+    }
+    
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const en5Dias = new Date(hoy);
+    en5Dias.setDate(en5Dias.getDate() + 5);
+    
+    const proximos = juicios.filter(j => {
+      const fechaJuicio = new Date(j.fecha_juicio);
+      fechaJuicio.setHours(0, 0, 0, 0);
+      const enRango = fechaJuicio >= hoy && fechaJuicio <= en5Dias;
+      
+      // Si es admin, ver todos. Si no, solo los que está citado
+      const citados = j.citados || [];
+      const estaCitado = citados.includes(userProfile.nombre);
+      
+      return enRango && (userProfile.role === 'admin' || estaCitado);
+    });
+    
+    setUpcomingJuicios(proximos);
+  }, [juicios, userProfile]);
 
   // Validación de duplicados en servidor
   const checkDuplicateServer = async (num, anio, excludeId) => {
@@ -765,7 +786,7 @@ const App = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-center mb-6">
               <div><h2 className="text-3xl font-black text-slate-800">⚖️ Juicios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Citaciones programadas</p></div>
-              <button onClick={() => setEditingJuicio({})} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo Juicio</button>
+              <button onClick={() => { setEditingJuicio({}); setSelectedCitados([]); }} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo Juicio</button>
             </div>
             
             {/* Formulario de nuevo/editar juicio */}
@@ -780,8 +801,13 @@ const App = () => {
                     numero_sgsp: d.get('sgsp'),
                     descripcion: d.get('desc') || null,
                     fecha_juicio: d.get('fecha'),
+                    citados: selectedCitados,
                     creado_por: userProfile.nombre
                   };
+                  if (selectedCitados.length === 0) {
+                    showNotify("Debes seleccionar al menos un citado", "error");
+                    return;
+                  }
                   try {
                     if (editingJuicio.id) {
                       const { error } = await sb.from('juicios').update(payload).eq('id', editingJuicio.id);
@@ -795,6 +821,7 @@ const App = () => {
                       showNotify("Juicio guardado");
                     }
                     setEditingJuicio(null);
+                    setSelectedCitados([]);
                     loadData();
                   } catch (err) {
                     showNotify("Error: " + err.message, "error");
@@ -817,6 +844,35 @@ const App = () => {
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Descripción</label>
                     <textarea name="desc" defaultValue={editingJuicio.descripcion} rows="3" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold resize-none" placeholder="Detalles de la citación..." />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Citados *</label>
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <div className="flex flex-wrap gap-2">
+                        {profiles.map(p => {
+                          const isSelected = selectedCitados.includes(p.nombre);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedCitados(selectedCitados.filter(c => c !== p.nombre));
+                                } else {
+                                  setSelectedCitados([...selectedCitados, p.nombre]);
+                                }
+                              }}
+                              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${isSelected ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white border border-slate-300 text-slate-600 hover:border-emerald-400'}`}
+                            >
+                              {isSelected && '✓ '}{p.nombre}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {selectedCitados.length > 0 && (
+                        <p className="text-xs text-emerald-600 font-bold mt-3">{selectedCitados.length} persona(s) seleccionada(s)</p>
+                      )}
+                    </div>
                   </div>
                   <div className="flex gap-4">
                     <button type="button" onClick={() => setEditingJuicio(null)} className="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-black uppercase text-xs">Cancelar</button>
@@ -842,6 +898,7 @@ const App = () => {
                   const diasRestantes = Math.ceil((fecha - hoy) / (1000 * 60 * 60 * 24));
                   const isPast = diasRestantes < 0;
                   const isClose = diasRestantes >= 0 && diasRestantes <= 5;
+                  const citados = j.citados || [];
                   
                   return (
                     <div key={j.id} className={`bg-white rounded-2xl p-6 shadow-md border-2 ${isPast ? 'border-slate-300 opacity-60' : isClose ? 'border-amber-400' : 'border-slate-200'}`}>
@@ -855,6 +912,16 @@ const App = () => {
                             </div>
                           </div>
                           {j.descripcion && <p className="text-sm text-slate-600 mt-2 bg-slate-50 p-3 rounded-xl">{j.descripcion}</p>}
+                          {citados.length > 0 && (
+                            <div className="mt-3">
+                              <p className="text-[9px] text-slate-400 uppercase font-bold mb-1">Citados:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {citados.map((c, i) => (
+                                  <span key={i} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg font-bold">{c}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           <p className="text-[9px] text-slate-400 mt-3 uppercase font-bold">Cargado por: {j.creado_por}</p>
                         </div>
                         <div className="text-right ml-4">
@@ -863,7 +930,7 @@ const App = () => {
                             {isPast ? 'Pasado' : diasRestantes === 0 ? '¡HOY!' : diasRestantes === 1 ? 'Mañana' : `En ${diasRestantes} días`}
                           </p>
                           <div className="flex gap-2 mt-3 justify-end">
-                            <button onClick={() => setEditingJuicio(j)} className="text-[10px] bg-slate-200 px-3 py-1.5 rounded-lg font-black text-slate-700 hover:bg-slate-300">Editar</button>
+                            <button onClick={() => { setEditingJuicio(j); setSelectedCitados(j.citados || []); }} className="text-[10px] bg-slate-200 px-3 py-1.5 rounded-lg font-black text-slate-700 hover:bg-slate-300">Editar</button>
                             <button onClick={async () => {
                               if (confirm("¿Eliminar este juicio?")) {
                                 await sb.from('juicios').delete().eq('id', j.id);
