@@ -59,8 +59,10 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
         {userProfile?.role === 'admin' && (
           <>
             <button onClick={() => setView('form')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'form' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>➕ Nueva</button>
+            <button onClick={() => setView('juicios')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'juicios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>⚖️ Juicios</button>
+            <button onClick={() => setView('auditoria')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'auditoria' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>🔍 Auditar</button>
             <button onClick={() => setView('users')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'users' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>👥 Personal</button>
-            <button onClick={() => setView('logs')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'logs' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>📜 Auditoría</button>
+            <button onClick={() => setView('logs')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'logs' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>📜 Logs</button>
           </>
         )}
       </nav>
@@ -68,21 +70,58 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
   </header>
 );
 
-// MODAL PENDIENTES
-const PendingModal = ({ count, onClose }) => (
+// MODAL PENDIENTES Y JUICIOS
+const PendingModal = ({ count, juiciosProximos, onClose }) => (
   <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[150] flex items-center justify-center p-4">
-    <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
+    <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto">
       <div className="p-8 bg-red-500 text-white text-center">
         <div className="text-6xl mb-4">⚠️</div>
         <h3 className="font-black uppercase tracking-widest text-lg">Atención</h3>
       </div>
-      <div className="p-10 text-center">
-        <p className="text-slate-600 font-bold text-lg mb-2">Tienes tareas pendientes</p>
-        <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 my-6">
-          <span className="text-5xl font-black text-red-500">{count}</span>
-          <p className="text-red-400 font-bold text-sm mt-2 uppercase">{count === 1 ? 'Novedad asignada' : 'Novedades asignadas'}</p>
-        </div>
-        <button onClick={onClose} className="w-full mt-4 py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl">Entendido</button>
+      <div className="p-8">
+        {count > 0 && (
+          <div className="text-center mb-6">
+            <p className="text-slate-600 font-bold text-lg mb-2">Tienes tareas pendientes</p>
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6">
+              <span className="text-5xl font-black text-red-500">{count}</span>
+              <p className="text-red-400 font-bold text-sm mt-2 uppercase">{count === 1 ? 'Novedad asignada' : 'Novedades asignadas'}</p>
+            </div>
+          </div>
+        )}
+        
+        {juiciosProximos && juiciosProximos.length > 0 && (
+          <div className="mt-4">
+            <p className="text-slate-600 font-bold text-lg mb-3 text-center">⚖️ Juicios próximos</p>
+            <div className="space-y-3">
+              {juiciosProximos.map(j => {
+                const fecha = new Date(j.fecha_juicio);
+                const hoy = new Date();
+                hoy.setHours(0,0,0,0);
+                fecha.setHours(0,0,0,0);
+                const diasRestantes = Math.ceil((fecha - hoy) / (1000 * 60 * 60 * 24));
+                return (
+                  <div key={j.id} className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-black text-slate-800">Nov. {j.numero_novedad}</p>
+                        <p className="text-xs text-slate-500">SGSP: {j.numero_sgsp}</p>
+                        {j.descripcion && <p className="text-xs text-slate-600 mt-1">{j.descripcion}</p>}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-amber-700">{fecha.toLocaleDateString()}</p>
+                        <p className={`text-xs font-black ${diasRestantes === 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                          {diasRestantes === 0 ? '¡HOY!' : diasRestantes === 1 ? 'Mañana' : `En ${diasRestantes} días`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        
+        <button onClick={onClose} className="w-full mt-6 py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl">Entendido</button>
       </div>
     </div>
   </div>
@@ -117,6 +156,7 @@ const App = () => {
   const [showStats, setShowStats] = useState(false);
   const [showPassModal, setShowPassModal] = useState(false);
   const [showPendingModal, setShowPendingModal] = useState(false);
+  const [modalShownOnce, setModalShownOnce] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showNewUser, setShowNewUser] = useState(false);
   const [selectedUserStats, setSelectedUserStats] = useState(null);
@@ -135,6 +175,14 @@ const App = () => {
   const [totalCountPending, setTotalCountPending] = useState(0);
   const [totalCountCompleted, setTotalCountCompleted] = useState(0);
   const PAGE_SIZE = 50;
+  
+  // Estados para Juicios
+  const [juicios, setJuicios] = useState([]);
+  const [editingJuicio, setEditingJuicio] = useState(null);
+  const [upcomingJuicios, setUpcomingJuicios] = useState([]);
+  
+  // Estados para Auditoría
+  const [selectedAuditUser, setSelectedAuditUser] = useState(null);
 
   const showNotify = (message, type = 'success') => {
     setNotification({ message, type });
@@ -204,6 +252,25 @@ const App = () => {
     const { data: profilesData } = await sb.from('profiles').select('*').order('nombre');
     setProfiles(profilesData || []);
     
+    // Cargar juicios
+    const { data: juiciosData } = await sb.from('juicios').select('*').order('fecha_juicio', { ascending: true });
+    setJuicios(juiciosData || []);
+    
+    // Calcular juicios próximos (5 días)
+    if (juiciosData) {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const en5Dias = new Date(hoy);
+      en5Dias.setDate(en5Dias.getDate() + 5);
+      
+      const proximos = juiciosData.filter(j => {
+        const fechaJuicio = new Date(j.fecha_juicio);
+        fechaJuicio.setHours(0, 0, 0, 0);
+        return fechaJuicio >= hoy && fechaJuicio <= en5Dias;
+      });
+      setUpcomingJuicios(proximos);
+    }
+    
     if (userProfile?.role === 'admin') {
       const { data: logData } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(100);
       setLogs(logData || []);
@@ -236,12 +303,22 @@ const App = () => {
   useEffect(() => {
     if (session && userProfile) {
       loadData();
-      const pending = countUserPendingTasks(userProfile, novedades);
-      if (pending > 0 && novedades.length > 0) { setPendingCount(pending); setShowPendingModal(true); }
     }
   }, [session, userProfile]);
 
-  useEffect(() => { if (session && userProfile) loadData(); }, [session, userProfile]);
+  // Mostrar modal de pendientes/juicios después de cargar datos (solo una vez)
+  useEffect(() => {
+    if (session && userProfile && novedades.length > 0 && !modalShownOnce) {
+      const pending = countUserPendingTasks(userProfile, novedades);
+      const hasUpcoming = upcomingJuicios.length > 0;
+      
+      if (pending > 0 || hasUpcoming) {
+        setPendingCount(pending);
+        setShowPendingModal(true);
+        setModalShownOnce(true);
+      }
+    }
+  }, [novedades, upcomingJuicios, modalShownOnce]);
 
   // UTILIDADES
   const extractNumber = (str) => { if (!str) return 0; const m = str.match(/\d+/g); return m ? parseInt(m[m.length - 1], 10) : 0; };
@@ -682,6 +759,265 @@ const App = () => {
             )}
           </div>
         )}
+
+        {/* JUICIOS (Admin) */}
+        {currentView === 'juicios' && userProfile?.role === 'admin' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center mb-6">
+              <div><h2 className="text-3xl font-black text-slate-800">⚖️ Juicios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Citaciones programadas</p></div>
+              <button onClick={() => setEditingJuicio({})} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo Juicio</button>
+            </div>
+            
+            {/* Formulario de nuevo/editar juicio */}
+            {editingJuicio && (
+              <div className="bg-white rounded-[2rem] shadow-xl p-8 border border-slate-200 mb-6">
+                <h3 className="text-lg font-black text-slate-800 mb-6">{editingJuicio.id ? 'Editar' : 'Nuevo'} Juicio</h3>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  const d = new FormData(e.target);
+                  const payload = {
+                    numero_novedad: d.get('nov'),
+                    numero_sgsp: d.get('sgsp'),
+                    descripcion: d.get('desc') || null,
+                    fecha_juicio: d.get('fecha'),
+                    creado_por: userProfile.nombre
+                  };
+                  try {
+                    if (editingJuicio.id) {
+                      const { error } = await sb.from('juicios').update(payload).eq('id', editingJuicio.id);
+                      if (error) { showNotify("Error: " + error.message, "error"); return; }
+                      await addLog('EDITAR_JUICIO', 'Editó juicio Nov. ' + payload.numero_novedad);
+                      showNotify("Juicio actualizado");
+                    } else {
+                      const { error } = await sb.from('juicios').insert([payload]);
+                      if (error) { showNotify("Error: " + error.message, "error"); return; }
+                      await addLog('CREAR_JUICIO', 'Creó juicio Nov. ' + payload.numero_novedad);
+                      showNotify("Juicio guardado");
+                    }
+                    setEditingJuicio(null);
+                    loadData();
+                  } catch (err) {
+                    showNotify("Error: " + err.message, "error");
+                  }
+                }} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">N° Novedad *</label>
+                      <input name="nov" defaultValue={editingJuicio.numero_novedad} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="001" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">N° SGSP *</label>
+                      <input name="sgsp" defaultValue={editingJuicio.numero_sgsp} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="SGSP-XXX" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Fecha *</label>
+                      <input name="fecha" type="date" defaultValue={editingJuicio.fecha_juicio} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Descripción</label>
+                    <textarea name="desc" defaultValue={editingJuicio.descripcion} rows="3" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold resize-none" placeholder="Detalles de la citación..." />
+                  </div>
+                  <div className="flex gap-4">
+                    <button type="button" onClick={() => setEditingJuicio(null)} className="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-black uppercase text-xs">Cancelar</button>
+                    <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl">Guardar</button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* Lista de juicios */}
+            {juicios.length === 0 ? (
+              <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-300">
+                <div className="text-5xl mb-4">⚖️</div>
+                <p className="text-slate-500 font-bold">No hay juicios programados</p>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {juicios.map(j => {
+                  const fecha = new Date(j.fecha_juicio);
+                  const hoy = new Date();
+                  hoy.setHours(0,0,0,0);
+                  fecha.setHours(0,0,0,0);
+                  const diasRestantes = Math.ceil((fecha - hoy) / (1000 * 60 * 60 * 24));
+                  const isPast = diasRestantes < 0;
+                  const isClose = diasRestantes >= 0 && diasRestantes <= 5;
+                  
+                  return (
+                    <div key={j.id} className={`bg-white rounded-2xl p-6 shadow-md border-2 ${isPast ? 'border-slate-300 opacity-60' : isClose ? 'border-amber-400' : 'border-slate-200'}`}>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-2xl">{isPast ? '📁' : isClose ? '⚠️' : '⚖️'}</span>
+                            <div>
+                              <h3 className="font-black text-slate-800 text-lg">Novedad {j.numero_novedad}</h3>
+                              <p className="text-xs text-slate-500">SGSP: {j.numero_sgsp}</p>
+                            </div>
+                          </div>
+                          {j.descripcion && <p className="text-sm text-slate-600 mt-2 bg-slate-50 p-3 rounded-xl">{j.descripcion}</p>}
+                          <p className="text-[9px] text-slate-400 mt-3 uppercase font-bold">Cargado por: {j.creado_por}</p>
+                        </div>
+                        <div className="text-right ml-4">
+                          <p className="text-sm font-bold text-slate-700">{fecha.toLocaleDateString()}</p>
+                          <p className={`text-xs font-black mt-1 ${isPast ? 'text-slate-400' : isClose ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {isPast ? 'Pasado' : diasRestantes === 0 ? '¡HOY!' : diasRestantes === 1 ? 'Mañana' : `En ${diasRestantes} días`}
+                          </p>
+                          <div className="flex gap-2 mt-3 justify-end">
+                            <button onClick={() => setEditingJuicio(j)} className="text-[10px] bg-slate-200 px-3 py-1.5 rounded-lg font-black text-slate-700 hover:bg-slate-300">Editar</button>
+                            <button onClick={async () => {
+                              if (confirm("¿Eliminar este juicio?")) {
+                                await sb.from('juicios').delete().eq('id', j.id);
+                                await addLog('BORRAR_JUICIO', 'Eliminó juicio Nov. ' + j.numero_novedad);
+                                showNotify("Juicio eliminado");
+                                loadData();
+                              }
+                            }} className="text-[10px] bg-red-100 px-3 py-1.5 rounded-lg font-black text-red-600 hover:bg-red-200">Eliminar</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* AUDITORÍA DE USUARIOS (Admin) */}
+        {currentView === 'auditoria' && userProfile?.role === 'admin' && (
+          <div className="space-y-6">
+            <div className="mb-6">
+              <h2 className="text-3xl font-black text-slate-800">🔍 Auditar Usuario</h2>
+              <p className="text-xs text-slate-600 font-bold uppercase mt-1">Ver pendientes por persona</p>
+            </div>
+            
+            {/* Selector de usuario */}
+            <div className="bg-white rounded-2xl p-6 shadow-md border border-slate-200">
+              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Seleccionar usuario</label>
+              <select 
+                value={selectedAuditUser?.id || ''} 
+                onChange={(e) => {
+                  const user = profiles.find(p => p.id === e.target.value);
+                  setSelectedAuditUser(user || null);
+                }}
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer"
+              >
+                <option value="">-- Elegir usuario --</option>
+                {profiles.map(p => <option key={p.id} value={p.id}>{p.nombre} ({p.role})</option>)}
+              </select>
+            </div>
+
+            {/* Resultados de auditoría */}
+            {selectedAuditUser && (
+              <div className="space-y-6 animate-fadeIn">
+                <div className="bg-slate-900 text-white rounded-2xl p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-2xl font-black">{selectedAuditUser.nombre?.charAt(0).toUpperCase()}</div>
+                    <div>
+                      <h3 className="text-2xl font-black">{selectedAuditUser.nombre}</h3>
+                      <p className="text-slate-400 text-sm uppercase font-bold">{selectedAuditUser.role}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {(() => {
+                  const userPendingNovedades = novedades.filter(n => {
+                    const { isAssigned, assignments } = getUserAssignment(n, selectedAuditUser);
+                    return isAssigned && !areUserTasksComplete(n, assignments);
+                  });
+                  
+                  const stats = getUserDetailedStats(selectedAuditUser);
+                  const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+
+                  return (
+                    <>
+                      {/* Estadísticas */}
+                      <div className="grid grid-cols-4 gap-4">
+                        <div className="bg-white p-4 rounded-2xl text-center shadow-md border border-slate-200">
+                          <div className="text-3xl font-black text-slate-800">{stats.total}</div>
+                          <div className="text-[9px] text-slate-500 font-bold uppercase">Asignadas</div>
+                        </div>
+                        <div className="bg-emerald-50 p-4 rounded-2xl text-center shadow-md border border-emerald-200">
+                          <div className="text-3xl font-black text-emerald-700">{stats.done}</div>
+                          <div className="text-[9px] text-emerald-600 font-bold uppercase">Completadas</div>
+                        </div>
+                        <div className="bg-red-50 p-4 rounded-2xl text-center shadow-md border border-red-200">
+                          <div className="text-3xl font-black text-red-600">{stats.pending}</div>
+                          <div className="text-[9px] text-red-500 font-bold uppercase">Pendientes</div>
+                        </div>
+                        <div className="bg-blue-50 p-4 rounded-2xl text-center shadow-md border border-blue-200">
+                          <div className="text-3xl font-black text-blue-700">{pct}%</div>
+                          <div className="text-[9px] text-blue-600 font-bold uppercase">Avance</div>
+                        </div>
+                      </div>
+
+                      {/* Desglose por tipo */}
+                      <div className="bg-white rounded-2xl p-6 shadow-md border border-slate-200">
+                        <h4 className="text-sm font-black text-slate-700 mb-4 uppercase">Desglose por tipo</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="bg-slate-50 p-4 rounded-xl text-center">
+                            <div className="text-xs font-bold text-slate-600 mb-1">Inf. Actuación</div>
+                            <div className="text-lg font-black"><span className="text-emerald-600">{stats.informeActuacion.c}</span><span className="text-slate-400">/</span><span className="text-slate-700">{stats.informeActuacion.a}</span></div>
+                          </div>
+                          <div className="bg-slate-50 p-4 rounded-xl text-center">
+                            <div className="text-xs font-bold text-slate-600 mb-1">Criminalístico</div>
+                            <div className="text-lg font-black"><span className="text-emerald-600">{stats.informeCriminalistico.c}</span><span className="text-slate-400">/</span><span className="text-slate-700">{stats.informeCriminalistico.a}</span></div>
+                          </div>
+                          <div className="bg-slate-50 p-4 rounded-xl text-center">
+                            <div className="text-xs font-bold text-slate-600 mb-1">Pericial</div>
+                            <div className="text-lg font-black"><span className="text-emerald-600">{stats.informePericial.c}</span><span className="text-slate-400">/</span><span className="text-slate-700">{stats.informePericial.a}</span></div>
+                          </div>
+                          <div className="bg-slate-50 p-4 rounded-xl text-center">
+                            <div className="text-xs font-bold text-slate-600 mb-1">Croquis</div>
+                            <div className="text-lg font-black"><span className="text-emerald-600">{stats.croquis.c}</span><span className="text-slate-400">/</span><span className="text-slate-700">{stats.croquis.a}</span></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Lista de pendientes */}
+                      <div>
+                        <h4 className="text-sm font-black text-slate-700 mb-4 uppercase">Novedades con tareas pendientes ({userPendingNovedades.length})</h4>
+                        {userPendingNovedades.length === 0 ? (
+                          <div className="text-center py-12 bg-emerald-50 rounded-2xl border-2 border-dashed border-emerald-300">
+                            <div className="text-4xl mb-2">🎉</div>
+                            <p className="text-emerald-600 font-bold">¡Sin pendientes!</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {userPendingNovedades.map(n => {
+                              const { assignments } = getUserAssignment(n, selectedAuditUser);
+                              return (
+                                <div key={n.id} className="bg-white rounded-xl p-4 shadow-md border border-slate-200">
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <h5 className="font-black text-slate-800">Novedad {n.numero_novedad}</h5>
+                                      <p className="text-xs text-slate-500">SGSP: {n.numero_sgsp} {n.titulo && `• ${n.titulo}`}</p>
+                                    </div>
+                                    <span className="text-xs bg-slate-100 px-2 py-1 rounded font-bold text-slate-600">{n.anio}</span>
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {assignments.map(a => {
+                                      const done = n[a.checkKey] || (n.checks && n.checks[a.checkKeyOld]);
+                                      return (
+                                        <span key={a.checkKey} className={`text-xs px-3 py-1 rounded-full font-bold ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+                                          {a.label} {done ? '✓' : '✗'}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* MODAL CAMBIAR CONTRASEÑA */}
@@ -770,7 +1106,7 @@ const App = () => {
         </div>
       )}
 
-      {showPendingModal && <PendingModal count={pendingCount} onClose={() => setShowPendingModal(false)} />}
+      {showPendingModal && <PendingModal count={pendingCount} juiciosProximos={upcomingJuicios} onClose={() => setShowPendingModal(false)} />}
       {notification && <Notification {...notification} />}
     </div>
   );
