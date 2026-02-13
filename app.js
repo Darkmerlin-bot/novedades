@@ -193,6 +193,10 @@ const App = () => {
   // Estados para Auditoría
   const [selectedAuditUser, setSelectedAuditUser] = useState(null);
   const [statsYear, setStatsYear] = useState('todos');
+  
+  // Estados para feedback y bloqueo optimista
+  const [saving, setSaving] = useState(false);
+  const [originalUpdatedAt, setOriginalUpdatedAt] = useState(null);
 
   const showNotify = (message, type = 'success') => {
     setNotification({ message, type });
@@ -604,7 +608,7 @@ const App = () => {
               </div>
               {userProfile.role === 'admin' && (
                 <div className="flex gap-2">
-                  <button onClick={() => { setEditingNovedad(n); setCurrentView('form'); }} className="text-[10px] bg-slate-200 px-4 py-2 rounded-xl font-black text-slate-700 hover:bg-slate-300 uppercase">Editar</button>
+                  <button onClick={() => { setEditingNovedad(n); setOriginalUpdatedAt(n.updated_at); setCurrentView('form'); }} className="text-[10px] bg-slate-200 px-4 py-2 rounded-xl font-black text-slate-700 hover:bg-slate-300 uppercase">Editar</button>
                   <button onClick={async () => { if(confirm("¿Eliminar?")){ await sb.from('novedades').delete().eq('id', n.id); await addLog('BORRAR', 'Eliminó ' + n.numero_novedad); loadData(); showNotify("Eliminado"); } }} className="text-[10px] bg-red-100 px-4 py-2 rounded-xl font-black text-red-600 hover:bg-red-200 uppercase">Eliminar</button>
                 </div>
               )}
@@ -656,27 +660,45 @@ const App = () => {
             </div>
             <form className="p-10 space-y-8" onSubmit={async (e) => {
               e.preventDefault();
+              if (saving) return;
+              setSaving(true);
+              
               const d = new FormData(e.target);
               const num = d.get('nov'), anio = d.get('anio');
               const isDuplicate = await checkDuplicate(num, anio, editingNovedad?.id);
-              if (isDuplicate) { showNotify("Ya existe esa novedad en " + anio, "error"); return; }
+              if (isDuplicate) { showNotify("Ya existe esa novedad en " + anio, "error"); setSaving(false); return; }
+              
               const payload = { numero_novedad: num, numero_sgsp: d.get('sgsp'), anio: parseInt(anio), titulo: d.get('titulo') || null, informe_actuacion: d.get('ia') || null, informe_criminalistico: d.get('ic') || null, informe_pericial: d.get('ip') || null, croquis: d.get('cr') || null };
+              
               try {
                 if (editingNovedad) {
+                  // Bloqueo optimista: verificar que no cambió
+                  if (originalUpdatedAt) {
+                    const { data: current } = await sb.from('novedades').select('updated_at').eq('id', editingNovedad.id).single();
+                    if (current && current.updated_at !== originalUpdatedAt) {
+                      showNotify("Este registro fue modificado por otro usuario. Recargando...", "error");
+                      setSaving(false);
+                      loadData();
+                      setCurrentView('list');
+                      return;
+                    }
+                  }
                   const { error } = await sb.from('novedades').update({ ...payload, modificado_por: userProfile.nombre }).eq('id', editingNovedad.id);
-                  if (error) { showNotify("Error al actualizar: " + error.message, "error"); return; }
+                  if (error) { showNotify("Error al actualizar: " + error.message, "error"); setSaving(false); return; }
                   await addLog('EDITAR', 'Editó ' + num); showNotify("Actualizado");
                 } else {
                   const { error } = await sb.from('novedades').insert([{ ...payload, creado_por: userProfile.nombre, actuacion_realizada: false, criminalistico_realizado: false, pericial_realizado: false, croquis_realizado: false }]);
-                  if (error) { showNotify("Error al crear: " + error.message, "error"); return; }
+                  if (error) { showNotify("Error al crear: " + error.message, "error"); setSaving(false); return; }
                   await addLog('CREAR', 'Creó ' + num); showNotify("Guardado");
                 }
                 setEditingNovedad(null);
+                setOriginalUpdatedAt(null);
                 setCurrentView('list');
                 loadData();
               } catch (err) {
                 showNotify("Error: " + err.message, "error");
               }
+              setSaving(false);
             }}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">N° Novedad *</label><input name="nov" defaultValue={editingNovedad?.numero_novedad} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="001" /></div>
@@ -693,8 +715,10 @@ const App = () => {
                 </div>
               </div>
               <div className="flex gap-4 pt-10">
-                <button type="button" onClick={() => setCurrentView('list')} className="flex-1 p-5 bg-slate-200 rounded-[1.5rem] font-black text-slate-600 uppercase text-xs">Cancelar</button>
-                <button className="flex-1 p-5 bg-emerald-500 text-white rounded-[1.5rem] font-black uppercase text-xs shadow-xl">Guardar</button>
+                <button type="button" onClick={() => { setCurrentView('list'); setOriginalUpdatedAt(null); }} disabled={saving} className="flex-1 p-5 bg-slate-200 rounded-[1.5rem] font-black text-slate-600 uppercase text-xs disabled:opacity-50">Cancelar</button>
+                <button disabled={saving} className="flex-1 p-5 bg-emerald-500 text-white rounded-[1.5rem] font-black uppercase text-xs shadow-xl disabled:opacity-50 flex items-center justify-center gap-2">
+                  {saving ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Guardando...</> : 'Guardar'}
+                </button>
               </div>
             </form>
           </div>
@@ -829,6 +853,9 @@ const App = () => {
                 <h3 className="text-lg font-black text-slate-800 mb-6">{editingJuicio.id ? 'Editar' : 'Nuevo'} Juicio</h3>
                 <form onSubmit={async (e) => {
                   e.preventDefault();
+                  if (saving) return;
+                  setSaving(true);
+                  
                   const d = new FormData(e.target);
                   const payload = {
                     numero_novedad: d.get('nov'),
@@ -840,26 +867,42 @@ const App = () => {
                   };
                   if (selectedCitados.length === 0) {
                     showNotify("Debes seleccionar al menos un citado", "error");
+                    setSaving(false);
                     return;
                   }
                   try {
                     if (editingJuicio.id) {
+                      // Bloqueo optimista
+                      if (originalUpdatedAt) {
+                        const { data: current } = await sb.from('juicios').select('updated_at').eq('id', editingJuicio.id).single();
+                        if (current && current.updated_at !== originalUpdatedAt) {
+                          showNotify("Este registro fue modificado por otro usuario. Recargando...", "error");
+                          setSaving(false);
+                          loadData();
+                          setEditingJuicio(null);
+                          setSelectedCitados([]);
+                          setOriginalUpdatedAt(null);
+                          return;
+                        }
+                      }
                       const { error } = await sb.from('juicios').update(payload).eq('id', editingJuicio.id);
-                      if (error) { showNotify("Error: " + error.message, "error"); return; }
+                      if (error) { showNotify("Error: " + error.message, "error"); setSaving(false); return; }
                       await addLog('EDITAR_JUICIO', 'Editó juicio Nov. ' + payload.numero_novedad);
                       showNotify("Juicio actualizado");
                     } else {
                       const { error } = await sb.from('juicios').insert([payload]);
-                      if (error) { showNotify("Error: " + error.message, "error"); return; }
+                      if (error) { showNotify("Error: " + error.message, "error"); setSaving(false); return; }
                       await addLog('CREAR_JUICIO', 'Creó juicio Nov. ' + payload.numero_novedad);
                       showNotify("Juicio guardado");
                     }
                     setEditingJuicio(null);
                     setSelectedCitados([]);
+                    setOriginalUpdatedAt(null);
                     loadData();
                   } catch (err) {
                     showNotify("Error: " + err.message, "error");
                   }
+                  setSaving(false);
                 }} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1.5">
@@ -909,8 +952,10 @@ const App = () => {
                     </div>
                   </div>
                   <div className="flex gap-4">
-                    <button type="button" onClick={() => setEditingJuicio(null)} className="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-black uppercase text-xs">Cancelar</button>
-                    <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl">Guardar</button>
+                    <button type="button" onClick={() => { setEditingJuicio(null); setSelectedCitados([]); setOriginalUpdatedAt(null); }} disabled={saving} className="flex-1 py-4 bg-slate-200 text-slate-700 rounded-2xl font-black uppercase text-xs disabled:opacity-50">Cancelar</button>
+                    <button type="submit" disabled={saving} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl disabled:opacity-50 flex items-center justify-center gap-2">
+                      {saving ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Guardando...</> : 'Guardar'}
+                    </button>
                   </div>
                 </form>
               </div>
@@ -978,7 +1023,7 @@ const App = () => {
                             </p>
                             {canEdit && (
                               <div className="flex gap-2 mt-3 justify-end">
-                                <button onClick={() => { setEditingJuicio(j); setSelectedCitados(j.citados || []); }} className="text-[10px] bg-slate-200 px-3 py-1.5 rounded-lg font-black text-slate-700 hover:bg-slate-300">Editar</button>
+                                <button onClick={() => { setEditingJuicio(j); setSelectedCitados(j.citados || []); setOriginalUpdatedAt(j.updated_at); }} className="text-[10px] bg-slate-200 px-3 py-1.5 rounded-lg font-black text-slate-700 hover:bg-slate-300">Editar</button>
                                 <button onClick={async () => {
                                   if (confirm("¿Eliminar este juicio?")) {
                                     await sb.from('juicios').delete().eq('id', j.id);
