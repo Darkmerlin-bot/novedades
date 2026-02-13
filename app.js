@@ -209,6 +209,44 @@ const App = () => {
     if (loadingScreen) loadingScreen.style.display = 'none';
   }, []);
 
+  // TIMEOUT DE SESIÓN POR INACTIVIDAD (30 minutos)
+  const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutos en milisegundos
+  const timeoutRef = React.useRef(null);
+  const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
+  
+  const resetSessionTimeout = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setShowTimeoutWarning(false);
+    
+    if (session) {
+      // Mostrar advertencia 2 minutos antes
+      timeoutRef.current = setTimeout(() => {
+        setShowTimeoutWarning(true);
+        // Cerrar sesión después de 2 minutos más si no hay actividad
+        timeoutRef.current = setTimeout(async () => {
+          await sb.auth.signOut();
+          setShowTimeoutWarning(false);
+          showNotify("Sesión cerrada por inactividad", "error");
+        }, 2 * 60 * 1000);
+      }, SESSION_TIMEOUT - 2 * 60 * 1000);
+    }
+  };
+  
+  useEffect(() => {
+    if (!session) return;
+    
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    const handleActivity = () => resetSessionTimeout();
+    
+    events.forEach(event => window.addEventListener(event, handleActivity));
+    resetSessionTimeout();
+    
+    return () => {
+      events.forEach(event => window.removeEventListener(event, handleActivity));
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [session]);
+
   // AUTENTICACIÓN
   useEffect(() => {
     sb.auth.getSession().then(({ data: { session } }) => {
@@ -781,8 +819,55 @@ const App = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Usuario (login)</label>
-                  <input value={editingProfile.email?.split('@')[0]} disabled className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-400" />
-                  <p className="text-[9px] text-slate-400 ml-1">El usuario de login no se puede cambiar</p>
+                  {editingProfile.isSelf ? (
+                    <>
+                      <input value={editingProfile.email?.split('@')[0]} disabled className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-400" />
+                      <p className="text-[9px] text-slate-400 ml-1">No podés cambiar tu propio usuario</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex gap-2">
+                        <input 
+                          name="login" 
+                          defaultValue={editingProfile.email?.split('@')[0]} 
+                          className="flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" 
+                          placeholder="usuario"
+                        />
+                        <button 
+                          type="button"
+                          onClick={async (e) => {
+                            const input = e.target.parentElement.querySelector('input[name="login"]');
+                            const newLogin = input.value.trim().toLowerCase();
+                            if (!newLogin) { showNotify("Ingresá un usuario", "error"); return; }
+                            if (newLogin === editingProfile.email?.split('@')[0]) { showNotify("El usuario es el mismo", "error"); return; }
+                            
+                            const newEmail = newLogin + '@local.com';
+                            try {
+                              const { error } = await sb.rpc('admin_update_user_email', { 
+                                user_id: editingProfile.user_id, 
+                                new_email: newEmail 
+                              });
+                              if (error) { 
+                                showNotify("Error: " + error.message, "error"); 
+                                return; 
+                              }
+                              // Actualizar también en profiles
+                              await sb.from('profiles').update({ email: newEmail }).eq('id', editingProfile.id);
+                              await addLog('CAMBIO_LOGIN', `${editingProfile.nombre}: ${editingProfile.email?.split('@')[0]} → ${newLogin}`);
+                              showNotify("Usuario de login actualizado");
+                              loadData();
+                            } catch (err) {
+                              showNotify("Error: " + err.message, "error");
+                            }
+                          }}
+                          className="px-6 py-4 bg-blue-500 text-white rounded-2xl font-black text-xs uppercase hover:bg-blue-600"
+                        >
+                          Cambiar
+                        </button>
+                      </div>
+                      <p className="text-[9px] text-slate-400 ml-1">Solo letras y números, sin espacios</p>
+                    </>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Rol</label>
@@ -1349,6 +1434,29 @@ const App = () => {
       )}
 
       {showPendingModal && <PendingModal count={pendingCount} juiciosProximos={upcomingJuicios} onClose={() => setShowPendingModal(false)} />}
+      
+      {/* Modal de advertencia de timeout */}
+      {showTimeoutWarning && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
+            <div className="p-8 bg-amber-500 text-white text-center">
+              <div className="text-6xl mb-4">⏰</div>
+              <h3 className="font-black uppercase tracking-widest text-lg">Sesión por expirar</h3>
+            </div>
+            <div className="p-8 text-center">
+              <p className="text-slate-600 font-bold text-lg mb-2">Tu sesión se cerrará en 2 minutos</p>
+              <p className="text-slate-500 text-sm mb-6">Por seguridad, la sesión se cierra automáticamente después de 30 minutos de inactividad.</p>
+              <button 
+                onClick={() => { resetSessionTimeout(); }} 
+                className="w-full py-5 bg-emerald-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl"
+              >
+                Continuar trabajando
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {notification && <Notification {...notification} />}
     </div>
   );
