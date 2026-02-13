@@ -197,6 +197,14 @@ const App = () => {
   // Estados para feedback y bloqueo optimista
   const [saving, setSaving] = useState(false);
   const [originalUpdatedAt, setOriginalUpdatedAt] = useState(null);
+  
+  // Estados para impresión
+  const [printType, setPrintType] = useState('todo');
+  const [printYear, setPrintYear] = useState('todos');
+  const [printDateFrom, setPrintDateFrom] = useState('');
+  const [printDateTo, setPrintDateTo] = useState('');
+  const [printReady, setPrintReady] = useState(false);
+  const [printUser, setPrintUser] = useState('todos');
 
   const showNotify = (message, type = 'success') => {
     setNotification({ message, type });
@@ -889,6 +897,48 @@ const App = () => {
                     </select>
                   )}
                 </div>
+                {!editingProfile.isSelf && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nueva Contraseña</label>
+                    <div className="flex gap-2">
+                      <input 
+                        name="newpass" 
+                        type="password" 
+                        placeholder="Mínimo 6 caracteres"
+                        className="flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" 
+                      />
+                      <button 
+                        type="button"
+                        onClick={async (e) => {
+                          const input = e.target.parentElement.querySelector('input[name="newpass"]');
+                          const newPass = input.value;
+                          if (!newPass || newPass.length < 6) { 
+                            showNotify("La contraseña debe tener al menos 6 caracteres", "error"); 
+                            return; 
+                          }
+                          try {
+                            const { error } = await sb.rpc('admin_update_user_password', { 
+                              target_user_id: editingProfile.user_id, 
+                              new_password: newPass 
+                            });
+                            if (error) { 
+                              showNotify("Error: " + error.message, "error"); 
+                              return; 
+                            }
+                            await addLog('CAMBIO_PASS_ADMIN', `Cambió contraseña de ${editingProfile.nombre}`);
+                            showNotify("Contraseña actualizada");
+                            input.value = '';
+                          } catch (err) {
+                            showNotify("Error: " + err.message, "error");
+                          }
+                        }}
+                        className="px-6 py-4 bg-amber-500 text-white rounded-2xl font-black text-xs uppercase hover:bg-amber-600"
+                      >
+                        Cambiar
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl">Guardar Cambios</button>
               </form>
             </div>
@@ -1418,17 +1468,294 @@ const App = () => {
 
       {/* MODAL REPORTE */}
       {showReport && userProfile.role === 'admin' && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4 no-print" onClick={() => setShowReport(false)}>
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4 no-print" onClick={() => { setShowReport(false); setPrintReady(false); setPrintUser('todos'); }}>
           <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-6 bg-slate-900 text-white flex justify-between items-center sticky top-0 print:hidden no-print"><h3 className="font-black uppercase text-sm">🖨️ Reporte</h3><div className="flex gap-2"><button onClick={() => window.print()} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-xl font-bold text-sm">Imprimir</button><button onClick={() => setShowReport(false)} className="text-slate-500 hover:text-white px-2">✕</button></div></div>
-            <div id="report-content" className="p-8 bg-white">
-              <div className="text-center mb-8"><h1 className="text-2xl font-black text-slate-800">📋 REPORTE DE NOVEDADES</h1><p className="text-slate-500 text-sm">Generado: {new Date().toLocaleString()}</p></div>
-              <div className="mb-8"><h2 className="text-lg font-black text-slate-700 border-b-2 border-slate-300 pb-2 mb-4">RESUMEN</h2><div className="grid grid-cols-3 gap-4"><div className="bg-slate-100 p-4 rounded-xl text-center"><div className="text-2xl font-black">{novedades.length}</div><div className="text-xs font-bold text-slate-500">TOTAL</div></div><div className="bg-amber-100 p-4 rounded-xl text-center"><div className="text-2xl font-black text-amber-700">{totalPending}</div><div className="text-xs font-bold text-amber-600">PENDIENTES</div></div><div className="bg-emerald-100 p-4 rounded-xl text-center"><div className="text-2xl font-black text-emerald-700">{totalCompleted}</div><div className="text-xs font-bold text-emerald-600">COMPLETADOS</div></div></div></div>
-              <div className="mb-8"><h2 className="text-lg font-black text-emerald-700 border-b-2 border-emerald-300 pb-2 mb-4">✅ COMPLETADOS ({totalCompleted})</h2>{completedNovedades.length === 0 ? <p className="text-slate-500 italic">Ninguno</p> : <table className="w-full text-sm"><thead><tr className="bg-emerald-50"><th className="p-2 text-left font-bold">N°</th><th className="p-2 text-left font-bold">Año</th><th className="p-2 text-left font-bold">SGSP</th><th className="p-2 text-left font-bold">Título</th></tr></thead><tbody>{novedades.filter(n => isNovedadComplete(n)).sort(sortByNumber).map(n => <tr key={n.id} className="border-b"><td className="p-2 font-bold">{n.numero_novedad}</td><td className="p-2">{n.anio || '-'}</td><td className="p-2">{n.numero_sgsp}</td><td className="p-2">{n.titulo || '-'}</td></tr>)}</tbody></table>}</div>
-              <div className="mb-8"><h2 className="text-lg font-black text-amber-700 border-b-2 border-amber-300 pb-2 mb-4">⏳ PENDIENTES ({totalPending})</h2>{pendingNovedades.length === 0 ? <p className="text-slate-500 italic">Ninguno</p> : <table className="w-full text-sm"><thead><tr className="bg-amber-50"><th className="p-2 text-left font-bold">N°</th><th className="p-2 text-left font-bold">Año</th><th className="p-2 text-left font-bold">SGSP</th><th className="p-2 text-left font-bold">Título</th><th className="p-2 text-left font-bold">Estado</th></tr></thead><tbody>{novedades.filter(n => !isNovedadComplete(n)).sort(sortByNumber).map(n => { const { completed, total } = getTaskCounts(n); return <tr key={n.id} className="border-b"><td className="p-2 font-bold">{n.numero_novedad}</td><td className="p-2">{n.anio || '-'}</td><td className="p-2">{n.numero_sgsp}</td><td className="p-2">{n.titulo || '-'}</td><td className="p-2"><span className="bg-amber-200 px-2 py-1 rounded text-xs font-bold">{completed}/{total}</span></td></tr>; })}</tbody></table>}</div>
-              <div className="mb-8"><h2 className="text-lg font-black text-slate-700 border-b-2 border-slate-300 pb-2 mb-4">👥 POR USUARIO</h2><div className="space-y-4">{profiles.map(p => { const stats = getUserDetailedStats(p); const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0; return <div key={p.id} className="bg-slate-50 p-4 rounded-xl"><div className="flex justify-between items-center mb-3"><div><span className="font-black text-slate-800">{p.nombre}</span><span className="text-xs text-slate-500 ml-2">{p.role}</span></div><span className="font-black text-lg">{pct}%</span></div><div className="grid grid-cols-4 gap-2 text-center text-xs"><div className="bg-white p-2 rounded"><div className="font-bold">Inf. Actuación</div><div className="text-emerald-600">{stats.informeActuacion.c}/{stats.informeActuacion.a}</div></div><div className="bg-white p-2 rounded"><div className="font-bold">Criminalístico</div><div className="text-emerald-600">{stats.informeCriminalistico.c}/{stats.informeCriminalistico.a}</div></div><div className="bg-white p-2 rounded"><div className="font-bold">Pericial</div><div className="text-emerald-600">{stats.informePericial.c}/{stats.informePericial.a}</div></div><div className="bg-white p-2 rounded"><div className="font-bold">Croquis</div><div className="text-emerald-600">{stats.croquis.c}/{stats.croquis.a}</div></div></div></div>; })}</div></div>
-              <div className="text-center text-xs text-slate-400 mt-8">Sistema de Novedades - Versión Segura</div>
+            <div className="p-6 bg-slate-900 text-white flex justify-between items-center sticky top-0 z-10 print:hidden no-print">
+              <h3 className="font-black uppercase text-sm">🖨️ Imprimir Reporte</h3>
+              <div className="flex gap-2">
+                {printReady && <button onClick={() => window.print()} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-xl font-bold text-sm">🖨️ Imprimir</button>}
+                <button onClick={() => { setShowReport(false); setPrintReady(false); setPrintUser('todos'); }} className="text-slate-500 hover:text-white px-2">✕</button>
+              </div>
             </div>
+            
+            {!printReady ? (
+              <div className="p-8 space-y-6">
+                <h4 className="text-lg font-black text-slate-800">¿Qué querés imprimir?</h4>
+                
+                {/* Tipo de reporte */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {[
+                    { id: 'pendientes', label: '⏳ Pendientes', desc: 'Novedades sin completar' },
+                    { id: 'completados', label: '✅ Completados', desc: 'Novedades finalizadas' },
+                    { id: 'juicios', label: '⚖️ Juicios', desc: 'Citaciones programadas' },
+                    { id: 'estadisticas', label: '📊 Estadísticas', desc: 'Resumen por usuario' },
+                    { id: 'auditoria', label: '📜 Auditoría', desc: 'Últimos 100 logs' },
+                    { id: 'todo', label: '📋 Todo', desc: 'Reporte completo' },
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setPrintType(opt.id)}
+                      className={`p-4 rounded-2xl text-left transition-all ${printType === opt.id ? 'bg-emerald-500 text-white shadow-lg' : 'bg-slate-100 hover:bg-slate-200'}`}
+                    >
+                      <div className="font-black text-sm">{opt.label}</div>
+                      <div className={`text-xs mt-1 ${printType === opt.id ? 'text-emerald-100' : 'text-slate-500'}`}>{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                
+                {/* Filtros */}
+                <div className="bg-slate-50 p-6 rounded-2xl space-y-4">
+                  <h5 className="text-sm font-black text-slate-600 uppercase">Filtros (opcional)</h5>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Año</label>
+                      <select 
+                        value={printYear} 
+                        onChange={(e) => setPrintYear(e.target.value)}
+                        className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold cursor-pointer"
+                      >
+                        <option value="todos">Todos los años</option>
+                        {getAvailableStatsYears().map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Usuario</label>
+                      <select 
+                        value={printUser} 
+                        onChange={(e) => setPrintUser(e.target.value)}
+                        className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold cursor-pointer"
+                      >
+                        <option value="todos">Todos los usuarios</option>
+                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Desde</label>
+                      <input 
+                        type="date" 
+                        value={printDateFrom}
+                        onChange={(e) => setPrintDateFrom(e.target.value)}
+                        className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Hasta</label>
+                      <input 
+                        type="date" 
+                        value={printDateTo}
+                        onChange={(e) => setPrintDateTo(e.target.value)}
+                        className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold"
+                      />
+                    </div>
+                  </div>
+                  
+                  {(printDateFrom || printDateTo || printYear !== 'todos' || printUser !== 'todos') && (
+                    <button 
+                      onClick={() => { setPrintYear('todos'); setPrintDateFrom(''); setPrintDateTo(''); setPrintUser('todos'); }}
+                      className="text-xs text-red-500 font-bold hover:underline"
+                    >
+                      ✕ Limpiar filtros
+                    </button>
+                  )}
+                </div>
+                
+                <button 
+                  onClick={() => setPrintReady(true)}
+                  className="w-full py-5 bg-emerald-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl hover:bg-emerald-600"
+                >
+                  Generar Reporte
+                </button>
+              </div>
+            ) : (
+              <div id="report-content" className="p-8 bg-white">
+                {(() => {
+                  // Filtrar datos según opciones
+                  let filteredNovedades = novedades;
+                  let filteredJuicios = juicios;
+                  let filteredLogs = logs;
+                  let filteredProfiles = profiles;
+                  
+                  // Filtrar por año
+                  if (printYear !== 'todos') {
+                    filteredNovedades = filteredNovedades.filter(n => n.anio?.toString() === printYear);
+                    filteredJuicios = filteredJuicios.filter(j => new Date(j.fecha_juicio).getFullYear().toString() === printYear);
+                    filteredLogs = filteredLogs.filter(l => new Date(l.created_at).getFullYear().toString() === printYear);
+                  }
+                  
+                  // Filtrar por fecha
+                  if (printDateFrom) {
+                    const from = new Date(printDateFrom);
+                    from.setHours(0,0,0,0);
+                    filteredNovedades = filteredNovedades.filter(n => new Date(n.created_at) >= from);
+                    filteredJuicios = filteredJuicios.filter(j => new Date(j.fecha_juicio) >= from);
+                    filteredLogs = filteredLogs.filter(l => new Date(l.created_at) >= from);
+                  }
+                  if (printDateTo) {
+                    const to = new Date(printDateTo);
+                    to.setHours(23,59,59,999);
+                    filteredNovedades = filteredNovedades.filter(n => new Date(n.created_at) <= to);
+                    filteredJuicios = filteredJuicios.filter(j => new Date(j.fecha_juicio) <= to);
+                    filteredLogs = filteredLogs.filter(l => new Date(l.created_at) <= to);
+                  }
+                  
+                  // Filtrar por usuario
+                  if (printUser !== 'todos') {
+                    // Novedades donde el usuario tiene alguna asignación
+                    filteredNovedades = filteredNovedades.filter(n => 
+                      (n.informe_actuacion || n.informeActuacion) === printUser ||
+                      (n.informe_criminalistico || n.informeCriminalistico) === printUser ||
+                      (n.informe_pericial || n.informePericial) === printUser ||
+                      n.croquis === printUser
+                    );
+                    // Juicios donde el usuario está citado
+                    filteredJuicios = filteredJuicios.filter(j => (j.citados || []).includes(printUser));
+                    // Logs del usuario
+                    filteredLogs = filteredLogs.filter(l => l.user_nombre === printUser);
+                    // Solo mostrar ese usuario en estadísticas
+                    filteredProfiles = filteredProfiles.filter(p => p.nombre === printUser);
+                  }
+                  
+                  const filteredPending = filteredNovedades.filter(n => !isNovedadComplete(n));
+                  const filteredCompleted = filteredNovedades.filter(n => isNovedadComplete(n));
+                  
+                  const filterText = [
+                    printYear !== 'todos' ? `Año: ${printYear}` : null,
+                    printUser !== 'todos' ? `Usuario: ${printUser}` : null,
+                    printDateFrom ? `Desde: ${printDateFrom}` : null,
+                    printDateTo ? `Hasta: ${printDateTo}` : null,
+                  ].filter(Boolean).join(' | ') || 'Sin filtros';
+                  
+                  return (
+                    <>
+                      <div className="text-center mb-8">
+                        <h1 className="text-2xl font-black text-slate-800">📋 REPORTE DE NOVEDADES</h1>
+                        <p className="text-slate-500 text-sm">Generado: {new Date().toLocaleString()}</p>
+                        <p className="text-slate-400 text-xs mt-1">{filterText}</p>
+                      </div>
+                      
+                      {/* Botón volver */}
+                      <button 
+                        onClick={() => setPrintReady(false)}
+                        className="mb-6 text-sm text-blue-500 font-bold hover:underline print:hidden"
+                      >
+                        ← Cambiar opciones
+                      </button>
+                      
+                      {/* RESUMEN - siempre visible excepto auditoría sola */}
+                      {printType !== 'auditoria' && (
+                        <div className="mb-8">
+                          <h2 className="text-lg font-black text-slate-700 border-b-2 border-slate-300 pb-2 mb-4">RESUMEN</h2>
+                          <div className="grid grid-cols-4 gap-4">
+                            <div className="bg-slate-100 p-4 rounded-xl text-center">
+                              <div className="text-2xl font-black">{filteredNovedades.length}</div>
+                              <div className="text-xs font-bold text-slate-500">TOTAL</div>
+                            </div>
+                            <div className="bg-amber-100 p-4 rounded-xl text-center">
+                              <div className="text-2xl font-black text-amber-700">{filteredPending.length}</div>
+                              <div className="text-xs font-bold text-amber-600">PENDIENTES</div>
+                            </div>
+                            <div className="bg-emerald-100 p-4 rounded-xl text-center">
+                              <div className="text-2xl font-black text-emerald-700">{filteredCompleted.length}</div>
+                              <div className="text-xs font-bold text-emerald-600">COMPLETADOS</div>
+                            </div>
+                            <div className="bg-blue-100 p-4 rounded-xl text-center">
+                              <div className="text-2xl font-black text-blue-700">{filteredJuicios.length}</div>
+                              <div className="text-xs font-bold text-blue-600">JUICIOS</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* PENDIENTES */}
+                      {(printType === 'pendientes' || printType === 'todo') && (
+                        <div className="mb-8">
+                          <h2 className="text-lg font-black text-amber-700 border-b-2 border-amber-300 pb-2 mb-4">⏳ PENDIENTES ({filteredPending.length})</h2>
+                          {filteredPending.length === 0 ? <p className="text-slate-500 italic">Ninguno</p> : (
+                            <table className="w-full text-sm">
+                              <thead><tr className="bg-amber-50"><th className="p-2 text-left font-bold">N°</th><th className="p-2 text-left font-bold">Año</th><th className="p-2 text-left font-bold">SGSP</th><th className="p-2 text-left font-bold">Título</th><th className="p-2 text-left font-bold">Estado</th></tr></thead>
+                              <tbody>{filteredPending.sort(sortByNumber).map(n => { const { completed, total } = getTaskCounts(n); return <tr key={n.id} className="border-b"><td className="p-2 font-bold">{n.numero_novedad}</td><td className="p-2">{n.anio || '-'}</td><td className="p-2">{n.numero_sgsp}</td><td className="p-2">{n.titulo || '-'}</td><td className="p-2"><span className="bg-amber-200 px-2 py-1 rounded text-xs font-bold">{completed}/{total}</span></td></tr>; })}</tbody>
+                            </table>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* COMPLETADOS */}
+                      {(printType === 'completados' || printType === 'todo') && (
+                        <div className="mb-8">
+                          <h2 className="text-lg font-black text-emerald-700 border-b-2 border-emerald-300 pb-2 mb-4">✅ COMPLETADOS ({filteredCompleted.length})</h2>
+                          {filteredCompleted.length === 0 ? <p className="text-slate-500 italic">Ninguno</p> : (
+                            <table className="w-full text-sm">
+                              <thead><tr className="bg-emerald-50"><th className="p-2 text-left font-bold">N°</th><th className="p-2 text-left font-bold">Año</th><th className="p-2 text-left font-bold">SGSP</th><th className="p-2 text-left font-bold">Título</th></tr></thead>
+                              <tbody>{filteredCompleted.sort(sortByNumber).map(n => <tr key={n.id} className="border-b"><td className="p-2 font-bold">{n.numero_novedad}</td><td className="p-2">{n.anio || '-'}</td><td className="p-2">{n.numero_sgsp}</td><td className="p-2">{n.titulo || '-'}</td></tr>)}</tbody>
+                            </table>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* JUICIOS */}
+                      {(printType === 'juicios' || printType === 'todo') && (
+                        <div className="mb-8">
+                          <h2 className="text-lg font-black text-blue-700 border-b-2 border-blue-300 pb-2 mb-4">⚖️ JUICIOS ({filteredJuicios.length})</h2>
+                          {filteredJuicios.length === 0 ? <p className="text-slate-500 italic">Ninguno</p> : (
+                            <table className="w-full text-sm">
+                              <thead><tr className="bg-blue-50"><th className="p-2 text-left font-bold">Fecha</th><th className="p-2 text-left font-bold">N° Nov.</th><th className="p-2 text-left font-bold">SGSP</th><th className="p-2 text-left font-bold">Descripción</th><th className="p-2 text-left font-bold">Citados</th></tr></thead>
+                              <tbody>{filteredJuicios.sort((a,b) => new Date(a.fecha_juicio) - new Date(b.fecha_juicio)).map(j => <tr key={j.id} className="border-b"><td className="p-2 font-bold">{new Date(j.fecha_juicio).toLocaleDateString()}</td><td className="p-2">{j.numero_novedad}</td><td className="p-2">{j.numero_sgsp}</td><td className="p-2">{j.descripcion || '-'}</td><td className="p-2 text-xs">{(j.citados || []).join(', ') || '-'}</td></tr>)}</tbody>
+                            </table>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* ESTADÍSTICAS */}
+                      {(printType === 'estadisticas' || printType === 'todo') && (
+                        <div className="mb-8">
+                          <h2 className="text-lg font-black text-slate-700 border-b-2 border-slate-300 pb-2 mb-4">📊 ESTADÍSTICAS POR USUARIO {printUser !== 'todos' ? `(${printUser})` : ''}</h2>
+                          <div className="space-y-4">
+                            {filteredProfiles.map(p => { 
+                              const stats = getUserDetailedStats(p, printYear); 
+                              const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0; 
+                              return (
+                                <div key={p.id} className="bg-slate-50 p-4 rounded-xl">
+                                  <div className="flex justify-between items-center mb-3">
+                                    <div><span className="font-black text-slate-800">{p.nombre}</span><span className="text-xs text-slate-500 ml-2">{p.role}</span></div>
+                                    <span className="font-black text-lg">{pct}%</span>
+                                  </div>
+                                  <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                                    <div className="bg-white p-2 rounded"><div className="font-bold">Inf. Actuación</div><div className="text-emerald-600">{stats.informeActuacion.c}/{stats.informeActuacion.a}</div></div>
+                                    <div className="bg-white p-2 rounded"><div className="font-bold">Criminalístico</div><div className="text-emerald-600">{stats.informeCriminalistico.c}/{stats.informeCriminalistico.a}</div></div>
+                                    <div className="bg-white p-2 rounded"><div className="font-bold">Pericial</div><div className="text-emerald-600">{stats.informePericial.c}/{stats.informePericial.a}</div></div>
+                                    <div className="bg-white p-2 rounded"><div className="font-bold">Croquis</div><div className="text-emerald-600">{stats.croquis.c}/{stats.croquis.a}</div></div>
+                                    <div className="bg-white p-2 rounded"><div className="font-bold">Juicios</div><div className="text-blue-600">{stats.juicios}</div></div>
+                                  </div>
+                                </div>
+                              ); 
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* AUDITORÍA */}
+                      {(printType === 'auditoria' || printType === 'todo') && (
+                        <div className="mb-8">
+                          <h2 className="text-lg font-black text-slate-700 border-b-2 border-slate-300 pb-2 mb-4">📜 AUDITORÍA ({filteredLogs.length} registros)</h2>
+                          {filteredLogs.length === 0 ? <p className="text-slate-500 italic">Sin registros</p> : (
+                            <table className="w-full text-xs">
+                              <thead><tr className="bg-slate-100"><th className="p-2 text-left font-bold">Fecha</th><th className="p-2 text-left font-bold">Usuario</th><th className="p-2 text-left font-bold">Acción</th><th className="p-2 text-left font-bold">Detalle</th></tr></thead>
+                              <tbody>{filteredLogs.map((l, i) => <tr key={l.id || i} className="border-b"><td className="p-2">{new Date(l.created_at).toLocaleString()}</td><td className="p-2 font-bold">{l.user_nombre || '-'}</td><td className="p-2"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${l.action === 'LOGIN_FALLIDO' ? 'bg-red-200 text-red-700' : 'bg-slate-200'}`}>{l.action}</span></td><td className="p-2">{l.details || '-'}</td></tr>)}</tbody>
+                            </table>
+                          )}
+                        </div>
+                      )}
+                      
+                      <div className="text-center text-xs text-slate-400 mt-8 pt-4 border-t">Sistema de Novedades - Versión Segura</div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
           </div>
         </div>
       )}
