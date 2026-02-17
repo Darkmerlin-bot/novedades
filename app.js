@@ -205,6 +205,10 @@ const App = () => {
   const [printDateTo, setPrintDateTo] = useState('');
   const [printReady, setPrintReady] = useState(false);
   const [printUser, setPrintUser] = useState('todos');
+  
+  // Estados para filtros de auditoría
+  const [logsFilterUser, setLogsFilterUser] = useState('todos');
+  const [logsFilterAction, setLogsFilterAction] = useState('todos');
 
   const showNotify = (message, type = 'success') => {
     setNotification({ message, type });
@@ -469,7 +473,20 @@ const App = () => {
     if (data && data.length > 0) {
       setNovedades(prev => prev.map(x => x.id === id ? data[0] : x));
     }
-    await addLog('MARCA_CHECK', 'Cambió ' + checkKey + ' en ' + n.numero_novedad);
+    
+    // Log descriptivo
+    const taskNames = {
+      'actuacion_realizada': 'Informe Actuación',
+      'criminalistico_realizado': 'Criminalístico',
+      'pericial_realizado': 'Pericial',
+      'croquis_realizado': 'Croquis'
+    };
+    const taskName = taskNames[checkKey] || checkKey;
+    const action = newVal ? 'CHECK_COMPLETADO' : 'CHECK_DESMARCADO';
+    const detail = newVal 
+      ? `Completó "${taskName}" en Nov. ${n.numero_novedad}` 
+      : `Desmarcó "${taskName}" en Nov. ${n.numero_novedad}`;
+    await addLog(action, detail);
   };
 
   const handleBackup = async () => {
@@ -605,16 +622,30 @@ const App = () => {
             {!isCompletedView && isAssigned && (
               <div className="py-4 border-b border-slate-200 bg-slate-100 -mx-6 px-6 my-4">
                 <span className="text-[10px] font-black text-slate-600 uppercase">📌 Tus tareas:</span>
-                <div className="mt-3 space-y-2">
-                  {assignments.map(a => (
-                    <label key={a.checkKey} className="flex items-center gap-4 py-2 cursor-pointer group select-none">
-                      <div onClick={() => handleToggleCheck(n.id, a.checkKey, a.checkKeyOld)} className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center ${isTaskDone(n, a) ? 'bg-emerald-500 border-emerald-500' : 'border-red-400 bg-red-100'}`}>
-                        {isTaskDone(n, a) && <span className="text-white text-sm">✓</span>}
+                {userProfile.role === 'user' ? (
+                  <div className="mt-3 space-y-2">
+                    {assignments.map(a => (
+                      <div key={a.checkKey} className="flex items-center gap-4 py-2">
+                        <div className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center ${isTaskDone(n, a) ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-slate-200'}`}>
+                          {isTaskDone(n, a) && <span className="text-white text-sm">✓</span>}
+                        </div>
+                        <span className={`text-sm font-bold ${isTaskDone(n, a) ? 'text-emerald-600 line-through' : 'text-slate-600'}`}>{a.label}</span>
+                        <span className="text-[9px] text-slate-400 italic">(Solo lectura)</span>
                       </div>
-                      <span className={`text-sm font-bold ${isTaskDone(n, a) ? 'text-emerald-600 line-through' : 'text-red-600'}`}>{a.label}</span>
-                    </label>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {assignments.map(a => (
+                      <label key={a.checkKey} className="flex items-center gap-4 py-2 cursor-pointer group select-none">
+                        <div onClick={() => handleToggleCheck(n.id, a.checkKey, a.checkKeyOld)} className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center ${isTaskDone(n, a) ? 'bg-emerald-500 border-emerald-500' : 'border-red-400 bg-red-100'}`}>
+                          {isTaskDone(n, a) && <span className="text-white text-sm">✓</span>}
+                        </div>
+                        <span className={`text-sm font-bold ${isTaskDone(n, a) ? 'text-emerald-600 line-through' : 'text-red-600'}`}>{a.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
@@ -637,7 +668,8 @@ const App = () => {
                 {tasks.length === 0 ? <p className="text-slate-400 text-xs italic py-4 text-center bg-slate-50 rounded-xl">Sin tareas</p> : tasks.map(task => {
                   const isMe = task.person === userProfile.nombre;
                   const done = isTaskDone(n, task);
-                  const canToggle = isMe || userProfile.role === 'admin';
+                  // Admin puede todo, moderator solo sus tareas, user no puede nada
+                  const canToggle = userProfile.role === 'admin' || (userProfile.role === 'moderator' && isMe);
                   return (
                     <label key={task.checkKey} className={`flex items-center gap-4 py-2 ${canToggle ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'} group select-none rounded-lg px-3 ${isMe ? 'bg-slate-100' : 'bg-slate-50'}`}>
                       <div onClick={() => canToggle && handleToggleCheck(n.id, task.checkKey, task.checkKeyOld)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'} ${!canToggle && 'opacity-50'}`}>{done && <span className="text-white text-[10px]">✓</span>}</div>
@@ -775,30 +807,35 @@ const App = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-end mb-8">
               <div><h2 className="text-3xl font-black text-slate-800">Personal</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Usuarios del sistema</p></div>
+              <button onClick={() => setShowNewUser(true)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo Usuario</button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {profiles.map(p => (
-                <div key={p.id} className="bg-white p-5 rounded-3xl shadow-md border border-slate-200 group hover:shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-lg">{p.nombre?.charAt(0).toUpperCase()}</div>
-                      <div>
-                        <div className="font-black text-slate-800">{p.nombre}</div>
-                        <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
-                          <span className={`w-1.5 h-1.5 rounded-full ${p.role === 'admin' ? 'bg-purple-500' : 'bg-emerald-500'}`}></span>
-                          {p.role} • {p.email?.split('@')[0]}
+              {profiles.map(p => {
+                const roleColor = p.role === 'admin' ? 'bg-purple-500' : p.role === 'moderator' ? 'bg-blue-500' : 'bg-emerald-500';
+                const roleLabel = p.role === 'admin' ? 'Admin' : p.role === 'moderator' ? 'Moderador' : 'Usuario';
+                return (
+                  <div key={p.id} className="bg-white p-5 rounded-3xl shadow-md border border-slate-200 group hover:shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl text-white flex items-center justify-center font-black text-lg ${p.role === 'admin' ? 'bg-purple-600' : p.role === 'moderator' ? 'bg-blue-600' : 'bg-slate-700'}`}>{p.nombre?.charAt(0).toUpperCase()}</div>
+                        <div>
+                          <div className="font-black text-slate-800">{p.nombre}</div>
+                          <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
+                            <span className={`w-1.5 h-1.5 rounded-full ${roleColor}`}></span>
+                            {roleLabel} • {p.email?.split('@')[0]}
+                          </div>
                         </div>
                       </div>
+                      {p.id !== userProfile.id && (
+                        <button onClick={() => setEditingProfile(p)} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Editar</button>
+                      )}
+                      {p.id === userProfile.id && (
+                        <button onClick={() => setEditingProfile({...p, isSelf: true})} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Mi Perfil</button>
+                      )}
                     </div>
-                    {p.id !== userProfile.id && (
-                      <button onClick={() => setEditingProfile(p)} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Editar</button>
-                    )}
-                    {p.id === userProfile.id && (
-                      <button onClick={() => setEditingProfile({...p, isSelf: true})} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Mi Perfil</button>
-                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -881,7 +918,7 @@ const App = () => {
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Rol</label>
                   {editingProfile.isSelf ? (
                     <div>
-                      <input value={editingProfile.role === 'admin' ? 'Administrador' : 'Usuario'} disabled className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-400" />
+                      <input value={editingProfile.role === 'admin' ? 'Administrador' : editingProfile.role === 'moderator' ? 'Moderador' : 'Usuario'} disabled className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-400" />
                       <p className="text-[9px] text-slate-400 ml-1">No podés cambiar tu propio rol</p>
                     </div>
                   ) : (
@@ -892,8 +929,9 @@ const App = () => {
                       showNotify("Rol actualizado");
                       loadData();
                     }} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer">
-                      <option value="user">Usuario</option>
-                      <option value="admin">Administrador</option>
+                      <option value="user">Usuario (solo lectura)</option>
+                      <option value="moderator">Moderador (puede completar tareas)</option>
+                      <option value="admin">Administrador (acceso total)</option>
                     </select>
                   )}
                 </div>
@@ -945,32 +983,195 @@ const App = () => {
           </div>
         )}
 
+        {/* MODAL NUEVO USUARIO */}
+        {showNewUser && (
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setShowNewUser(false)}>
+            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp" onClick={e => e.stopPropagation()}>
+              <div className="p-8 bg-emerald-600 text-white flex justify-between items-center">
+                <h3 className="font-black uppercase text-sm">➕ Nuevo Usuario</h3>
+                <button onClick={() => setShowNewUser(false)} className="text-emerald-200 hover:text-white">✕</button>
+              </div>
+              <form className="p-8 space-y-5" onSubmit={async (e) => {
+                e.preventDefault();
+                if (saving) return;
+                setSaving(true);
+                
+                const nombre = e.target.nombre.value.trim();
+                const login = e.target.login.value.trim().toLowerCase();
+                const password = e.target.password.value;
+                const role = e.target.role.value;
+                
+                if (!nombre || !login || !password) {
+                  showNotify("Completá todos los campos", "error");
+                  setSaving(false);
+                  return;
+                }
+                if (password.length < 6) {
+                  showNotify("La contraseña debe tener al menos 6 caracteres", "error");
+                  setSaving(false);
+                  return;
+                }
+                
+                const email = login + '@local.com';
+                
+                try {
+                  // Crear usuario en auth
+                  const { data: authData, error: authError } = await sb.auth.signUp({
+                    email,
+                    password,
+                    options: { data: { nombre } }
+                  });
+                  
+                  if (authError) {
+                    showNotify("Error: " + authError.message, "error");
+                    setSaving(false);
+                    return;
+                  }
+                  
+                  // Crear perfil
+                  if (authData.user) {
+                    await sb.from('profiles').insert([{
+                      id: authData.user.id,
+                      user_id: authData.user.id,
+                      nombre,
+                      email,
+                      role
+                    }]);
+                  }
+                  
+                  await addLog('CREAR_USUARIO', `Creó usuario: ${nombre} (${role})`);
+                  showNotify("Usuario creado correctamente");
+                  setShowNewUser(false);
+                  loadData();
+                } catch (err) {
+                  showNotify("Error: " + err.message, "error");
+                }
+                setSaving(false);
+              }}>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nombre completo *</label>
+                  <input name="nombre" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="Juan Pérez" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Usuario (login) *</label>
+                  <input name="login" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="juanperez" />
+                  <p className="text-[9px] text-slate-400 ml-1">Solo letras y números, sin espacios</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Contraseña *</label>
+                  <input name="password" type="password" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="Mínimo 6 caracteres" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Rol</label>
+                  <select name="role" defaultValue="user" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer">
+                    <option value="user">Usuario (solo lectura)</option>
+                    <option value="moderator">Moderador (puede completar tareas)</option>
+                    <option value="admin">Administrador (acceso total)</option>
+                  </select>
+                </div>
+                <button type="submit" disabled={saving} className="w-full py-5 bg-emerald-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl disabled:opacity-50 flex items-center justify-center gap-2">
+                  {saving ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Creando...</> : 'Crear Usuario'}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* LOGS (Admin) */}
         {currentView === 'logs' && userProfile.role === 'admin' && (
           <div className="space-y-4">
-            <div className="mb-8"><h2 className="text-3xl font-black text-slate-800">Auditoría</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Últimos 100 registros</p></div>
-            {logs.length === 0 ? <div className="text-center py-16 bg-white rounded-[2rem] border border-slate-200"><p className="text-slate-500 font-bold">Sin registros</p></div> : (
-              <div className="bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-md">
-                <div className="max-h-[600px] overflow-y-auto">
-                  {logs.map((log, i) => {
-                    const isFailed = log.action === 'LOGIN_FALLIDO';
-                    return (
-                      <div key={log.id || i} className={`p-5 border-b border-slate-100 last:border-0 flex items-start gap-4 ${isFailed ? 'bg-red-50' : 'hover:bg-slate-50'}`}>
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm shrink-0 ${isFailed ? 'bg-red-200' : 'bg-slate-200'}`}>{log.action === 'LOGIN' ? '🔓' : log.action === 'LOGOUT' ? '🚪' : isFailed ? '🚫' : '📝'}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`font-black text-sm ${isFailed ? 'text-red-700' : 'text-slate-800'}`}>{log.user_nombre || 'Sistema'}</span>
-                            {isFailed && <span className="text-[9px] font-black text-white bg-red-500 px-2 py-0.5 rounded-full">⚠️ ALERTA</span>}
-                          </div>
-                          <p className={`text-xs mt-1 ${isFailed ? 'text-red-600' : 'text-slate-600'}`}>{log.details}</p>
-                          <span className="text-[9px] text-slate-400 font-bold uppercase mt-2 inline-block">{log.action} • {new Date(log.created_at).toLocaleString()}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+            <div className="flex justify-between items-start mb-6">
+              <div><h2 className="text-3xl font-black text-slate-800">Auditoría</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Registro de actividad</p></div>
+            </div>
+            
+            {/* Filtros de logs */}
+            <div className="bg-white p-4 rounded-2xl shadow-md border border-slate-200 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Usuario</label>
+                  <select 
+                    value={logsFilterUser} 
+                    onChange={(e) => setLogsFilterUser(e.target.value)}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
+                  >
+                    <option value="todos">Todos los usuarios</option>
+                    {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Tipo de acción</label>
+                  <select 
+                    value={logsFilterAction} 
+                    onChange={(e) => setLogsFilterAction(e.target.value)}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
+                  >
+                    <option value="todos">Todas las acciones</option>
+                    <option value="LOGIN">Inicios de sesión</option>
+                    <option value="LOGOUT">Cierres de sesión</option>
+                    <option value="LOGIN_FALLIDO">Intentos fallidos</option>
+                    <option value="CREAR">Creación de novedades</option>
+                    <option value="EDITAR">Edición de novedades</option>
+                    <option value="BORRAR">Eliminación</option>
+                    <option value="CHECK">Tareas completadas</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  {(logsFilterUser !== 'todos' || logsFilterAction !== 'todos') && (
+                    <button 
+                      onClick={() => { setLogsFilterUser('todos'); setLogsFilterAction('todos'); }}
+                      className="w-full p-3 bg-red-100 text-red-600 rounded-xl font-bold text-sm hover:bg-red-200"
+                    >
+                      ✕ Limpiar filtros
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
+            
+            {(() => {
+              let filteredLogs = logs;
+              if (logsFilterUser !== 'todos') {
+                filteredLogs = filteredLogs.filter(l => l.user_nombre === logsFilterUser);
+              }
+              if (logsFilterAction !== 'todos') {
+                filteredLogs = filteredLogs.filter(l => l.action === logsFilterAction || l.action?.includes(logsFilterAction));
+              }
+              
+              return filteredLogs.length === 0 ? (
+                <div className="text-center py-16 bg-white rounded-[2rem] border border-slate-200"><p className="text-slate-500 font-bold">Sin registros</p></div>
+              ) : (
+                <div className="bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-md">
+                  <div className="p-4 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-600">
+                    Mostrando {filteredLogs.length} de {logs.length} registros
+                  </div>
+                  <div className="max-h-[600px] overflow-y-auto">
+                    {filteredLogs.map((log, i) => {
+                      const isFailed = log.action === 'LOGIN_FALLIDO';
+                      const isLogin = log.action === 'LOGIN';
+                      const isLogout = log.action === 'LOGOUT';
+                      const isCheck = log.action?.includes('CHECK') || log.details?.includes('completó') || log.details?.includes('desmarcó');
+                      return (
+                        <div key={log.id || i} className={`p-5 border-b border-slate-100 last:border-0 flex items-start gap-4 ${isFailed ? 'bg-red-50' : isCheck ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}>
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm shrink-0 ${isFailed ? 'bg-red-200' : isLogin ? 'bg-emerald-200' : isLogout ? 'bg-amber-200' : isCheck ? 'bg-emerald-300' : 'bg-slate-200'}`}>
+                            {isLogin ? '🔓' : isLogout ? '🚪' : isFailed ? '🚫' : isCheck ? '✓' : '📝'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`font-black text-sm ${isFailed ? 'text-red-700' : 'text-slate-800'}`}>{log.user_nombre || 'Sistema'}</span>
+                              {isFailed && <span className="text-[9px] font-black text-white bg-red-500 px-2 py-0.5 rounded-full">⚠️ ALERTA</span>}
+                              {isLogin && <span className="text-[9px] font-black text-white bg-emerald-500 px-2 py-0.5 rounded-full">INGRESO</span>}
+                              {isLogout && <span className="text-[9px] font-black text-white bg-amber-500 px-2 py-0.5 rounded-full">SALIDA</span>}
+                            </div>
+                            <p className={`text-xs mt-1 ${isFailed ? 'text-red-600' : 'text-slate-600'}`}>{log.details}</p>
+                            <span className="text-[9px] text-slate-400 font-bold uppercase mt-2 inline-block">{log.action} • {new Date(log.created_at).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -979,11 +1180,13 @@ const App = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-center mb-6">
               <div><h2 className="text-3xl font-black text-slate-800">⚖️ Juicios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">{userProfile?.role === 'admin' ? 'Todas las citaciones' : 'Tus citaciones'}</p></div>
-              <button onClick={() => { setEditingJuicio({}); setSelectedCitados([]); }} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo Juicio</button>
+              {(userProfile?.role === 'admin' || userProfile?.role === 'moderator') && (
+                <button onClick={() => { setEditingJuicio({}); setSelectedCitados([]); }} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo Juicio</button>
+              )}
             </div>
             
             {/* Formulario de nuevo/editar juicio */}
-            {editingJuicio && (
+            {editingJuicio && (userProfile?.role === 'admin' || userProfile?.role === 'moderator') && (
               <div className="bg-white rounded-[2rem] shadow-xl p-8 border border-slate-200 mb-6">
                 <h3 className="text-lg font-black text-slate-800 mb-6">{editingJuicio.id ? 'Editar' : 'Nuevo'} Juicio</h3>
                 <form onSubmit={async (e) => {
@@ -1123,7 +1326,8 @@ const App = () => {
                     const isPast = diasRestantes < 0;
                     const isClose = diasRestantes >= 0 && diasRestantes <= 5;
                     const citados = j.citados || [];
-                    const canEdit = userProfile?.role === 'admin' || j.creado_por === userProfile?.nombre;
+                    // Admin puede todo, moderator solo los que creó, user nada
+                    const canEdit = userProfile?.role === 'admin' || (userProfile?.role === 'moderator' && j.creado_por === userProfile?.nombre);
                     const isMe = citados.includes(userProfile?.nombre);
                     
                     return (
