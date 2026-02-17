@@ -209,6 +209,7 @@ const App = () => {
   // Estados para filtros de auditoría
   const [logsFilterUser, setLogsFilterUser] = useState('todos');
   const [logsFilterAction, setLogsFilterAction] = useState('todos');
+  const [auditView, setAuditView] = useState('logs'); // 'logs' o 'tareas'
 
   const showNotify = (message, type = 'success') => {
     setNotification({ message, type });
@@ -321,7 +322,7 @@ const App = () => {
     setJuicios(juiciosData || []);
     
     if (userProfile?.role === 'admin') {
-      const { data: logData } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(100);
+      const { data: logData } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(500);
       setLogs(logData || []);
     }
   };
@@ -924,10 +925,21 @@ const App = () => {
                   ) : (
                     <select name="role" defaultValue={editingProfile.role} onChange={async (e) => {
                       const newRole = e.target.value;
-                      await sb.from('profiles').update({ role: newRole }).eq('id', editingProfile.id);
-                      await addLog('CAMBIO_ROL', `${editingProfile.nombre} ahora es ${newRole}`);
-                      showNotify("Rol actualizado");
-                      loadData();
+                      try {
+                        const { error } = await sb.from('profiles').update({ role: newRole }).eq('id', editingProfile.id);
+                        if (error) {
+                          showNotify("Error al cambiar rol: " + error.message, "error");
+                          e.target.value = editingProfile.role; // Revertir
+                          return;
+                        }
+                        await addLog('CAMBIO_ROL', `${editingProfile.nombre} ahora es ${newRole}`);
+                        showNotify("Rol actualizado");
+                        setEditingProfile({...editingProfile, role: newRole});
+                        loadData();
+                      } catch (err) {
+                        showNotify("Error: " + err.message, "error");
+                        e.target.value = editingProfile.role;
+                      }
                     }} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer">
                       <option value="user">Usuario (solo lectura)</option>
                       <option value="moderator">Moderador (puede completar tareas)</option>
@@ -1084,6 +1096,171 @@ const App = () => {
               <div><h2 className="text-3xl font-black text-slate-800">Auditoría</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Registro de actividad</p></div>
             </div>
             
+            {/* Pestañas de auditoría */}
+            <div className="flex gap-2 mb-4">
+              <button 
+                onClick={() => setAuditView('logs')}
+                className={`px-6 py-3 rounded-2xl font-black text-sm transition-all ${auditView === 'logs' ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
+              >
+                📜 Logs de Actividad
+              </button>
+              <button 
+                onClick={() => setAuditView('tareas')}
+                className={`px-6 py-3 rounded-2xl font-black text-sm transition-all ${auditView === 'tareas' ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
+              >
+                ✅ Tareas Completadas
+              </button>
+            </div>
+            
+            {/* Vista de Tareas Completadas */}
+            {auditView === 'tareas' && (
+              <div className="space-y-4">
+                <div className="bg-white p-4 rounded-2xl shadow-md border border-slate-200 mb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Usuario</label>
+                      <select 
+                        value={logsFilterUser} 
+                        onChange={(e) => setLogsFilterUser(e.target.value)}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
+                      >
+                        <option value="todos">Todos los usuarios</option>
+                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Año</label>
+                      <select 
+                        value={printYear} 
+                        onChange={(e) => setPrintYear(e.target.value)}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
+                      >
+                        <option value="todos">Todos los años</option>
+                        {getAvailableStatsYears().map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Lista de tareas completadas por usuario */}
+                {(() => {
+                  const usersToShow = logsFilterUser === 'todos' ? profiles : profiles.filter(p => p.nombre === logsFilterUser);
+                  
+                  return usersToShow.map(p => {
+                    // Filtrar novedades completadas por este usuario
+                    let userNovedades = novedades.filter(n => {
+                      const ia = n.informe_actuacion || n.informeActuacion;
+                      const ic = n.informe_criminalistico || n.informeCriminalistico;
+                      const ip = n.informe_pericial || n.informePericial;
+                      const cr = n.croquis;
+                      
+                      // Verificar si tiene alguna tarea completada
+                      const completedTasks = [];
+                      if (ia === p.nombre && (n.actuacion_realizada || n.checks?.actuacionRealizada)) {
+                        completedTasks.push({ tipo: 'Informe Actuación', novedad: n });
+                      }
+                      if (ic === p.nombre && (n.criminalistico_realizado || n.checks?.criminalisticoRealizado)) {
+                        completedTasks.push({ tipo: 'Criminalístico', novedad: n });
+                      }
+                      if (ip === p.nombre && (n.pericial_realizado || n.checks?.pericialRealizado)) {
+                        completedTasks.push({ tipo: 'Pericial', novedad: n });
+                      }
+                      if (cr === p.nombre && (n.croquis_realizado || n.checks?.croquisRealizado)) {
+                        completedTasks.push({ tipo: 'Croquis', novedad: n });
+                      }
+                      
+                      return completedTasks.length > 0;
+                    });
+                    
+                    // Filtrar por año si aplica
+                    if (printYear !== 'todos') {
+                      userNovedades = userNovedades.filter(n => n.anio?.toString() === printYear);
+                    }
+                    
+                    // Obtener lista detallada de tareas completadas
+                    const completedTasksList = [];
+                    userNovedades.forEach(n => {
+                      const ia = n.informe_actuacion || n.informeActuacion;
+                      const ic = n.informe_criminalistico || n.informeCriminalistico;
+                      const ip = n.informe_pericial || n.informePericial;
+                      const cr = n.croquis;
+                      
+                      if (ia === p.nombre && (n.actuacion_realizada || n.checks?.actuacionRealizada)) {
+                        completedTasksList.push({ tipo: 'Informe Actuación', novedad: n.numero_novedad, anio: n.anio, sgsp: n.numero_sgsp });
+                      }
+                      if (ic === p.nombre && (n.criminalistico_realizado || n.checks?.criminalisticoRealizado)) {
+                        completedTasksList.push({ tipo: 'Criminalístico', novedad: n.numero_novedad, anio: n.anio, sgsp: n.numero_sgsp });
+                      }
+                      if (ip === p.nombre && (n.pericial_realizado || n.checks?.pericialRealizado)) {
+                        completedTasksList.push({ tipo: 'Pericial', novedad: n.numero_novedad, anio: n.anio, sgsp: n.numero_sgsp });
+                      }
+                      if (cr === p.nombre && (n.croquis_realizado || n.checks?.croquisRealizado)) {
+                        completedTasksList.push({ tipo: 'Croquis', novedad: n.numero_novedad, anio: n.anio, sgsp: n.numero_sgsp });
+                      }
+                    });
+                    
+                    const roleColor = p.role === 'admin' ? 'bg-purple-600' : p.role === 'moderator' ? 'bg-blue-600' : 'bg-slate-700';
+                    
+                    return (
+                      <div key={p.id} className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+                        <div className={`${roleColor} text-white p-4 flex justify-between items-center`}>
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center font-black text-lg">
+                              {p.nombre?.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <h3 className="font-black">{p.nombre}</h3>
+                              <p className="text-xs opacity-80">{p.role === 'admin' ? 'Administrador' : p.role === 'moderator' ? 'Moderador' : 'Usuario'}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-black">{completedTasksList.length}</div>
+                            <div className="text-[10px] opacity-80 uppercase">Tareas completadas</div>
+                          </div>
+                        </div>
+                        
+                        {completedTasksList.length === 0 ? (
+                          <div className="p-6 text-center text-slate-400 italic">
+                            Sin tareas completadas {printYear !== 'todos' ? `en ${printYear}` : ''}
+                          </div>
+                        ) : (
+                          <div className="max-h-64 overflow-y-auto">
+                            <table className="w-full text-sm">
+                              <thead className="bg-slate-50 sticky top-0">
+                                <tr>
+                                  <th className="p-3 text-left font-bold text-slate-600">Tipo</th>
+                                  <th className="p-3 text-left font-bold text-slate-600">Novedad</th>
+                                  <th className="p-3 text-left font-bold text-slate-600">Año</th>
+                                  <th className="p-3 text-left font-bold text-slate-600">SGSP</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {completedTasksList.map((t, i) => (
+                                  <tr key={i} className="border-b border-slate-100 hover:bg-emerald-50">
+                                    <td className="p-3">
+                                      <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg text-xs font-bold">
+                                        ✓ {t.tipo}
+                                      </span>
+                                    </td>
+                                    <td className="p-3 font-bold">{t.novedad}</td>
+                                    <td className="p-3">{t.anio || '-'}</td>
+                                    <td className="p-3 text-slate-500">{t.sgsp}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            )}
+            
+            {/* Vista de Logs */}
+            {auditView === 'logs' && (
+              <>
             {/* Filtros de logs */}
             <div className="bg-white p-4 rounded-2xl shadow-md border border-slate-200 mb-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1172,6 +1349,8 @@ const App = () => {
                 </div>
               );
             })()}
+              </>
+            )}
           </div>
         )}
 
