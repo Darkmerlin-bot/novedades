@@ -341,29 +341,43 @@ const App = () => {
 
   // Calcular juicios próximos (5 días) - mostrar a todos
   useEffect(() => {
-    if (!userProfile || juicios.length === 0) {
+    if (!userProfile || !juicios || juicios.length === 0) {
       setUpcomingJuicios([]);
       return;
     }
     
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const en5Dias = new Date(hoy);
-    en5Dias.setDate(en5Dias.getDate() + 5);
-    
-    const proximos = juicios.filter(j => {
-      // Corregir fecha para evitar problemas de zona horaria
-      const fechaStr = j.fecha_juicio?.split('T')[0];
-      if (!fechaStr) return false;
-      const [year, month, day] = fechaStr.split('-').map(Number);
-      const fechaJuicio = new Date(year, month - 1, day);
-      fechaJuicio.setHours(0, 0, 0, 0);
+    try {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const en5Dias = new Date(hoy);
+      en5Dias.setDate(en5Dias.getDate() + 5);
       
-      return fechaJuicio >= hoy && fechaJuicio <= en5Dias;
-    });
-    
-    // Todos ven todos los juicios próximos en la notificación
-    setUpcomingJuicios(proximos);
+      const proximos = juicios.filter(j => {
+        if (!j || !j.fecha_juicio) return false;
+        try {
+          // Corregir fecha para evitar problemas de zona horaria
+          const fechaStr = String(j.fecha_juicio).split('T')[0];
+          if (!fechaStr) return false;
+          const parts = fechaStr.split('-');
+          if (parts.length !== 3) return false;
+          const [year, month, day] = parts.map(Number);
+          if (isNaN(year) || isNaN(month) || isNaN(day)) return false;
+          const fechaJuicio = new Date(year, month - 1, day);
+          fechaJuicio.setHours(0, 0, 0, 0);
+          
+          return fechaJuicio >= hoy && fechaJuicio <= en5Dias;
+        } catch (e) {
+          console.error('Error parsing fecha_juicio:', e);
+          return false;
+        }
+      });
+      
+      // Todos ven todos los juicios próximos en la notificación
+      setUpcomingJuicios(proximos);
+    } catch (e) {
+      console.error('Error en cálculo de juicios próximos:', e);
+      setUpcomingJuicios([]);
+    }
   }, [juicios, userProfile]);
 
   // Validación de duplicados en servidor
@@ -413,6 +427,23 @@ const App = () => {
   const extractNumber = (str) => { if (!str) return 0; const m = str.match(/\d+/g); return m ? parseInt(m[m.length - 1], 10) : 0; };
   const extractYear = (n) => n.anio ? n.anio.toString() : n.created_at ? new Date(n.created_at).getFullYear().toString() : '';
   const sortByNumber = (a, b) => extractNumber(a.numero_novedad) - extractNumber(b.numero_novedad);
+  
+  // Función segura para parsear fechas de juicios (evita problemas de zona horaria)
+  const parseFechaJuicio = (fechaStr) => {
+    if (!fechaStr) return null;
+    try {
+      const str = String(fechaStr).split('T')[0];
+      const parts = str.split('-');
+      if (parts.length !== 3) return null;
+      const [year, month, day] = parts.map(Number);
+      if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+      const fecha = new Date(year, month - 1, day);
+      fecha.setHours(0, 0, 0, 0);
+      return fecha;
+    } catch (e) {
+      return null;
+    }
+  };
 
   const getAssignedTasks = (n) => {
     const tasks = [];
@@ -531,8 +562,8 @@ const App = () => {
     
     // Contar juicios donde el usuario está citado
     const filteredJuicios = filterYear === 'todos' ? juicios : juicios.filter(j => {
-      const year = new Date(j.fecha_juicio).getFullYear().toString();
-      return year === filterYear;
+      const fecha = parseFechaJuicio(j.fecha_juicio);
+      return fecha && fecha.getFullYear().toString() === filterYear;
     });
     stats.juicios = filteredJuicios.filter(j => (j.citados || []).includes(profile.nombre)).length;
     
@@ -545,14 +576,20 @@ const App = () => {
   const getAvailableStatsYears = () => {
     const years = new Set();
     novedades.forEach(n => { if (n.anio) years.add(n.anio.toString()); });
-    juicios.forEach(j => { if (j.fecha_juicio) years.add(new Date(j.fecha_juicio).getFullYear().toString()); });
+    juicios.forEach(j => { 
+      const fecha = parseFechaJuicio(j.fecha_juicio);
+      if (fecha) years.add(fecha.getFullYear().toString()); 
+    });
     return Array.from(years).sort((a, b) => b - a);
   };
   
   // Estadísticas filtradas por año
   const getFilteredStats = () => {
     const filteredNovedades = statsYear === 'todos' ? novedades : novedades.filter(n => n.anio?.toString() === statsYear);
-    const filteredJuicios = statsYear === 'todos' ? juicios : juicios.filter(j => new Date(j.fecha_juicio).getFullYear().toString() === statsYear);
+    const filteredJuicios = statsYear === 'todos' ? juicios : juicios.filter(j => {
+      const fecha = parseFechaJuicio(j.fecha_juicio);
+      return fecha && fecha.getFullYear().toString() === statsYear;
+    });
     
     return {
       totalNovedades: filteredNovedades.length,
@@ -2002,7 +2039,10 @@ const App = () => {
                   // Filtrar por año
                   if (printYear !== 'todos') {
                     filteredNovedades = filteredNovedades.filter(n => n.anio?.toString() === printYear);
-                    filteredJuicios = filteredJuicios.filter(j => new Date(j.fecha_juicio).getFullYear().toString() === printYear);
+                    filteredJuicios = filteredJuicios.filter(j => {
+                      const fecha = parseFechaJuicio(j.fecha_juicio);
+                      return fecha && fecha.getFullYear().toString() === printYear;
+                    });
                     filteredLogs = filteredLogs.filter(l => new Date(l.created_at).getFullYear().toString() === printYear);
                   }
                   
@@ -2011,14 +2051,20 @@ const App = () => {
                     const from = new Date(printDateFrom);
                     from.setHours(0,0,0,0);
                     filteredNovedades = filteredNovedades.filter(n => new Date(n.created_at) >= from);
-                    filteredJuicios = filteredJuicios.filter(j => new Date(j.fecha_juicio) >= from);
+                    filteredJuicios = filteredJuicios.filter(j => {
+                      const fecha = parseFechaJuicio(j.fecha_juicio);
+                      return fecha && fecha >= from;
+                    });
                     filteredLogs = filteredLogs.filter(l => new Date(l.created_at) >= from);
                   }
                   if (printDateTo) {
                     const to = new Date(printDateTo);
                     to.setHours(23,59,59,999);
                     filteredNovedades = filteredNovedades.filter(n => new Date(n.created_at) <= to);
-                    filteredJuicios = filteredJuicios.filter(j => new Date(j.fecha_juicio) <= to);
+                    filteredJuicios = filteredJuicios.filter(j => {
+                      const fecha = parseFechaJuicio(j.fecha_juicio);
+                      return fecha && fecha <= to;
+                    });
                     filteredLogs = filteredLogs.filter(l => new Date(l.created_at) <= to);
                   }
                   
@@ -2122,8 +2168,15 @@ const App = () => {
                           <h2 className="text-lg font-black text-blue-700 border-b-2 border-blue-300 pb-2 mb-4">⚖️ JUICIOS ({filteredJuicios.length})</h2>
                           {filteredJuicios.length === 0 ? <p className="text-slate-500 italic">Ninguno</p> : (
                             <table className="w-full text-sm">
-                              <thead><tr className="bg-blue-50"><th className="p-2 text-left font-bold">Fecha</th><th className="p-2 text-left font-bold">N° Nov.</th><th className="p-2 text-left font-bold">SGSP</th><th className="p-2 text-left font-bold">Descripción</th><th className="p-2 text-left font-bold">Citados</th></tr></thead>
-                              <tbody>{filteredJuicios.sort((a,b) => new Date(a.fecha_juicio) - new Date(b.fecha_juicio)).map(j => <tr key={j.id} className="border-b"><td className="p-2 font-bold">{new Date(j.fecha_juicio).toLocaleDateString()}</td><td className="p-2">{j.numero_novedad}</td><td className="p-2">{j.numero_sgsp}</td><td className="p-2">{j.descripcion || '-'}</td><td className="p-2 text-xs">{(j.citados || []).join(', ') || '-'}</td></tr>)}</tbody>
+                              <thead><tr className="bg-blue-50"><th className="p-2 text-left font-bold">Fecha</th><th className="p-2 text-left font-bold">N° Nov.</th><th className="p-2 text-left font-bold">SGSP</th><th className="p-2 text-left font-bold">IUE</th><th className="p-2 text-left font-bold">Descripción</th><th className="p-2 text-left font-bold">Citados</th></tr></thead>
+                              <tbody>{filteredJuicios.sort((a,b) => {
+                                const fechaA = parseFechaJuicio(a.fecha_juicio);
+                                const fechaB = parseFechaJuicio(b.fecha_juicio);
+                                return (fechaA || 0) - (fechaB || 0);
+                              }).map(j => {
+                                const fecha = parseFechaJuicio(j.fecha_juicio);
+                                return <tr key={j.id} className="border-b"><td className="p-2 font-bold">{fecha ? fecha.toLocaleDateString() : '-'}</td><td className="p-2">{j.numero_novedad || '-'}</td><td className="p-2">{j.numero_sgsp || '-'}</td><td className="p-2">{j.iue || '-'}</td><td className="p-2">{j.descripcion || '-'}</td><td className="p-2 text-xs">{(j.citados || []).join(', ') || '-'}</td></tr>;
+                              })}</tbody>
                             </table>
                           )}
                         </div>
