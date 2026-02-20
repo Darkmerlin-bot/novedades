@@ -20,7 +20,7 @@ const Notification = ({ message, type }) => (
 );
 
 // HEADER
-const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount }) => (
+const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount, juiciosCount }) => (
   <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50 print:hidden">
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
@@ -34,7 +34,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
         <div className="flex items-center justify-between md:justify-end gap-3">
           <div className="flex flex-col items-end mr-2">
             <span className="text-sm font-bold text-emerald-400">{userProfile?.nombre}</span>
-            <span className="text-[10px] text-slate-500 font-black uppercase tracking-tighter">{userProfile?.role}</span>
+            <span className="text-[10px] text-slate-500 font-black uppercase tracking-tighter">{userProfile?.role === 'admin' ? 'Admin' : userProfile?.role === 'moderator' ? 'Moderador' : 'Usuario'}</span>
           </div>
           <div className="flex gap-1.5">
             <button onClick={onShowPass} className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all" title="Cambiar Contraseña">🔑</button>
@@ -56,7 +56,9 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
         <button onClick={() => setView('completed')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${currentView === 'completed' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
           ✅ Completados {completedCount > 0 && <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-black">{completedCount}</span>}
         </button>
-        <button onClick={() => setView('juicios')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'juicios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>⚖️ Juicios</button>
+        <button onClick={() => setView('juicios')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${currentView === 'juicios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+          ⚖️ Juicios {juiciosCount > 0 && <span className="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black">{juiciosCount}</span>}
+        </button>
         {userProfile?.role === 'admin' && (
           <>
             <button onClick={() => setView('form')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'form' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>➕ Nueva</button>
@@ -71,7 +73,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
 );
 
 // MODAL PENDIENTES Y JUICIOS
-const PendingModal = ({ count, juiciosProximos, onClose }) => (
+const PendingModal = ({ count, juiciosProximos, onClose, userName }) => (
   <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[150] flex items-center justify-center p-4">
     <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto">
       <div className="p-8 bg-red-500 text-white text-center">
@@ -91,26 +93,36 @@ const PendingModal = ({ count, juiciosProximos, onClose }) => (
         
         {juiciosProximos && juiciosProximos.length > 0 && (
           <div className="mt-4">
-            <p className="text-slate-600 font-bold text-lg mb-3 text-center">⚖️ Juicios próximos</p>
+            <p className="text-slate-600 font-bold text-lg mb-3 text-center">⚖️ Juicios próximos (5 días)</p>
             <div className="space-y-3">
               {juiciosProximos.map(j => {
-                const fecha = new Date(j.fecha_juicio);
+                // Corregir fecha para evitar problemas de zona horaria
+                const fechaStr = j.fecha_juicio?.split('T')[0];
+                const [year, month, day] = fechaStr ? fechaStr.split('-').map(Number) : [0,0,0];
+                const fecha = new Date(year, month - 1, day);
                 const hoy = new Date();
                 hoy.setHours(0,0,0,0);
                 fecha.setHours(0,0,0,0);
                 const diasRestantes = Math.ceil((fecha - hoy) / (1000 * 60 * 60 * 24));
                 const citados = j.citados || [];
+                const estaUsuarioCitado = citados.includes(userName);
+                const titulo = j.numero_novedad ? `Nov. ${j.numero_novedad}` : j.iue ? `IUE: ${j.iue}` : 'Juicio';
+                
                 return (
-                  <div key={j.id} className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
+                  <div key={j.id} className={`border-2 rounded-xl p-4 ${estaUsuarioCitado ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-400' : 'bg-amber-50 border-amber-200'}`}>
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="font-black text-slate-800">Nov. {j.numero_novedad}</p>
-                        <p className="text-xs text-slate-500">SGSP: {j.numero_sgsp}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-black text-slate-800">{titulo}</p>
+                          {estaUsuarioCitado && <span className="text-[9px] bg-blue-500 text-white px-2 py-0.5 rounded-full font-black">CITADO</span>}
+                        </div>
+                        {j.numero_sgsp && <p className="text-xs text-slate-500">SGSP: {j.numero_sgsp}</p>}
+                        {j.iue && j.numero_novedad && <p className="text-xs text-purple-600 font-bold">IUE: {j.iue}</p>}
                         {j.descripcion && <p className="text-xs text-slate-600 mt-1">{j.descripcion}</p>}
                         {citados.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
                             {citados.map((c, i) => (
-                              <span key={i} className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">{c}</span>
+                              <span key={i} className={`text-[10px] px-2 py-0.5 rounded font-bold ${c === userName ? 'bg-blue-500 text-white' : 'bg-blue-100 text-blue-700'}`}>{c}</span>
                             ))}
                           </div>
                         )}
@@ -327,7 +339,7 @@ const App = () => {
     }
   };
 
-  // Calcular juicios próximos (5 días) - filtrar por usuario citado
+  // Calcular juicios próximos (5 días) - mostrar a todos
   useEffect(() => {
     if (!userProfile || juicios.length === 0) {
       setUpcomingJuicios([]);
@@ -340,17 +352,17 @@ const App = () => {
     en5Dias.setDate(en5Dias.getDate() + 5);
     
     const proximos = juicios.filter(j => {
-      const fechaJuicio = new Date(j.fecha_juicio);
+      // Corregir fecha para evitar problemas de zona horaria
+      const fechaStr = j.fecha_juicio?.split('T')[0];
+      if (!fechaStr) return false;
+      const [year, month, day] = fechaStr.split('-').map(Number);
+      const fechaJuicio = new Date(year, month - 1, day);
       fechaJuicio.setHours(0, 0, 0, 0);
-      const enRango = fechaJuicio >= hoy && fechaJuicio <= en5Dias;
       
-      // Si es admin, ver todos. Si no, solo los que está citado
-      const citados = j.citados || [];
-      const estaCitado = citados.includes(userProfile.nombre);
-      
-      return enRango && (userProfile.role === 'admin' || estaCitado);
+      return fechaJuicio >= hoy && fechaJuicio <= en5Dias;
     });
     
+    // Todos ven todos los juicios próximos en la notificación
     setUpcomingJuicios(proximos);
   }, [juicios, userProfile]);
 
@@ -701,7 +713,7 @@ const App = () => {
   // APP
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} />
+      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={upcomingJuicios.length} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
@@ -1374,14 +1386,24 @@ const App = () => {
                   setSaving(true);
                   
                   const d = new FormData(e.target);
+                  const fechaRaw = d.get('fecha');
+                  // Agregar hora para evitar problemas de zona horaria
+                  const fechaCorregida = fechaRaw ? fechaRaw + 'T12:00:00' : null;
+                  
                   const payload = {
-                    numero_novedad: d.get('nov'),
-                    numero_sgsp: d.get('sgsp'),
+                    numero_novedad: d.get('nov') || null,
+                    numero_sgsp: d.get('sgsp') || null,
+                    iue: d.get('iue') || null,
                     descripcion: d.get('desc') || null,
-                    fecha_juicio: d.get('fecha'),
+                    fecha_juicio: fechaCorregida,
                     citados: selectedCitados,
                     creado_por: userProfile.nombre
                   };
+                  if (!fechaRaw) {
+                    showNotify("La fecha es obligatoria", "error");
+                    setSaving(false);
+                    return;
+                  }
                   if (selectedCitados.length === 0) {
                     showNotify("Debes seleccionar al menos un citado", "error");
                     setSaving(false);
@@ -1404,12 +1426,12 @@ const App = () => {
                       }
                       const { error } = await sb.from('juicios').update(payload).eq('id', editingJuicio.id);
                       if (error) { showNotify("Error: " + error.message, "error"); setSaving(false); return; }
-                      await addLog('EDITAR_JUICIO', 'Editó juicio Nov. ' + payload.numero_novedad);
+                      await addLog('EDITAR_JUICIO', 'Editó juicio' + (payload.numero_novedad ? ' Nov. ' + payload.numero_novedad : '') + (payload.iue ? ' IUE: ' + payload.iue : ''));
                       showNotify("Juicio actualizado");
                     } else {
                       const { error } = await sb.from('juicios').insert([payload]);
                       if (error) { showNotify("Error: " + error.message, "error"); setSaving(false); return; }
-                      await addLog('CREAR_JUICIO', 'Creó juicio Nov. ' + payload.numero_novedad);
+                      await addLog('CREAR_JUICIO', 'Creó juicio' + (payload.numero_novedad ? ' Nov. ' + payload.numero_novedad : '') + (payload.iue ? ' IUE: ' + payload.iue : ''));
                       showNotify("Juicio guardado");
                     }
                     setEditingJuicio(null);
@@ -1421,18 +1443,24 @@ const App = () => {
                   }
                   setSaving(false);
                 }} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">N° Novedad *</label>
-                      <input name="nov" defaultValue={editingJuicio.numero_novedad} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="001" />
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">N° Novedad</label>
+                      <input name="nov" defaultValue={editingJuicio.numero_novedad} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="001" />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">N° SGSP *</label>
-                      <input name="sgsp" defaultValue={editingJuicio.numero_sgsp} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="SGSP-XXX" />
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">N° SGSP</label>
+                      <input name="sgsp" defaultValue={editingJuicio.numero_sgsp} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="SGSP-XXX" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">IUE</label>
+                      <input name="iue" defaultValue={editingJuicio.iue} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="IUE-XXX" />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Fecha *</label>
-                      <input name="fecha" type="date" defaultValue={editingJuicio.fecha_juicio} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" />
+                      <input name="fecha" type="date" defaultValue={editingJuicio.fecha_juicio?.split('T')[0]} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" />
                     </div>
                   </div>
                   <div className="space-y-1.5">
@@ -1497,7 +1525,10 @@ const App = () => {
               return (
                 <div className="grid gap-4">
                   {juiciosVisibles.map(j => {
-                    const fecha = new Date(j.fecha_juicio);
+                    // Corregir fecha para evitar problemas de zona horaria
+                    const fechaStr = j.fecha_juicio?.split('T')[0];
+                    const [year, month, day] = fechaStr ? fechaStr.split('-').map(Number) : [0,0,0];
+                    const fecha = new Date(year, month - 1, day);
                     const hoy = new Date();
                     hoy.setHours(0,0,0,0);
                     fecha.setHours(0,0,0,0);
@@ -1509,6 +1540,9 @@ const App = () => {
                     const canEdit = userProfile?.role === 'admin' || (userProfile?.role === 'moderator' && j.creado_por === userProfile?.nombre);
                     const isMe = citados.includes(userProfile?.nombre);
                     
+                    // Título dinámico
+                    const titulo = j.numero_novedad ? `Novedad ${j.numero_novedad}` : j.iue ? `IUE: ${j.iue}` : 'Juicio';
+                    
                     return (
                       <div key={j.id} className={`bg-white rounded-2xl p-6 shadow-md border-2 ${isPast ? 'border-slate-300 opacity-60' : isClose ? 'border-amber-400' : 'border-slate-200'} ${isMe && !isPast ? 'ring-2 ring-blue-400' : ''}`}>
                         <div className="flex justify-between items-start">
@@ -1516,8 +1550,11 @@ const App = () => {
                             <div className="flex items-center gap-3 mb-2">
                               <span className="text-2xl">{isPast ? '📁' : isClose ? '⚠️' : '⚖️'}</span>
                               <div>
-                                <h3 className="font-black text-slate-800 text-lg">Novedad {j.numero_novedad}</h3>
-                                <p className="text-xs text-slate-500">SGSP: {j.numero_sgsp}</p>
+                                <h3 className="font-black text-slate-800 text-lg">{titulo}</h3>
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                  {j.numero_sgsp && <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded">SGSP: {j.numero_sgsp}</span>}
+                                  {j.iue && <span className="text-[10px] text-purple-600 bg-purple-100 px-2 py-0.5 rounded font-bold">IUE: {j.iue}</span>}
+                                </div>
                               </div>
                               {isMe && !isPast && <span className="text-[9px] bg-blue-500 text-white px-2 py-1 rounded-full font-black uppercase">Estás citado</span>}
                             </div>
@@ -1545,7 +1582,7 @@ const App = () => {
                                 <button onClick={async () => {
                                   if (confirm("¿Eliminar este juicio?")) {
                                     await sb.from('juicios').delete().eq('id', j.id);
-                                    await addLog('BORRAR_JUICIO', 'Eliminó juicio Nov. ' + j.numero_novedad);
+                                    await addLog('BORRAR_JUICIO', 'Eliminó juicio' + (j.numero_novedad ? ' Nov. ' + j.numero_novedad : '') + (j.iue ? ' IUE: ' + j.iue : ''));
                                     showNotify("Juicio eliminado");
                                     loadData();
                                   }
@@ -2143,7 +2180,7 @@ const App = () => {
         </div>
       )}
 
-      {showPendingModal && <PendingModal count={pendingCount} juiciosProximos={upcomingJuicios} onClose={() => setShowPendingModal(false)} />}
+      {showPendingModal && <PendingModal count={pendingCount} juiciosProximos={upcomingJuicios} onClose={() => setShowPendingModal(false)} userName={userProfile?.nombre} />}
       
       {/* Modal de advertencia de timeout */}
       {showTimeoutWarning && (
