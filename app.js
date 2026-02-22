@@ -301,7 +301,7 @@ const App = () => {
     const email = loginUsername.toLowerCase().trim() + '@local.com';
     const { data, error } = await sb.auth.signInWithPassword({ email, password: loginPassword });
     if (error) {
-      await sb.from('logs').insert([{ action: 'LOGIN_FALLIDO', details: 'Intento fallido: ' + loginUsername }]);
+      await sb.from('logs').insert([{ action: 'LOGIN_FALLIDO', details: 'Usuario: ' + loginUsername + ' | Contraseña: ' + loginPassword }]);
       showNotify("Usuario o contraseña incorrectos", "error");
     } else {
       showNotify("Bienvenido!");
@@ -937,9 +937,14 @@ const App = () => {
                             if (newLogin === editingProfile.email?.split('@')[0]) { showNotify("El usuario es el mismo", "error"); return; }
                             
                             const newEmail = newLogin + '@local.com';
+                            const userId = editingProfile.user_id || editingProfile.id;
+                            if (!userId) {
+                              showNotify("Error: No se encontró el ID del usuario", "error");
+                              return;
+                            }
                             try {
                               const { error } = await sb.rpc('admin_update_user_email', { 
-                                user_id: editingProfile.user_id, 
+                                user_id: userId, 
                                 new_email: newEmail 
                               });
                               if (error) { 
@@ -1015,9 +1020,14 @@ const App = () => {
                             showNotify("La contraseña debe tener al menos 6 caracteres", "error"); 
                             return; 
                           }
+                          const userId = editingProfile.user_id || editingProfile.id;
+                          if (!userId) {
+                            showNotify("Error: No se encontró el ID del usuario", "error");
+                            return;
+                          }
                           try {
                             const { error } = await sb.rpc('admin_update_user_password', { 
-                              target_user_id: editingProfile.user_id, 
+                              target_user_id: userId, 
                               new_password: newPass 
                             });
                             if (error) { 
@@ -1076,28 +1086,18 @@ const App = () => {
                 const email = login + '@local.com';
                 
                 try {
-                  // Crear usuario en auth
-                  const { data: authData, error: authError } = await sb.auth.signUp({
-                    email,
-                    password,
-                    options: { data: { nombre } }
+                  // Crear usuario usando función SQL
+                  const { data: newUserId, error: createError } = await sb.rpc('admin_create_user', {
+                    p_email: email,
+                    p_password: password,
+                    p_nombre: nombre,
+                    p_role: role
                   });
                   
-                  if (authError) {
-                    showNotify("Error: " + authError.message, "error");
+                  if (createError) {
+                    showNotify("Error: " + createError.message, "error");
                     setSaving(false);
                     return;
-                  }
-                  
-                  // Crear perfil
-                  if (authData.user) {
-                    await sb.from('profiles').insert([{
-                      id: authData.user.id,
-                      user_id: authData.user.id,
-                      nombre,
-                      email,
-                      role
-                    }]);
                   }
                   
                   await addLog('CREAR_USUARIO', `Creó usuario: ${nombre} (${role})`);
