@@ -750,7 +750,7 @@ const App = () => {
   // APP
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={upcomingJuicios.length} />
+      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={juicios.filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
@@ -876,12 +876,31 @@ const App = () => {
                           </div>
                         </div>
                       </div>
-                      {p.id !== userProfile.id && (
-                        <button onClick={() => setEditingProfile(p)} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Editar</button>
-                      )}
-                      {p.id === userProfile.id && (
-                        <button onClick={() => setEditingProfile({...p, isSelf: true})} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Mi Perfil</button>
-                      )}
+                      <div className="flex gap-2">
+                        {p.id !== userProfile.id && (
+                          <>
+                            <button onClick={() => setEditingProfile(p)} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Editar</button>
+                            <button onClick={async () => {
+                              if (!confirm(`¿Eliminar usuario "${p.nombre}"?\n\nEsta acción no se puede deshacer.`)) return;
+                              try {
+                                const { error } = await sb.rpc('admin_delete_user', { target_user_id: p.id });
+                                if (error) {
+                                  showNotify("Error: " + error.message, "error");
+                                  return;
+                                }
+                                await addLog('ELIMINAR_USUARIO', `Eliminó usuario: ${p.nombre}`);
+                                showNotify("Usuario eliminado");
+                                loadData();
+                              } catch (err) {
+                                showNotify("Error: " + err.message, "error");
+                              }
+                            }} className="text-[10px] bg-red-100 px-3 py-2 rounded-xl font-bold text-red-600 hover:bg-red-200">🗑️</button>
+                          </>
+                        )}
+                        {p.id === userProfile.id && (
+                          <button onClick={() => setEditingProfile({...p, isSelf: true})} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Mi Perfil</button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
