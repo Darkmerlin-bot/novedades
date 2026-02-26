@@ -20,7 +20,7 @@ const Notification = ({ message, type }) => (
 );
 
 // HEADER
-const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount, juiciosCount }) => (
+const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount, juiciosCount, recordatoriosCount }) => (
   <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50 print:hidden">
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
@@ -59,6 +59,9 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
         <button onClick={() => setView('juicios')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${currentView === 'juicios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
           ⚖️ Juicios {juiciosCount > 0 && <span className="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black">{juiciosCount}</span>}
         </button>
+        <button onClick={() => setView('recordatorios')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${currentView === 'recordatorios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+          🔔 Recordatorios {recordatoriosCount > 0 && <span className="bg-purple-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black">{recordatoriosCount}</span>}
+        </button>
         {userProfile?.role === 'admin' && (
           <>
             <button onClick={() => setView('form')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'form' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>➕ Nueva</button>
@@ -73,7 +76,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
 );
 
 // MODAL PENDIENTES Y JUICIOS
-const PendingModal = ({ count, juiciosProximos, onClose, userName }) => (
+const PendingModal = ({ count, juiciosProximos, recordatoriosProximos, onClose, userName }) => (
   <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[150] flex items-center justify-center p-4">
     <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto">
       <div className="p-8 bg-red-500 text-white text-center">
@@ -132,6 +135,44 @@ const PendingModal = ({ count, juiciosProximos, onClose, userName }) => (
                         <p className={`text-xs font-black ${diasRestantes === 0 ? 'text-red-600' : 'text-amber-600'}`}>
                           {diasRestantes === 0 ? '¡HOY!' : diasRestantes === 1 ? 'Mañana' : `En ${diasRestantes} días`}
                         </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {recordatoriosProximos && recordatoriosProximos.length > 0 && (
+          <div className="mt-4">
+            <p className="text-slate-600 font-bold text-lg mb-3 text-center">🔔 Recordatorios próximos</p>
+            <div className="space-y-3">
+              {recordatoriosProximos.map(r => {
+                const fecha = new Date(r.fecha_hora);
+                const ahora = new Date();
+                const diffMs = fecha - ahora;
+                const diffHoras = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                let tiempoTexto = '';
+                if (diffMs < 0) tiempoTexto = '¡VENCIDO!';
+                else if (diffHoras < 1) tiempoTexto = 'En menos de 1 hora';
+                else if (diffHoras < 24) tiempoTexto = `En ${diffHoras} horas`;
+                else if (diffDias === 1) tiempoTexto = 'Mañana';
+                else tiempoTexto = `En ${diffDias} días`;
+                
+                return (
+                  <div key={r.id} className={`border-2 rounded-xl p-4 ${diffMs < 0 ? 'bg-red-50 border-red-300' : 'bg-purple-50 border-purple-200'}`}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-black text-slate-800">{r.titulo}</p>
+                        {r.descripcion && <p className="text-xs text-slate-600 mt-1">{r.descripcion}</p>}
+                        <p className="text-[10px] text-slate-400 mt-1">Por: {r.creado_por_nombre}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-purple-700">{fecha.toLocaleDateString()}</p>
+                        <p className="text-xs text-purple-600">{fecha.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                        <p className={`text-xs font-black mt-1 ${diffMs < 0 ? 'text-red-600' : 'text-purple-600'}`}>{tiempoTexto}</p>
                       </div>
                     </div>
                   </div>
@@ -201,6 +242,11 @@ const App = () => {
   const [editingJuicio, setEditingJuicio] = useState(null);
   const [upcomingJuicios, setUpcomingJuicios] = useState([]);
   const [selectedCitados, setSelectedCitados] = useState([]);
+  
+  // Estados para Recordatorios
+  const [recordatorios, setRecordatorios] = useState([]);
+  const [editingRecordatorio, setEditingRecordatorio] = useState(null);
+  const [upcomingRecordatorios, setUpcomingRecordatorios] = useState([]);
   
   // Estados para Auditoría
   const [selectedAuditUser, setSelectedAuditUser] = useState(null);
@@ -333,6 +379,10 @@ const App = () => {
     const { data: juiciosData } = await sb.from('juicios').select('*').order('fecha_juicio', { ascending: true });
     setJuicios(juiciosData || []);
     
+    // Cargar recordatorios
+    const { data: recordatoriosData } = await sb.from('recordatorios').select('*').eq('completado', false).order('fecha_hora', { ascending: true });
+    setRecordatorios(recordatoriosData || []);
+    
     if (userProfile?.role === 'admin') {
       const { data: logData } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(500);
       setLogs(logData || []);
@@ -380,6 +430,30 @@ const App = () => {
     }
   }, [juicios, userProfile]);
 
+  // Calcular recordatorios próximos (24 horas)
+  useEffect(() => {
+    if (!recordatorios || recordatorios.length === 0) {
+      setUpcomingRecordatorios([]);
+      return;
+    }
+    
+    try {
+      const ahora = new Date();
+      const en24Horas = new Date(ahora.getTime() + 24 * 60 * 60 * 1000);
+      
+      const proximos = recordatorios.filter(r => {
+        if (!r || !r.fecha_hora || r.completado) return false;
+        const fecha = new Date(r.fecha_hora);
+        return fecha <= en24Horas;
+      });
+      
+      setUpcomingRecordatorios(proximos);
+    } catch (e) {
+      console.error('Error en cálculo de recordatorios próximos:', e);
+      setUpcomingRecordatorios([]);
+    }
+  }, [recordatorios]);
+
   // Validación de duplicados en servidor
   const checkDuplicateServer = async (num, anio, excludeId) => {
     try {
@@ -409,19 +483,20 @@ const App = () => {
     }
   }, [session, userProfile]);
 
-  // Mostrar modal de pendientes/juicios después de cargar datos (solo una vez)
+  // Mostrar modal de pendientes/juicios/recordatorios después de cargar datos (solo una vez)
   useEffect(() => {
     if (session && userProfile && novedades.length > 0 && !modalShownOnce) {
       const pending = countUserPendingTasks(userProfile, novedades);
-      const hasUpcoming = upcomingJuicios.length > 0;
+      const hasUpcomingJuicios = upcomingJuicios.length > 0;
+      const hasUpcomingRecordatorios = upcomingRecordatorios.length > 0;
       
-      if (pending > 0 || hasUpcoming) {
+      if (pending > 0 || hasUpcomingJuicios || hasUpcomingRecordatorios) {
         setPendingCount(pending);
         setShowPendingModal(true);
         setModalShownOnce(true);
       }
     }
-  }, [novedades, upcomingJuicios, modalShownOnce]);
+  }, [novedades, upcomingJuicios, upcomingRecordatorios, modalShownOnce]);
 
   // UTILIDADES
   const extractNumber = (str) => { if (!str) return 0; const m = str.match(/\d+/g); return m ? parseInt(m[m.length - 1], 10) : 0; };
@@ -750,7 +825,7 @@ const App = () => {
   // APP
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={juicios.filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} />
+      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={juicios.filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={recordatorios.filter(r => !r.completado).length} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
@@ -1656,6 +1731,169 @@ const App = () => {
           </div>
         )}
 
+        {/* RECORDATORIOS */}
+        {currentView === 'recordatorios' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center mb-6">
+              <div><h2 className="text-3xl font-black text-slate-800">🔔 Recordatorios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tareas y eventos pendientes</p></div>
+              <button onClick={() => setEditingRecordatorio({})} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo</button>
+            </div>
+            
+            {/* Formulario de nuevo/editar recordatorio */}
+            {editingRecordatorio && (
+              <div className="bg-white rounded-[2rem] shadow-xl p-8 border border-slate-200 mb-6">
+                <h3 className="text-lg font-black text-slate-800 mb-6">{editingRecordatorio.id ? 'Editar' : 'Nuevo'} Recordatorio</h3>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (saving) return;
+                  setSaving(true);
+                  
+                  const d = new FormData(e.target);
+                  const fecha = d.get('fecha');
+                  const hora = d.get('hora') || '09:00';
+                  const titulo = d.get('titulo');
+                  
+                  if (!titulo) {
+                    showNotify("El título es obligatorio", "error");
+                    setSaving(false);
+                    return;
+                  }
+                  if (!fecha) {
+                    showNotify("La fecha es obligatoria", "error");
+                    setSaving(false);
+                    return;
+                  }
+                  
+                  const fechaHora = new Date(`${fecha}T${hora}`);
+                  
+                  const payload = {
+                    titulo: titulo,
+                    descripcion: d.get('descripcion') || null,
+                    fecha_hora: fechaHora.toISOString(),
+                    creado_por: session.user.id,
+                    creado_por_nombre: userProfile.nombre
+                  };
+                  
+                  try {
+                    if (editingRecordatorio.id) {
+                      const { error } = await sb.from('recordatorios').update(payload).eq('id', editingRecordatorio.id);
+                      if (error) { showNotify("Error: " + error.message, "error"); setSaving(false); return; }
+                      await addLog('EDITAR_RECORDATORIO', 'Editó recordatorio: ' + titulo);
+                    } else {
+                      const { error } = await sb.from('recordatorios').insert([payload]);
+                      if (error) { showNotify("Error: " + error.message, "error"); setSaving(false); return; }
+                      await addLog('CREAR_RECORDATORIO', 'Creó recordatorio: ' + titulo);
+                    }
+                    showNotify(editingRecordatorio.id ? "Recordatorio actualizado" : "Recordatorio creado");
+                    setEditingRecordatorio(null);
+                    loadData();
+                  } catch (err) {
+                    showNotify("Error: " + err.message, "error");
+                  }
+                  setSaving(false);
+                }} className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Título *</label>
+                    <input name="titulo" defaultValue={editingRecordatorio.titulo || ''} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-purple-500" placeholder="Ej: Llamar al cliente" required />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Descripción</label>
+                    <textarea name="descripcion" defaultValue={editingRecordatorio.descripcion || ''} rows={3} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-purple-500" placeholder="Detalles adicionales..." />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Fecha *</label>
+                      <input name="fecha" type="date" defaultValue={editingRecordatorio.fecha_hora ? editingRecordatorio.fecha_hora.split('T')[0] : ''} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-purple-500" required />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Hora</label>
+                      <input name="hora" type="time" defaultValue={editingRecordatorio.fecha_hora ? editingRecordatorio.fecha_hora.split('T')[1]?.substring(0,5) : '09:00'} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-purple-500" />
+                    </div>
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                    <button type="submit" disabled={saving} className="flex-1 py-4 bg-purple-600 text-white rounded-xl font-black uppercase text-xs disabled:opacity-50">{saving ? 'Guardando...' : (editingRecordatorio.id ? 'Actualizar' : 'Crear')}</button>
+                    <button type="button" onClick={() => setEditingRecordatorio(null)} className="px-8 py-4 bg-slate-200 text-slate-600 rounded-xl font-black uppercase text-xs">Cancelar</button>
+                  </div>
+                </form>
+              </div>
+            )}
+            
+            {/* Lista de recordatorios */}
+            {recordatorios.length === 0 ? (
+              <div className="bg-white rounded-[2rem] shadow-xl p-12 text-center">
+                <div className="text-6xl mb-4">🔔</div>
+                <p className="text-slate-500 font-bold">No hay recordatorios pendientes</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {recordatorios.map(r => {
+                  const fecha = new Date(r.fecha_hora);
+                  const ahora = new Date();
+                  const diffMs = fecha - ahora;
+                  const vencido = diffMs < 0;
+                  const diffHoras = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+                  const diffDias = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24));
+                  
+                  let tiempoTexto = '';
+                  if (vencido) {
+                    if (diffDias > 0) tiempoTexto = `Hace ${diffDias} días`;
+                    else if (diffHoras > 0) tiempoTexto = `Hace ${diffHoras} horas`;
+                    else tiempoTexto = 'Hace unos minutos';
+                  } else {
+                    if (diffDias > 0) tiempoTexto = `En ${diffDias} días`;
+                    else if (diffHoras > 0) tiempoTexto = `En ${diffHoras} horas`;
+                    else tiempoTexto = 'Pronto';
+                  }
+                  
+                  return (
+                    <div key={r.id} className={`bg-white rounded-2xl shadow-md border-2 p-6 ${vencido ? 'border-red-300 bg-red-50' : 'border-purple-200'}`}>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className={`text-2xl ${vencido ? 'animate-pulse' : ''}`}>{vencido ? '⚠️' : '🔔'}</span>
+                            <h4 className="font-black text-slate-800 text-lg">{r.titulo}</h4>
+                            {vencido && <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-black">VENCIDO</span>}
+                          </div>
+                          {r.descripcion && <p className="text-slate-600 text-sm ml-9 mb-2">{r.descripcion}</p>}
+                          <div className="ml-9 flex items-center gap-4 text-xs text-slate-500">
+                            <span className="font-bold">📅 {fecha.toLocaleDateString()}</span>
+                            <span className="font-bold">🕐 {fecha.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            <span className={`font-black ${vencido ? 'text-red-600' : 'text-purple-600'}`}>{tiempoTexto}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 ml-9 mt-2">Creado por: {r.creado_por_nombre}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={async () => {
+                            if (!confirm('¿Marcar como completado?')) return;
+                            const { error } = await sb.from('recordatorios').update({ completado: true }).eq('id', r.id);
+                            if (error) { showNotify("Error: " + error.message, "error"); return; }
+                            await addLog('COMPLETAR_RECORDATORIO', 'Completó: ' + r.titulo);
+                            showNotify("Recordatorio completado");
+                            loadData();
+                          }} className="p-3 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-200" title="Completar">✅</button>
+                          {(r.creado_por === session.user.id || userProfile?.role === 'admin') && (
+                            <>
+                              <button onClick={() => setEditingRecordatorio(r)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200" title="Editar">✏️</button>
+                              <button onClick={async () => {
+                                if (!confirm('¿Eliminar este recordatorio?')) return;
+                                const { error } = await sb.from('recordatorios').delete().eq('id', r.id);
+                                if (error) { showNotify("Error: " + error.message, "error"); return; }
+                                await addLog('ELIMINAR_RECORDATORIO', 'Eliminó: ' + r.titulo);
+                                showNotify("Recordatorio eliminado");
+                                loadData();
+                              }} className="p-3 bg-red-100 text-red-600 rounded-xl hover:bg-red-200" title="Eliminar">🗑️</button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* AUDITORÍA DE USUARIOS (Admin) */}
         {currentView === 'auditoria' && userProfile?.role === 'admin' && (
           <div className="space-y-6">
@@ -2252,7 +2490,7 @@ const App = () => {
         </div>
       )}
 
-      {showPendingModal && <PendingModal count={pendingCount} juiciosProximos={upcomingJuicios} onClose={() => setShowPendingModal(false)} userName={userProfile?.nombre} />}
+      {showPendingModal && <PendingModal count={pendingCount} juiciosProximos={upcomingJuicios} recordatoriosProximos={upcomingRecordatorios} onClose={() => setShowPendingModal(false)} userName={userProfile?.nombre} />}
       
       {/* Modal de advertencia de timeout */}
       {showTimeoutWarning && (
