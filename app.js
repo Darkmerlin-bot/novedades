@@ -49,25 +49,25 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
           </div>
         </div>
       </div>
-      <nav className="flex gap-1 overflow-x-auto pb-1 no-scrollbar border-t border-slate-800 pt-3">
-        <button onClick={() => setView('list')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${currentView === 'list' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-          📁 Pendientes {pendingCount > 0 && <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black">{pendingCount}</span>}
+      <nav className="flex flex-wrap gap-1 pb-1 border-t border-slate-800 pt-3">
+        <button onClick={() => setView('list')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${currentView === 'list' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+          📁 Pend. {pendingCount > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black">{pendingCount}</span>}
         </button>
-        <button onClick={() => setView('completed')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${currentView === 'completed' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-          ✅ Completados {completedCount > 0 && <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-black">{completedCount}</span>}
+        <button onClick={() => setView('completed')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${currentView === 'completed' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+          ✅ Compl. {completedCount > 0 && <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black">{completedCount}</span>}
         </button>
-        <button onClick={() => setView('juicios')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${currentView === 'juicios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-          ⚖️ Juicios {juiciosCount > 0 && <span className="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black">{juiciosCount}</span>}
+        <button onClick={() => setView('juicios')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${currentView === 'juicios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+          ⚖️ Juicios {juiciosCount > 0 && <span className="bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black">{juiciosCount}</span>}
         </button>
-        <button onClick={() => setView('recordatorios')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${currentView === 'recordatorios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-          🔔 Recordatorios {recordatoriosCount > 0 && <span className="bg-purple-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black">{recordatoriosCount}</span>}
+        <button onClick={() => setView('recordatorios')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${currentView === 'recordatorios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+          🔔 Recor. {recordatoriosCount > 0 && <span className="bg-purple-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black">{recordatoriosCount}</span>}
         </button>
         {userProfile?.role === 'admin' && (
           <>
-            <button onClick={() => setView('form')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'form' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>➕ Nueva</button>
-            <button onClick={() => setView('auditoria')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'auditoria' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>🔍 Auditar</button>
-            <button onClick={() => setView('users')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'users' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>👥 Personal</button>
-            <button onClick={() => setView('logs')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${currentView === 'logs' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>📜 Logs</button>
+            <button onClick={() => setView('form')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'form' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>➕ Nueva</button>
+            <button onClick={() => setView('auditoria')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'auditoria' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>🔍 Auditar</button>
+            <button onClick={() => setView('users')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'users' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>👥 Personal</button>
+            <button onClick={() => setView('logs')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'logs' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>📜 Logs</button>
           </>
         )}
       </nav>
@@ -350,6 +350,17 @@ const App = () => {
       await sb.from('logs').insert([{ action: 'LOGIN_FALLIDO', details: 'Usuario: ' + loginUsername + ' | Contraseña: ' + loginPassword }]);
       showNotify("Usuario o contraseña incorrectos", "error");
     } else {
+      // Registrar login exitoso
+      const { data: profileData } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
+      if (profileData) {
+        await sb.from('logs').insert([{ 
+          user_id: data.user.id, 
+          user_email: email, 
+          user_nombre: profileData.nombre, 
+          action: 'LOGIN', 
+          details: 'Inicio de sesión exitoso' 
+        }]);
+      }
       showNotify("Bienvenido!");
     }
     setLoginLoading(false);
