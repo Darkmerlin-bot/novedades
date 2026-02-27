@@ -2056,14 +2056,12 @@ const App = () => {
                         <p className="text-slate-400 py-4 text-center">No hay ausencias registradas este día</p>
                       )}
                       
-                      {/* Formulario para agregar licencia con rango de fechas */}
-                      <div className={selectedCalendarDate !== 'nueva' ? "border-t-2 border-slate-100 pt-6 mt-6" : ""}>
-                        <p className="text-sm font-black text-slate-700 uppercase mb-4">
-                          {userProfile?.role === 'admin' ? '➕ Agregar licencia' : '➕ Agregar mi licencia'}
-                        </p>
+                      {/* Formulario compacto para agregar/eliminar licencias */}
+                      <div className={selectedCalendarDate !== 'nueva' ? "border-t-2 border-slate-100 pt-4 mt-4" : ""}>
                         <form onSubmit={async (e) => {
                           e.preventDefault();
                           const d = new FormData(e.target);
+                          const accion = d.get('accion');
                           const tipo = d.get('tipo');
                           const descripcion = d.get('descripcion');
                           const fechaDesde = d.get('fechaDesde');
@@ -2078,88 +2076,80 @@ const App = () => {
                             return;
                           }
                           
-                          // Generar array de fechas en el rango
-                          const fechas = [];
                           const inicio = new Date(fechaDesde + 'T12:00:00');
                           const fin = new Date(fechaHasta + 'T12:00:00');
                           
                           if (fin < inicio) {
-                            showNotify("La fecha hasta debe ser mayor o igual a la fecha desde", "error");
+                            showNotify("Fecha hasta debe ser >= fecha desde", "error");
                             return;
                           }
                           
-                          let current = new Date(inicio);
-                          while (current <= fin) {
-                            const fechaStr = current.toISOString().split('T')[0];
-                            // Verificar si ya existe
-                            const existe = licencias.find(l => l.fecha === fechaStr && l.user_id === targetUserId);
-                            if (!existe) {
-                              fechas.push({
-                                user_id: targetUserId,
-                                user_nombre: targetUserNombre,
-                                fecha: fechaStr,
-                                tipo,
-                                descripcion: descripcion || null
-                              });
+                          if (accion === 'eliminar') {
+                            // Eliminar licencias en rango
+                            const fechasEliminar = [];
+                            let current = new Date(inicio);
+                            while (current <= fin) {
+                              fechasEliminar.push(current.toISOString().split('T')[0]);
+                              current.setDate(current.getDate() + 1);
                             }
-                            current.setDate(current.getDate() + 1);
+                            
+                            const { error } = await sb.from('licencias').delete()
+                              .eq('user_id', targetUserId)
+                              .in('fecha', fechasEliminar);
+                            
+                            if (error) { showNotify("Error: " + error.message, "error"); return; }
+                            await addLog('ELIMINAR_LICENCIAS', `Eliminó licencias de ${targetUserNombre}: ${fechaDesde} a ${fechaHasta}`);
+                            showNotify(`Licencias eliminadas: ${fechasEliminar.length} días`);
+                          } else {
+                            // Agregar licencias en rango
+                            const fechas = [];
+                            let current = new Date(inicio);
+                            while (current <= fin) {
+                              const fechaStr = current.toISOString().split('T')[0];
+                              const existe = licencias.find(l => l.fecha === fechaStr && l.user_id === targetUserId);
+                              if (!existe) {
+                                fechas.push({ user_id: targetUserId, user_nombre: targetUserNombre, fecha: fechaStr, tipo, descripcion: descripcion || null });
+                              }
+                              current.setDate(current.getDate() + 1);
+                            }
+                            
+                            if (fechas.length === 0) {
+                              showNotify("Todas las fechas ya tienen licencia", "error");
+                              return;
+                            }
+                            
+                            const { error } = await sb.from('licencias').insert(fechas);
+                            if (error) { showNotify("Error: " + error.message, "error"); return; }
+                            await addLog('AGREGAR_LICENCIA', `Agregó ${tipo} para ${targetUserNombre}: ${fechas.length} días`);
+                            showNotify(`Agregado: ${fechas.length} días`);
                           }
-                          
-                          if (fechas.length === 0) {
-                            showNotify("Todas las fechas seleccionadas ya tienen licencia", "error");
-                            return;
-                          }
-                          
-                          const { error } = await sb.from('licencias').insert(fechas);
-                          
-                          if (error) {
-                            showNotify("Error: " + error.message, "error");
-                            return;
-                          }
-                          
-                          const diasTexto = fechas.length === 1 ? '1 día' : `${fechas.length} días`;
-                          await addLog('AGREGAR_LICENCIA', `Agregó ${tipo} para ${targetUserNombre}: ${diasTexto} (${fechaDesde} a ${fechaHasta})`);
-                          showNotify(`Licencia agregada: ${diasTexto}`);
                           e.target.reset();
                           setSelectedCalendarDate(null);
                           loadData();
-                        }} className="space-y-4">
-                          {userProfile?.role === 'admin' && (
-                            <div>
-                              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Usuario</label>
-                              <select name="usuario" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold" required>
-                                {profiles.map(p => (
-                                  <option key={p.id} value={p.id}>{p.nombre}</option>
-                                ))}
+                        }} className="space-y-2">
+                          <div className="flex flex-wrap gap-2 items-end">
+                            {userProfile?.role === 'admin' && (
+                              <select name="usuario" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold flex-1 min-w-[120px]" required>
+                                {profiles.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                               </select>
-                            </div>
-                          )}
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Fecha Desde *</label>
-                              <input name="fechaDesde" type="date" defaultValue={selectedCalendarDate || ''} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold" required />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Fecha Hasta</label>
-                              <input name="fechaHasta" type="date" defaultValue={selectedCalendarDate || ''} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold" />
-                            </div>
+                            )}
+                            <input name="fechaDesde" type="date" defaultValue={selectedCalendarDate !== 'nueva' ? selectedCalendarDate : ''} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" required />
+                            <span className="text-slate-400 text-sm">a</span>
+                            <input name="fechaHasta" type="date" defaultValue={selectedCalendarDate !== 'nueva' ? selectedCalendarDate : ''} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
+                            <select name="tipo" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" required>
+                              <option value="licencia">📋 Licencia</option>
+                              <option value="enfermedad">🏥 Enfermedad</option>
+                              <option value="estudio">📚 Estudio</option>
+                              <option value="descanso">😴 Descanso</option>
+                            </select>
+                            <input name="descripcion" placeholder="Nota..." className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm flex-1 min-w-[100px]" />
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Tipo</label>
-                              <select name="tipo" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold" required>
-                                <option value="licencia">📋 Licencia</option>
-                                <option value="enfermedad">🏥 Enfermedad</option>
-                                <option value="estudio">📚 Estudio</option>
-                                <option value="descanso">😴 Descanso</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Descripción (opcional)</label>
-                              <input name="descripcion" placeholder="Ej: Trámite personal" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold" />
-                            </div>
+                          <div className="flex gap-2">
+                            <button type="submit" name="accion" value="agregar" className="flex-1 py-2 bg-emerald-500 text-white rounded-lg font-bold text-sm hover:bg-emerald-600">➕ Agregar</button>
+                            {userProfile?.role === 'admin' && (
+                              <button type="submit" name="accion" value="eliminar" className="px-4 py-2 bg-red-500 text-white rounded-lg font-bold text-sm hover:bg-red-600" onClick={(e) => { if (!confirm('¿Eliminar licencias en este rango?')) e.preventDefault(); }}>🗑️ Eliminar rango</button>
+                            )}
                           </div>
-                          <button type="submit" className="w-full py-4 bg-emerald-500 text-white rounded-xl font-black uppercase hover:bg-emerald-600 shadow-lg">Agregar Licencia</button>
                         </form>
                       </div>
                     </div>
