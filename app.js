@@ -1924,6 +1924,7 @@ const App = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <div><h2 className="text-3xl font-black text-slate-800">📅 Almanaque de Licencias</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Registro anual de ausencias</p></div>
               <div className="flex items-center gap-2">
+                <button onClick={() => setSelectedCalendarDate('nueva')} className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-sm hover:bg-emerald-600 shadow-lg">➕ Agregar</button>
                 <button onClick={() => setCalendarioYear(calendarioYear - 1)} className="p-2 bg-slate-200 rounded-xl hover:bg-slate-300 font-bold">◀</button>
                 <select value={calendarioYear} onChange={(e) => setCalendarioYear(parseInt(e.target.value))} className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-black text-slate-700 text-lg">
                   {[2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
@@ -2002,24 +2003,24 @@ const App = () => {
               })}
             </div>
             
-            {/* Panel de día seleccionado */}
+            {/* Panel de día seleccionado o nueva licencia */}
             {selectedCalendarDate && (
               <div className="bg-white rounded-2xl shadow-xl border-2 border-slate-200 p-6">
                 <div className="flex justify-between items-start mb-4">
                   <h3 className="font-black text-slate-800 text-xl">
-                    📅 {new Date(selectedCalendarDate + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    {selectedCalendarDate === 'nueva' ? '➕ Nueva Licencia' : `📅 ${new Date(selectedCalendarDate + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`}
                   </h3>
                   <button onClick={() => setSelectedCalendarDate(null)} className="p-2 bg-slate-100 rounded-xl hover:bg-slate-200">✕</button>
                 </div>
                 
                 {(() => {
-                  const dayLicencias = licencias.filter(l => l.fecha === selectedCalendarDate);
+                  const dayLicencias = selectedCalendarDate !== 'nueva' ? licencias.filter(l => l.fecha === selectedCalendarDate) : [];
                   const myLicencia = dayLicencias.find(l => l.user_id === session?.user?.id);
                   
                   return (
                     <div className="space-y-4">
-                      {/* Lista de ausencias del día */}
-                      {dayLicencias.length > 0 ? (
+                      {/* Lista de ausencias del día (solo si es fecha específica) */}
+                      {selectedCalendarDate !== 'nueva' && dayLicencias.length > 0 && (
                         <div className="space-y-2">
                           <p className="text-sm font-bold text-slate-500 uppercase">Ausencias registradas:</p>
                           {dayLicencias.map(l => {
@@ -2050,12 +2051,13 @@ const App = () => {
                             );
                           })}
                         </div>
-                      ) : (
+                      )}
+                      {selectedCalendarDate !== 'nueva' && dayLicencias.length === 0 && (
                         <p className="text-slate-400 py-4 text-center">No hay ausencias registradas este día</p>
                       )}
                       
-                      {/* Formulario para agregar licencia */}
-                      <div className="border-t-2 border-slate-100 pt-6 mt-6">
+                      {/* Formulario para agregar licencia con rango de fechas */}
+                      <div className={selectedCalendarDate !== 'nueva' ? "border-t-2 border-slate-100 pt-6 mt-6" : ""}>
                         <p className="text-sm font-black text-slate-700 uppercase mb-4">
                           {userProfile?.role === 'admin' ? '➕ Agregar licencia' : '➕ Agregar mi licencia'}
                         </p>
@@ -2064,34 +2066,62 @@ const App = () => {
                           const d = new FormData(e.target);
                           const tipo = d.get('tipo');
                           const descripcion = d.get('descripcion');
+                          const fechaDesde = d.get('fechaDesde');
+                          const fechaHasta = d.get('fechaHasta') || fechaDesde;
                           const targetUserId = userProfile?.role === 'admin' ? d.get('usuario') : session.user.id;
                           const targetUserNombre = userProfile?.role === 'admin' 
                             ? profiles.find(p => p.id === targetUserId)?.nombre 
                             : userProfile.nombre;
                           
-                          // Verificar si ya existe
-                          const existe = licencias.find(l => l.fecha === selectedCalendarDate && l.user_id === targetUserId);
-                          if (existe) {
-                            showNotify("Este usuario ya tiene licencia este día", "error");
+                          if (!fechaDesde) {
+                            showNotify("Selecciona una fecha", "error");
                             return;
                           }
                           
-                          const { error } = await sb.from('licencias').insert([{
-                            user_id: targetUserId,
-                            user_nombre: targetUserNombre,
-                            fecha: selectedCalendarDate,
-                            tipo,
-                            descripcion: descripcion || null
-                          }]);
+                          // Generar array de fechas en el rango
+                          const fechas = [];
+                          const inicio = new Date(fechaDesde + 'T12:00:00');
+                          const fin = new Date(fechaHasta + 'T12:00:00');
+                          
+                          if (fin < inicio) {
+                            showNotify("La fecha hasta debe ser mayor o igual a la fecha desde", "error");
+                            return;
+                          }
+                          
+                          let current = new Date(inicio);
+                          while (current <= fin) {
+                            const fechaStr = current.toISOString().split('T')[0];
+                            // Verificar si ya existe
+                            const existe = licencias.find(l => l.fecha === fechaStr && l.user_id === targetUserId);
+                            if (!existe) {
+                              fechas.push({
+                                user_id: targetUserId,
+                                user_nombre: targetUserNombre,
+                                fecha: fechaStr,
+                                tipo,
+                                descripcion: descripcion || null
+                              });
+                            }
+                            current.setDate(current.getDate() + 1);
+                          }
+                          
+                          if (fechas.length === 0) {
+                            showNotify("Todas las fechas seleccionadas ya tienen licencia", "error");
+                            return;
+                          }
+                          
+                          const { error } = await sb.from('licencias').insert(fechas);
                           
                           if (error) {
                             showNotify("Error: " + error.message, "error");
                             return;
                           }
                           
-                          await addLog('AGREGAR_LICENCIA', `Agregó ${tipo} para ${targetUserNombre} el ${selectedCalendarDate}`);
-                          showNotify("Licencia agregada");
+                          const diasTexto = fechas.length === 1 ? '1 día' : `${fechas.length} días`;
+                          await addLog('AGREGAR_LICENCIA', `Agregó ${tipo} para ${targetUserNombre}: ${diasTexto} (${fechaDesde} a ${fechaHasta})`);
+                          showNotify(`Licencia agregada: ${diasTexto}`);
                           e.target.reset();
+                          setSelectedCalendarDate(null);
                           loadData();
                         }} className="space-y-4">
                           {userProfile?.role === 'admin' && (
@@ -2104,6 +2134,16 @@ const App = () => {
                               </select>
                             </div>
                           )}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Fecha Desde *</label>
+                              <input name="fechaDesde" type="date" defaultValue={selectedCalendarDate || ''} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold" required />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Fecha Hasta</label>
+                              <input name="fechaHasta" type="date" defaultValue={selectedCalendarDate || ''} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold" />
+                            </div>
+                          </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Tipo</label>
