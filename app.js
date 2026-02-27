@@ -2058,99 +2058,89 @@ const App = () => {
                       
                       {/* Formulario compacto para agregar/eliminar licencias */}
                       <div className={selectedCalendarDate !== 'nueva' ? "border-t-2 border-slate-100 pt-4 mt-4" : ""}>
-                        <form onSubmit={async (e) => {
-                          e.preventDefault();
-                          const d = new FormData(e.target);
-                          const accion = d.get('accion');
-                          const tipo = d.get('tipo');
-                          const descripcion = d.get('descripcion');
-                          const fechaDesde = d.get('fechaDesde');
-                          const fechaHasta = d.get('fechaHasta') || fechaDesde;
-                          const targetUserId = userProfile?.role === 'admin' ? d.get('usuario') : session.user.id;
-                          const targetUserNombre = userProfile?.role === 'admin' 
-                            ? profiles.find(p => p.id === targetUserId)?.nombre 
-                            : userProfile.nombre;
-                          
-                          if (!fechaDesde) {
-                            showNotify("Selecciona una fecha", "error");
-                            return;
-                          }
-                          
-                          const inicio = new Date(fechaDesde + 'T12:00:00');
-                          const fin = new Date(fechaHasta + 'T12:00:00');
-                          
-                          if (fin < inicio) {
-                            showNotify("Fecha hasta debe ser >= fecha desde", "error");
-                            return;
-                          }
-                          
-                          if (accion === 'eliminar') {
-                            // Eliminar licencias en rango
-                            const fechasEliminar = [];
-                            let current = new Date(inicio);
-                            while (current <= fin) {
-                              fechasEliminar.push(current.toISOString().split('T')[0]);
-                              current.setDate(current.getDate() + 1);
-                            }
-                            
-                            const { error } = await sb.from('licencias').delete()
-                              .eq('user_id', targetUserId)
-                              .in('fecha', fechasEliminar);
-                            
-                            if (error) { showNotify("Error: " + error.message, "error"); return; }
-                            await addLog('ELIMINAR_LICENCIAS', `Eliminó licencias de ${targetUserNombre}: ${fechaDesde} a ${fechaHasta}`);
-                            showNotify(`Licencias eliminadas: ${fechasEliminar.length} días`);
-                          } else {
-                            // Agregar licencias en rango
-                            const fechas = [];
-                            let current = new Date(inicio);
-                            while (current <= fin) {
-                              const fechaStr = current.toISOString().split('T')[0];
-                              const existe = licencias.find(l => l.fecha === fechaStr && l.user_id === targetUserId);
-                              if (!existe) {
-                                fechas.push({ user_id: targetUserId, user_nombre: targetUserNombre, fecha: fechaStr, tipo, descripcion: descripcion || null });
-                              }
-                              current.setDate(current.getDate() + 1);
-                            }
-                            
-                            if (fechas.length === 0) {
-                              showNotify("Todas las fechas ya tienen licencia", "error");
-                              return;
-                            }
-                            
-                            const { error } = await sb.from('licencias').insert(fechas);
-                            if (error) { showNotify("Error: " + error.message, "error"); return; }
-                            await addLog('AGREGAR_LICENCIA', `Agregó ${tipo} para ${targetUserNombre}: ${fechas.length} días`);
-                            showNotify(`Agregado: ${fechas.length} días`);
-                          }
-                          e.target.reset();
-                          setSelectedCalendarDate(null);
-                          loadData();
-                        }} className="space-y-2">
+                        <div className="space-y-2">
                           <div className="flex flex-wrap gap-2 items-end">
                             {userProfile?.role === 'admin' && (
-                              <select name="usuario" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold flex-1 min-w-[120px]" required>
+                              <select id="licUsuario" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold flex-1 min-w-[120px]">
                                 {profiles.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                               </select>
                             )}
-                            <input name="fechaDesde" type="date" defaultValue={selectedCalendarDate !== 'nueva' ? selectedCalendarDate : ''} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" required />
+                            <input id="licFechaDesde" type="date" defaultValue={selectedCalendarDate !== 'nueva' ? selectedCalendarDate : ''} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
                             <span className="text-slate-400 text-sm">a</span>
-                            <input name="fechaHasta" type="date" defaultValue={selectedCalendarDate !== 'nueva' ? selectedCalendarDate : ''} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
-                            <select name="tipo" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" required>
+                            <input id="licFechaHasta" type="date" defaultValue={selectedCalendarDate !== 'nueva' ? selectedCalendarDate : ''} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
+                            <select id="licTipo" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold">
                               <option value="licencia">📋 Licencia</option>
                               <option value="enfermedad">🏥 Enfermedad</option>
                               <option value="estudio">📚 Estudio</option>
                               <option value="descanso">😴 Descanso</option>
                             </select>
-                            <input name="descripcion" placeholder="Nota..." className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm flex-1 min-w-[100px]" />
+                            <input id="licDescripcion" placeholder="Nota..." className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm flex-1 min-w-[100px]" />
                           </div>
                           <div className="flex gap-2">
-                            <button type="submit" name="accion" value="agregar" className="flex-1 py-2 bg-emerald-500 text-white rounded-lg font-bold text-sm hover:bg-emerald-600">➕ Agregar</button>
+                            <button onClick={async () => {
+                              const fechaDesde = document.getElementById('licFechaDesde').value;
+                              const fechaHasta = document.getElementById('licFechaHasta').value || fechaDesde;
+                              const tipo = document.getElementById('licTipo').value;
+                              const descripcion = document.getElementById('licDescripcion').value;
+                              const targetUserId = userProfile?.role === 'admin' ? document.getElementById('licUsuario').value : session.user.id;
+                              const targetUserNombre = userProfile?.role === 'admin' ? profiles.find(p => p.id === targetUserId)?.nombre : userProfile.nombre;
+                              
+                              if (!fechaDesde) { showNotify("Selecciona una fecha", "error"); return; }
+                              
+                              const inicio = new Date(fechaDesde + 'T12:00:00');
+                              const fin = new Date(fechaHasta + 'T12:00:00');
+                              if (fin < inicio) { showNotify("Fecha hasta debe ser >= fecha desde", "error"); return; }
+                              
+                              const fechas = [];
+                              let current = new Date(inicio);
+                              while (current <= fin) {
+                                const fechaStr = current.toISOString().split('T')[0];
+                                const existe = licencias.find(l => l.fecha === fechaStr && l.user_id === targetUserId);
+                                if (!existe) fechas.push({ user_id: targetUserId, user_nombre: targetUserNombre, fecha: fechaStr, tipo, descripcion: descripcion || null });
+                                current.setDate(current.getDate() + 1);
+                              }
+                              
+                              if (fechas.length === 0) { showNotify("Todas las fechas ya tienen licencia", "error"); return; }
+                              
+                              const { error } = await sb.from('licencias').insert(fechas);
+                              if (error) { showNotify("Error: " + error.message, "error"); return; }
+                              await addLog('AGREGAR_LICENCIA', `Agregó ${tipo} para ${targetUserNombre}: ${fechas.length} días`);
+                              showNotify(`Agregado: ${fechas.length} días`);
+                              setSelectedCalendarDate(null);
+                              loadData();
+                            }} className="flex-1 py-2 bg-emerald-500 text-white rounded-lg font-bold text-sm hover:bg-emerald-600">➕ Agregar</button>
                             {userProfile?.role === 'admin' && (
-                              <button type="submit" name="accion" value="eliminar" className="px-4 py-2 bg-red-500 text-white rounded-lg font-bold text-sm hover:bg-red-600" onClick={(e) => { if (!confirm('¿Eliminar licencias en este rango?')) e.preventDefault(); }}>🗑️ Eliminar rango</button>
+                              <button onClick={async () => {
+                                if (!confirm('¿Eliminar licencias en este rango?')) return;
+                                
+                                const fechaDesde = document.getElementById('licFechaDesde').value;
+                                const fechaHasta = document.getElementById('licFechaHasta').value || fechaDesde;
+                                const targetUserId = document.getElementById('licUsuario').value;
+                                const targetUserNombre = profiles.find(p => p.id === targetUserId)?.nombre;
+                                
+                                if (!fechaDesde) { showNotify("Selecciona una fecha", "error"); return; }
+                                
+                                const inicio = new Date(fechaDesde + 'T12:00:00');
+                                const fin = new Date(fechaHasta + 'T12:00:00');
+                                if (fin < inicio) { showNotify("Fecha hasta debe ser >= fecha desde", "error"); return; }
+                                
+                                const fechasEliminar = [];
+                                let current = new Date(inicio);
+                                while (current <= fin) {
+                                  fechasEliminar.push(current.toISOString().split('T')[0]);
+                                  current.setDate(current.getDate() + 1);
+                                }
+                                
+                                const { error } = await sb.from('licencias').delete().eq('user_id', targetUserId).in('fecha', fechasEliminar);
+                                if (error) { showNotify("Error: " + error.message, "error"); return; }
+                                await addLog('ELIMINAR_LICENCIAS', `Eliminó licencias de ${targetUserNombre}: ${fechaDesde} a ${fechaHasta}`);
+                                showNotify(`Eliminado: ${fechasEliminar.length} días`);
+                                setSelectedCalendarDate(null);
+                                loadData();
+                              }} className="px-4 py-2 bg-red-500 text-white rounded-lg font-bold text-sm hover:bg-red-600">🗑️ Eliminar</button>
                             )}
                           </div>
-                        </form>
+                        </div>
                       </div>
                     </div>
                   );
