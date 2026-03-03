@@ -82,7 +82,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
 );
 
 // MODAL PENDIENTES Y JUICIOS
-const PendingModal = ({ count, juiciosProximos, recordatoriosProximos, onClose, userName }) => (
+const PendingModal = ({ count, juiciosProximos, recordatoriosProximos, stockBajo, onClose, userName }) => (
   <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[150] flex items-center justify-center p-4">
     <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto">
       <div className="p-8 bg-red-500 text-white text-center">
@@ -179,6 +179,31 @@ const PendingModal = ({ count, juiciosProximos, recordatoriosProximos, onClose, 
                         <p className="text-xs font-bold text-purple-700">{fecha.toLocaleDateString()}</p>
                         <p className="text-xs text-purple-600">{fecha.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                         <p className={`text-xs font-black mt-1 ${diffMs < 0 ? 'text-red-600' : 'text-purple-600'}`}>{tiempoTexto}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        
+        {stockBajo && stockBajo.length > 0 && (
+          <div className="mt-4">
+            <p className="text-slate-600 font-bold text-lg mb-3 text-center">📦 Stock bajo mínimo</p>
+            <div className="space-y-2">
+              {stockBajo.map(item => {
+                const ubNombres = { valija_perbio: '🧳 Per-Bio', biologica: '🧬 Biologica', pericial_grande: '📦 Grande', pericial_chica: '📋 Chica', lockers: '🔐 Lockers' };
+                return (
+                  <div key={item.id} className="border-2 rounded-xl p-3 bg-red-50 border-red-300">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-black text-slate-800">{item.nombre}</p>
+                        <p className="text-xs text-slate-500">{ubNombres[item.ubicacion]}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-black text-red-600">{item.cantidad}</p>
+                        <p className="text-[10px] text-red-500">Min: {item.cantidad_minima}</p>
                       </div>
                     </div>
                   </div>
@@ -524,20 +549,21 @@ const App = () => {
     }
   }, [session, userProfile]);
 
-  // Mostrar modal de pendientes/juicios/recordatorios después de cargar datos (solo una vez)
+  // Mostrar modal de pendientes/juicios/recordatorios/stock después de cargar datos (solo una vez)
   useEffect(() => {
-    if (session && userProfile && novedades.length > 0 && !modalShownOnce) {
+    if (session && userProfile && !modalShownOnce) {
       const pending = countUserPendingTasks(userProfile, novedades);
       const hasUpcomingJuicios = upcomingJuicios.length > 0;
       const hasUpcomingRecordatorios = upcomingRecordatorios.length > 0;
+      const hasStockBajo = stockItems.filter(i => i.cantidad <= i.cantidad_minima).length > 0;
       
-      if (pending > 0 || hasUpcomingJuicios || hasUpcomingRecordatorios) {
+      if (pending > 0 || hasUpcomingJuicios || hasUpcomingRecordatorios || hasStockBajo) {
         setPendingCount(pending);
         setShowPendingModal(true);
         setModalShownOnce(true);
       }
     }
-  }, [novedades, upcomingJuicios, upcomingRecordatorios, modalShownOnce]);
+  }, [novedades, upcomingJuicios, upcomingRecordatorios, stockItems, modalShownOnce]);
 
   // UTILIDADES
   const extractNumber = (str) => { if (!str) return 0; const m = str.match(/\d+/g); return m ? parseInt(m[m.length - 1], 10) : 0; };
@@ -2927,7 +2953,7 @@ const App = () => {
         </div>
       )}
 
-      {showPendingModal && <PendingModal count={pendingCount} juiciosProximos={upcomingJuicios} recordatoriosProximos={upcomingRecordatorios} onClose={() => setShowPendingModal(false)} userName={userProfile?.nombre} />}
+      {showPendingModal && <PendingModal count={pendingCount} juiciosProximos={upcomingJuicios} recordatoriosProximos={upcomingRecordatorios} stockBajo={stockItems.filter(i => i.cantidad <= i.cantidad_minima)} onClose={() => setShowPendingModal(false)} userName={userProfile?.nombre} />}
       
       {/* Modal de advertencia de timeout */}
       {showTimeoutWarning && (
