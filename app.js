@@ -263,8 +263,9 @@ const App = () => {
   // Estados para Stock
   const [stockItems, setStockItems] = useState([]);
   const [stockMovimientos, setStockMovimientos] = useState([]);
-  const [selectedUbicacion, setSelectedUbicacion] = useState('valija_perbio');
+  const [selectedUbicacion, setSelectedUbicacion] = useState('todas');
   const [editingItem, setEditingItem] = useState(null);
+  const [stockSearch, setStockSearch] = useState('');
   
   // Estados para Auditoría
   const [selectedAuditUser, setSelectedAuditUser] = useState(null);
@@ -2233,158 +2234,99 @@ const App = () => {
 
         {/* STOCK / INVENTARIO */}
         {currentView === 'stock' && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-              <div><h2 className="text-3xl font-black text-slate-800">📦 Control de Stock</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Inventario por ubicación</p></div>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <h2 className="text-2xl font-black text-slate-800">📦 Stock</h2>
+              <div className="relative flex-1 sm:w-64 sm:flex-none">
+                <input value={stockSearch} onChange={(e) => setStockSearch(e.target.value)} placeholder="🔍 Buscar item..." className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold" />
+                {stockSearch && <button onClick={() => setStockSearch('')} className="absolute right-2 top-2 text-slate-400">x</button>}
+              </div>
             </div>
             
-            {/* Selector de ubicación */}
-            <div className="flex flex-wrap gap-2">
-              {[
-                { id: 'valija_perbio', nombre: '🧳 Valija Per-Bio' },
-                { id: 'biologica', nombre: '🧬 Biológica' },
-                { id: 'pericial_grande', nombre: '📦 Pericial Grande' },
-                { id: 'pericial_chica', nombre: '📋 Pericial Chica' },
-                { id: 'lockers', nombre: '🔐 Lockers' }
-              ].map(ub => {
-                const itemsUb = stockItems.filter(i => i.ubicacion === ub.id);
-                const alertas = itemsUb.filter(i => i.cantidad <= i.cantidad_minima).length;
-                return (
-                  <button 
-                    key={ub.id}
-                    onClick={() => setSelectedUbicacion(ub.id)}
-                    className={`px-4 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${selectedUbicacion === ub.id ? 'bg-slate-800 text-white shadow-lg' : 'bg-white border-2 border-slate-200 text-slate-600 hover:border-slate-400'}`}
-                  >
-                    {ub.nombre}
-                    {alertas > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black">{alertas}</span>}
-                  </button>
-                );
+            {stockSearch && (
+              <div className="bg-amber-50 rounded-xl border-2 border-amber-200 p-3">
+                <p className="text-xs font-bold text-amber-700 mb-2">Resultados en todas las ubicaciones:</p>
+                {(() => {
+                  const resultados = stockItems.filter(i => i.nombre.toLowerCase().includes(stockSearch.toLowerCase()));
+                  if (resultados.length === 0) return <p className="text-amber-600 text-sm">No encontrado</p>;
+                  const ubNombres = { valija_perbio: 'Per-Bio', biologica: 'Biologica', pericial_grande: 'Grande', pericial_chica: 'Chica', lockers: 'Lockers' };
+                  return (<div className="space-y-1">{resultados.map(item => (
+                    <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg text-sm ${item.cantidad <= item.cantidad_minima ? 'bg-red-100' : 'bg-white'}`}>
+                      <span className="font-bold">{item.nombre}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">{ubNombres[item.ubicacion]}</span>
+                        <span className={`font-black ${item.cantidad <= item.cantidad_minima ? 'text-red-600' : 'text-slate-800'}`}>{item.cantidad}</span>
+                      </div>
+                    </div>
+                  ))}</div>);
+                })()}
+              </div>
+            )}
+            
+            <div className="flex flex-wrap gap-1">
+              {[{id:'valija_perbio',n:'🧳 Per-Bio'},{id:'biologica',n:'🧬 Biologica'},{id:'pericial_grande',n:'📦 Grande'},{id:'pericial_chica',n:'📋 Chica'},{id:'lockers',n:'🔐 Lockers'}].map(ub => {
+                const alertas = stockItems.filter(i => i.ubicacion === ub.id && i.cantidad <= i.cantidad_minima).length;
+                return (<button key={ub.id} onClick={() => { setSelectedUbicacion(ub.id); setStockSearch(''); }} className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 ${selectedUbicacion === ub.id ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{ub.n}{alertas > 0 && <span className="bg-red-500 text-white text-[8px] px-1 rounded-full">{alertas}</span>}</button>);
               })}
             </div>
             
-            {/* Contenido de la ubicación seleccionada */}
-            <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-black text-slate-800 text-lg">
-                  {selectedUbicacion === 'valija_perbio' && '🧳 Valija Per-Bio'}
-                  {selectedUbicacion === 'biologica' && '🧬 Biológica'}
-                  {selectedUbicacion === 'pericial_grande' && '📦 Pericial Grande'}
-                  {selectedUbicacion === 'pericial_chica' && '📋 Pericial Chica'}
-                  {selectedUbicacion === 'lockers' && '🔐 Lockers'}
-                </h3>
-                {(userProfile?.role === 'admin' || userProfile?.role === 'moderator') && (
-                  <button onClick={() => setEditingItem({ ubicacion: selectedUbicacion })} className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-sm hover:bg-emerald-600">➕ Nuevo</button>
-                )}
+            <div className="bg-white rounded-xl shadow-md border border-slate-200 p-3">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-bold text-slate-700 text-sm">{stockItems.filter(i => i.ubicacion === selectedUbicacion).length} items</span>
+                {(userProfile?.role === 'admin' || userProfile?.role === 'moderator') && (<button onClick={() => setEditingItem({ ubicacion: selectedUbicacion })} className="px-3 py-1 bg-emerald-500 text-white rounded-lg font-bold text-xs">+ Nuevo</button>)}
               </div>
               
-              {/* Formulario nuevo/editar item */}
               {editingItem && (
-                <div className="bg-slate-50 rounded-xl p-4 mb-4 border-2 border-slate-200">
-                  <div className="flex flex-wrap gap-2 items-end">
-                    <input id="itemNombre" placeholder="Nombre del item" defaultValue={editingItem.nombre || ''} className="flex-1 min-w-[150px] px-3 py-2 border border-slate-200 rounded-lg text-sm font-bold" />
-                    <input id="itemCantidad" type="number" placeholder="Cant." defaultValue={editingItem.cantidad || 0} className="w-20 px-3 py-2 border border-slate-200 rounded-lg text-sm font-bold" />
-                    <input id="itemMinimo" type="number" placeholder="Min." defaultValue={editingItem.cantidad_minima || 5} className="w-20 px-3 py-2 border border-slate-200 rounded-lg text-sm font-bold" />
-                    <button onClick={async () => {
-                      const nombre = document.getElementById('itemNombre').value.trim();
-                      const cantidad = parseInt(document.getElementById('itemCantidad').value) || 0;
-                      const cantidad_minima = parseInt(document.getElementById('itemMinimo').value) || 5;
-                      if (!nombre) { showNotify("Ingresa un nombre", "error"); return; }
-                      if (editingItem.id) {
-                        const { error } = await sb.from('stock_items').update({ nombre, cantidad, cantidad_minima, updated_at: new Date().toISOString() }).eq('id', editingItem.id);
-                        if (error) { showNotify("Error: " + error.message, "error"); return; }
-                        await addLog('EDITAR_STOCK', 'Edito ' + nombre);
-                      } else {
-                        const { error } = await sb.from('stock_items').insert([{ nombre, ubicacion: selectedUbicacion, cantidad, cantidad_minima }]);
-                        if (error) { showNotify("Error: " + error.message, "error"); return; }
-                        await addLog('CREAR_STOCK', 'Creo ' + nombre);
-                      }
-                      showNotify(editingItem.id ? "Actualizado" : "Creado");
-                      setEditingItem(null);
-                      loadData();
-                    }} className="px-4 py-2 bg-emerald-500 text-white rounded-lg font-bold text-sm">💾</button>
-                    <button onClick={() => setEditingItem(null)} className="px-3 py-2 bg-slate-300 text-slate-700 rounded-lg font-bold text-sm">✕</button>
-                  </div>
+                <div className="bg-slate-50 rounded-lg p-2 mb-2 flex flex-wrap gap-1 items-center">
+                  <input id="itemNombre" placeholder="Nombre" defaultValue={editingItem.nombre || ''} className="flex-1 min-w-[120px] px-2 py-1 border rounded text-xs font-bold" />
+                  <input id="itemCantidad" type="number" placeholder="Cant" defaultValue={editingItem.cantidad || 0} className="w-14 px-2 py-1 border rounded text-xs font-bold" />
+                  <input id="itemMinimo" type="number" placeholder="Min" defaultValue={editingItem.cantidad_minima || 5} className="w-14 px-2 py-1 border rounded text-xs font-bold" />
+                  <button onClick={async () => {
+                    const nombre = document.getElementById('itemNombre').value.trim();
+                    const cantidad = parseInt(document.getElementById('itemCantidad').value) || 0;
+                    const cantidad_minima = parseInt(document.getElementById('itemMinimo').value) || 5;
+                    if (!nombre) { showNotify("Nombre requerido", "error"); return; }
+                    if (editingItem.id) { await sb.from('stock_items').update({ nombre, cantidad, cantidad_minima }).eq('id', editingItem.id); }
+                    else { await sb.from('stock_items').insert([{ nombre, ubicacion: selectedUbicacion, cantidad, cantidad_minima }]); }
+                    showNotify("OK"); setEditingItem(null); loadData();
+                  }} className="px-2 py-1 bg-emerald-500 text-white rounded text-xs font-bold">OK</button>
+                  <button onClick={() => setEditingItem(null)} className="px-2 py-1 bg-slate-300 rounded text-xs">X</button>
                 </div>
               )}
               
-              {/* Lista de items */}
-              {(() => {
-                const items = stockItems.filter(i => i.ubicacion === selectedUbicacion);
-                if (items.length === 0) return <p className="text-slate-400 text-center py-8">No hay items en esta ubicacion</p>;
-                return (
-                  <div className="space-y-2">
-                    {items.map(item => {
-                      const bajoStock = item.cantidad <= item.cantidad_minima;
-                      return (
-                        <div key={item.id} className={`flex items-center justify-between p-3 rounded-xl border-2 ${bajoStock ? 'bg-red-50 border-red-300' : 'bg-white border-slate-200'}`}>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-800">{item.nombre}</span>
-                              {bajoStock && <span className="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded-full font-black">BAJO</span>}
-                            </div>
-                            <p className="text-[10px] text-slate-400">Min: {item.cantidad_minima}</p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {(userProfile?.role === 'admin' || userProfile?.role === 'moderator') ? (
-                              <>
-                                <button onClick={async () => {
-                                  if (item.cantidad <= 0) { showNotify("Sin stock", "error"); return; }
-                                  await sb.from('stock_items').update({ cantidad: item.cantidad - 1 }).eq('id', item.id);
-                                  await sb.from('stock_movimientos').insert([{ item_id: item.id, tipo: 'salida', cantidad: 1, user_id: session.user.id, user_nombre: userProfile.nombre }]);
-                                  await addLog('STOCK_SALIDA', '-1 ' + item.nombre);
-                                  loadData();
-                                }} className="w-9 h-9 bg-red-100 text-red-600 rounded-lg font-black hover:bg-red-200">-</button>
-                                <span className={`w-12 text-center text-xl font-black ${bajoStock ? 'text-red-600' : 'text-slate-800'}`}>{item.cantidad}</span>
-                                <button onClick={async () => {
-                                  const cant = prompt("Agregar:", "1");
-                                  if (!cant) return;
-                                  const c = parseInt(cant);
-                                  if (isNaN(c) || c <= 0) return;
-                                  await sb.from('stock_items').update({ cantidad: item.cantidad + c }).eq('id', item.id);
-                                  await sb.from('stock_movimientos').insert([{ item_id: item.id, tipo: 'entrada', cantidad: c, user_id: session.user.id, user_nombre: userProfile.nombre }]);
-                                  await addLog('STOCK_ENTRADA', '+' + c + ' ' + item.nombre);
-                                  showNotify('+' + c);
-                                  loadData();
-                                }} className="w-9 h-9 bg-emerald-100 text-emerald-600 rounded-lg font-black hover:bg-emerald-200">+</button>
-                                <button onClick={() => setEditingItem(item)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg">✏️</button>
-                                <button onClick={async () => {
-                                  if (!confirm('Eliminar ' + item.nombre + '?')) return;
-                                  await sb.from('stock_items').delete().eq('id', item.id);
-                                  await addLog('ELIMINAR_STOCK', item.nombre);
-                                  showNotify("Eliminado");
-                                  loadData();
-                                }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">🗑️</button>
-                              </>
-                            ) : (
-                              <span className={`text-2xl font-black ${bajoStock ? 'text-red-600' : 'text-slate-800'}`}>{item.cantidad}</span>
-                            )}
-                          </div>
+              <div className="space-y-0.5 max-h-[50vh] overflow-y-auto">
+                {(() => {
+                  const items = stockItems.filter(i => i.ubicacion === selectedUbicacion);
+                  if (items.length === 0) return <p className="text-slate-400 text-center py-4 text-xs">Sin items</p>;
+                  return items.map(item => {
+                    const bajo = item.cantidad <= item.cantidad_minima;
+                    return (
+                      <div key={item.id} className={`flex items-center justify-between py-1 px-2 rounded ${bajo ? 'bg-red-50' : 'hover:bg-slate-50'}`}>
+                        <div className="flex items-center gap-1 flex-1 min-w-0"><span className="font-semibold text-slate-800 text-sm truncate">{item.nombre}</span>{bajo && <span className="text-[8px] bg-red-500 text-white px-1 rounded">!</span>}</div>
+                        <div className="flex items-center gap-0.5">
+                          {(userProfile?.role === 'admin' || userProfile?.role === 'moderator') ? (<>
+                            <button onClick={async () => { const c = prompt("Sacar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; if(n>item.cantidad){showNotify("No hay","error");return;} await sb.from('stock_items').update({cantidad:item.cantidad-n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'salida',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre}]); loadData(); }} className="w-6 h-6 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">-</button>
+                            <span className={`w-8 text-center text-sm font-black ${bajo?'text-red-600':'text-slate-700'}`}>{item.cantidad}</span>
+                            <button onClick={async () => { const c = prompt("Agregar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; await sb.from('stock_items').update({cantidad:item.cantidad+n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'entrada',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre}]); loadData(); }} className="w-6 h-6 bg-emerald-100 text-emerald-600 rounded text-xs font-bold hover:bg-emerald-200">+</button>
+                            <button onClick={()=>setEditingItem(item)} className="w-6 h-6 text-slate-400 hover:bg-slate-100 rounded text-[10px]">✏</button>
+                            <button onClick={async()=>{if(!confirm('Eliminar?'))return;await sb.from('stock_items').delete().eq('id',item.id);loadData();}} className="w-6 h-6 text-red-400 hover:bg-red-50 rounded text-[10px]">🗑</button>
+                          </>) : (<span className={`text-sm font-black ${bajo?'text-red-600':'text-slate-700'}`}>{item.cantidad}</span>)}
                         </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
             </div>
             
-            {/* Ultimos movimientos */}
-            <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-4">
-              <h3 className="font-bold text-slate-800 mb-3 text-sm">📜 Ultimos Movimientos</h3>
-              <div className="space-y-1 max-h-48 overflow-y-auto">
-                {stockMovimientos.length === 0 ? (
-                  <p className="text-slate-400 text-center py-4 text-sm">Sin movimientos</p>
-                ) : stockMovimientos.slice(0, 15).map(mov => {
+            <div className="bg-white rounded-xl shadow-md border border-slate-200 p-2">
+              <details><summary className="font-bold text-slate-700 text-xs cursor-pointer">📜 Movimientos</summary>
+              <div className="space-y-0.5 max-h-24 overflow-y-auto mt-2">
+                {stockMovimientos.slice(0,10).map(mov => {
                   const item = stockItems.find(i => i.id === mov.item_id);
-                  return (
-                    <div key={mov.id} className={`flex items-center justify-between p-2 rounded-lg text-sm ${mov.tipo === 'entrada' ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                      <span className={`font-bold ${mov.tipo === 'entrada' ? 'text-emerald-700' : 'text-red-700'}`}>
-                        {mov.tipo === 'entrada' ? '+' : '-'}{mov.cantidad} {item?.nombre || '?'}
-                      </span>
-                      <span className="text-xs text-slate-500">{mov.user_nombre?.split(' ')[0]} {new Date(mov.created_at).toLocaleDateString()}</span>
-                    </div>
-                  );
+                  return (<div key={mov.id} className={`flex items-center justify-between py-0.5 px-2 rounded text-xs ${mov.tipo==='entrada'?'bg-emerald-50':'bg-red-50'}`}><span className={`font-bold ${mov.tipo==='entrada'?'text-emerald-700':'text-red-700'}`}>{mov.tipo==='entrada'?'+':'-'}{mov.cantidad} {item?.nombre||'?'}</span><span className="text-slate-400">{mov.user_nombre?.split(' ')[0]}</span></div>);
                 })}
-              </div>
+              </div></details>
             </div>
           </div>
         )}
