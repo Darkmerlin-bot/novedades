@@ -82,7 +82,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
 );
 
 // MODAL PENDIENTES Y JUICIOS
-const PendingModal = ({ count, juiciosProximos, recordatoriosProximos, stockBajo, onClose, userName }) => (
+const PendingModal = ({ count, juiciosProximos, recordatoriosProximos, onClose, userName }) => (
   <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[150] flex items-center justify-center p-4">
     <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto">
       <div className="p-8 bg-red-500 text-white text-center">
@@ -179,31 +179,6 @@ const PendingModal = ({ count, juiciosProximos, recordatoriosProximos, stockBajo
                         <p className="text-xs font-bold text-purple-700">{fecha.toLocaleDateString()}</p>
                         <p className="text-xs text-purple-600">{fecha.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                         <p className={`text-xs font-black mt-1 ${diffMs < 0 ? 'text-red-600' : 'text-purple-600'}`}>{tiempoTexto}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        
-        {stockBajo && stockBajo.length > 0 && (
-          <div className="mt-4">
-            <p className="text-slate-600 font-bold text-lg mb-3 text-center">📦 Stock bajo mínimo</p>
-            <div className="space-y-2">
-              {stockBajo.map(item => {
-                const ubNombres = { valija_perbio: '🧳 Per-Bio', biologica: '🧬 Biologica', pericial_grande: '📦 Grande', pericial_chica: '📋 Chica', lockers: '🔐 Lockers' };
-                return (
-                  <div key={item.id} className="border-2 rounded-xl p-3 bg-red-50 border-red-300">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="font-black text-slate-800">{item.nombre}</p>
-                        <p className="text-xs text-slate-500">{ubNombres[item.ubicacion]}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-black text-red-600">{item.cantidad}</p>
-                        <p className="text-[10px] text-red-500">Min: {item.cantidad_minima}</p>
                       </div>
                     </div>
                   </div>
@@ -549,21 +524,20 @@ const App = () => {
     }
   }, [session, userProfile]);
 
-  // Mostrar modal de pendientes/juicios/recordatorios/stock después de cargar datos (solo una vez)
+  // Mostrar modal de pendientes/juicios/recordatorios después de cargar datos (solo una vez)
   useEffect(() => {
-    if (session && userProfile && !modalShownOnce) {
+    if (session && userProfile && novedades.length > 0 && !modalShownOnce) {
       const pending = countUserPendingTasks(userProfile, novedades);
       const hasUpcomingJuicios = upcomingJuicios.length > 0;
       const hasUpcomingRecordatorios = upcomingRecordatorios.length > 0;
-      const hasStockBajo = stockItems.filter(i => i.cantidad <= i.cantidad_minima).length > 0;
       
-      if (pending > 0 || hasUpcomingJuicios || hasUpcomingRecordatorios || hasStockBajo) {
+      if (pending > 0 || hasUpcomingJuicios || hasUpcomingRecordatorios) {
         setPendingCount(pending);
         setShowPendingModal(true);
         setModalShownOnce(true);
       }
     }
-  }, [novedades, upcomingJuicios, upcomingRecordatorios, stockItems, modalShownOnce]);
+  }, [novedades, upcomingJuicios, upcomingRecordatorios, modalShownOnce]);
 
   // UTILIDADES
   const extractNumber = (str) => { if (!str) return 0; const m = str.match(/\d+/g); return m ? parseInt(m[m.length - 1], 10) : 0; };
@@ -2304,17 +2278,32 @@ const App = () => {
               
               {editingItem && (
                 <div className="bg-slate-50 rounded-lg p-2 mb-2 flex flex-wrap gap-1 items-center">
-                  <input id="itemNombre" placeholder="Nombre" defaultValue={editingItem.nombre || ''} className="flex-1 min-w-[120px] px-2 py-1 border rounded text-xs font-bold" />
-                  <input id="itemCantidad" type="number" placeholder="Cant" defaultValue={editingItem.cantidad || 0} className="w-14 px-2 py-1 border rounded text-xs font-bold" />
-                  <input id="itemMinimo" type="number" placeholder="Min" defaultValue={editingItem.cantidad_minima || 5} className="w-14 px-2 py-1 border rounded text-xs font-bold" />
+                  <input id="itemNombre" placeholder="Nombre" defaultValue={editingItem.nombre || ''} className="flex-1 min-w-[100px] px-2 py-1 border rounded text-xs font-bold" />
+                  <input id="itemCantidad" type="number" placeholder="Cant" defaultValue={editingItem.cantidad || 0} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
+                  <input id="itemMinimo" type="number" placeholder="Min" defaultValue={editingItem.cantidad_minima || 5} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
+                  {!editingItem.id && <label className="flex items-center gap-1 text-[10px] bg-blue-100 px-2 py-1 rounded"><input type="checkbox" id="itemReplicar" defaultChecked className="w-3 h-3" /><span>Todas</span></label>}
                   <button onClick={async () => {
                     const nombre = document.getElementById('itemNombre').value.trim();
                     const cantidad = parseInt(document.getElementById('itemCantidad').value) || 0;
                     const cantidad_minima = parseInt(document.getElementById('itemMinimo').value) || 5;
                     if (!nombre) { showNotify("Nombre requerido", "error"); return; }
-                    if (editingItem.id) { await sb.from('stock_items').update({ nombre, cantidad, cantidad_minima }).eq('id', editingItem.id); }
-                    else { await sb.from('stock_items').insert([{ nombre, ubicacion: selectedUbicacion, cantidad, cantidad_minima }]); }
-                    showNotify("OK"); setEditingItem(null); loadData();
+                    if (editingItem.id) { 
+                      await sb.from('stock_items').update({ nombre, cantidad, cantidad_minima }).eq('id', editingItem.id); 
+                      showNotify("Actualizado");
+                    } else {
+                      const replicar = document.getElementById('itemReplicar')?.checked;
+                      if (replicar) {
+                        const ubicaciones = ['valija_perbio', 'biologica', 'pericial_grande', 'pericial_chica', 'lockers'];
+                        const items = ubicaciones.map(ub => ({ nombre, ubicacion: ub, cantidad: ub === selectedUbicacion ? cantidad : 0, cantidad_minima }));
+                        const { error } = await sb.from('stock_items').insert(items);
+                        if (error) { showNotify("Error: " + error.message, "error"); return; }
+                        showNotify("Creado en 5 ubicaciones");
+                      } else {
+                        await sb.from('stock_items').insert([{ nombre, ubicacion: selectedUbicacion, cantidad, cantidad_minima }]);
+                        showNotify("Creado");
+                      }
+                    }
+                    setEditingItem(null); loadData();
                   }} className="px-2 py-1 bg-emerald-500 text-white rounded text-xs font-bold">OK</button>
                   <button onClick={() => setEditingItem(null)} className="px-2 py-1 bg-slate-300 rounded text-xs">X</button>
                 </div>
@@ -2953,7 +2942,7 @@ const App = () => {
         </div>
       )}
 
-      {showPendingModal && <PendingModal count={pendingCount} juiciosProximos={upcomingJuicios} recordatoriosProximos={upcomingRecordatorios} stockBajo={stockItems.filter(i => i.cantidad <= i.cantidad_minima)} onClose={() => setShowPendingModal(false)} userName={userProfile?.nombre} />}
+      {showPendingModal && <PendingModal count={pendingCount} juiciosProximos={upcomingJuicios} recordatoriosProximos={upcomingRecordatorios} onClose={() => setShowPendingModal(false)} userName={userProfile?.nombre} />}
       
       {/* Modal de advertencia de timeout */}
       {showTimeoutWarning && (
