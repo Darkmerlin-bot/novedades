@@ -265,6 +265,7 @@ const App = () => {
   const [stockMovimientos, setStockMovimientos] = useState([]);
   const [selectedUbicacion, setSelectedUbicacion] = useState('todas');
   const [editingItem, setEditingItem] = useState(null);
+  const [highlightedItem, setHighlightedItem] = useState(null);
   const [stockSearch, setStockSearch] = useState('');
   
   // Estados para Auditoría
@@ -2251,7 +2252,7 @@ const App = () => {
                   if (resultados.length === 0) return <p className="text-amber-600 text-sm">No encontrado</p>;
                   const ubNombres = { valija_perbio: 'Per-Bio', biologica: 'Biologica', pericial_grande: 'Grande', pericial_chica: 'Chica', lockers: 'Lockers' };
                   return (<div className="space-y-1">{resultados.map(item => (
-                    <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg text-sm ${item.cantidad <= item.cantidad_minima ? 'bg-red-100' : 'bg-white'}`}>
+                    <div key={item.id} onClick={() => { setSelectedUbicacion(item.ubicacion); setStockSearch(''); setHighlightedItem(item.id); setTimeout(() => setHighlightedItem(null), 3000); }} className={`flex items-center justify-between p-2 rounded-lg text-sm cursor-pointer hover:ring-2 hover:ring-amber-400 ${item.cantidad <= item.cantidad_minima ? 'bg-red-100' : 'bg-white'}`}>
                       <span className="font-bold">{item.nombre}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-500">{ubNombres[item.ubicacion]}</span>
@@ -2313,10 +2314,12 @@ const App = () => {
                 {(() => {
                   const items = stockItems.filter(i => i.ubicacion === selectedUbicacion);
                   if (items.length === 0) return <p className="text-slate-400 text-center py-4 text-xs">Sin items</p>;
-                  return items.map(item => {
+                  return items.map((item, idx) => {
                     const bajo = item.cantidad <= item.cantidad_minima;
+                    const highlighted = highlightedItem === item.id;
+                    const bgColor = highlighted ? 'bg-yellow-200 ring-2 ring-yellow-400' : bajo ? 'bg-red-50' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50';
                     return (
-                      <div key={item.id} className={`flex items-center justify-between py-1 px-2 rounded ${bajo ? 'bg-red-50' : 'hover:bg-slate-50'}`}>
+                      <div key={item.id} className={`flex items-center justify-between py-1 px-2 rounded ${bgColor} ${highlighted ? 'animate-pulse' : ''}`}>
                         <div className="flex items-center gap-1 flex-1 min-w-0"><span className="font-semibold text-slate-800 text-sm truncate">{item.nombre}</span>{bajo && <span className="text-[8px] bg-red-500 text-white px-1 rounded">!</span>}</div>
                         <div className="flex items-center gap-0.5">
                           {(userProfile?.role === 'admin' || userProfile?.role === 'moderator') ? (<>
