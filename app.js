@@ -2252,7 +2252,7 @@ const App = () => {
                   if (resultados.length === 0) return <p className="text-amber-600 text-sm">No encontrado</p>;
                   const ubNombres = { valija_perbio: 'Per-Bio', biologica: 'Biologica', pericial_grande: 'Grande', pericial_chica: 'Chica', lockers: 'Lockers' };
                   return (<div className="space-y-1">{resultados.map(item => (
-                    <div key={item.id} onClick={() => { setSelectedUbicacion(item.ubicacion); setStockSearch(''); setHighlightedItem(item.id); setTimeout(() => setHighlightedItem(null), 3000); }} className={`flex items-center justify-between p-2 rounded-lg text-sm cursor-pointer hover:ring-2 hover:ring-amber-400 ${item.cantidad <= item.cantidad_minima ? 'bg-red-100' : 'bg-white'}`}>
+                    <div key={item.id} onClick={() => { setSelectedUbicacion(item.ubicacion); setStockSearch(''); setHighlightedItem(item.id); setTimeout(() => setHighlightedItem(null), 6000); }} className={`flex items-center justify-between p-2 rounded-lg text-sm cursor-pointer hover:ring-2 hover:ring-amber-400 ${item.cantidad <= item.cantidad_minima ? 'bg-red-100' : 'bg-white'}`}>
                       <span className="font-bold">{item.nombre}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-500">{ubNombres[item.ubicacion]}</span>
