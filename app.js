@@ -20,7 +20,7 @@ const Notification = ({ message, type }) => (
 );
 
 // HEADER
-const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount, juiciosCount, recordatoriosCount }) => (
+const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount, juiciosCount, recordatoriosCount, stockBajoCount }) => (
   <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50 print:hidden">
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
@@ -66,7 +66,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
           📅 Licencias
         </button>
         <button onClick={() => setView('stock')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${currentView === 'stock' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-          📦 Stock
+          📦 Stock {stockBajoCount > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse">{stockBajoCount}</span>}
         </button>
         {userProfile?.role === 'admin' && (
           <>
@@ -867,7 +867,7 @@ const App = () => {
   // APP
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={juicios.filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={recordatorios.filter(r => !r.completado).length} />
+      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={juicios.filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={recordatorios.filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
@@ -2238,9 +2238,66 @@ const App = () => {
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
               <h2 className="text-2xl font-black text-slate-800">📦 Stock</h2>
-              <div className="relative flex-1 sm:w-64 sm:flex-none">
-                <input value={stockSearch} onChange={(e) => setStockSearch(e.target.value)} placeholder="🔍 Buscar item..." className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold" />
-                {stockSearch && <button onClick={() => setStockSearch('')} className="absolute right-2 top-2 text-slate-400">x</button>}
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1 sm:w-48">
+                  <input value={stockSearch} onChange={(e) => setStockSearch(e.target.value)} placeholder="🔍 Buscar..." className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold" />
+                  {stockSearch && <button onClick={() => setStockSearch('')} className="absolute right-2 top-2 text-slate-400">x</button>}
+                </div>
+                <div className="relative">
+                  <button onClick={() => {
+                    const menu = document.getElementById('printStockMenu');
+                    menu.classList.toggle('hidden');
+                  }} className="px-3 py-2 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600">🖨️</button>
+                  <div id="printStockMenu" className="hidden absolute right-0 top-10 bg-white border border-slate-200 rounded-lg shadow-xl z-50 min-w-[180px]">
+                    <button onClick={() => {
+                      document.getElementById('printStockMenu').classList.add('hidden');
+                      const ubNombres = { valija_perbio: '🧳 Valija Per-Bio', biologica: '🧬 Biológica', pericial_grande: '📦 Pericial Grande', pericial_chica: '📋 Pericial Chica', lockers: '🔐 Lockers' };
+                      const items = stockItems.filter(i => i.ubicacion === selectedUbicacion);
+                      const consumibles = items.filter(i => i.tipo !== 'fijo');
+                      const fijos = items.filter(i => i.tipo === 'fijo');
+                      const printWindow = window.open('', '_blank');
+                      printWindow.document.write(`<html><head><title>Stock - ${ubNombres[selectedUbicacion]}</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{font-size:18px;border-bottom:2px solid #333;padding-bottom:10px}h2{font-size:14px;margin-top:20px;color:#666}.item{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #eee;font-size:12px}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:10px;color:#999;margin-top:20px}</style></head><body>`);
+                      printWindow.document.write(`<h1>${ubNombres[selectedUbicacion]}</h1>`);
+                      if(consumibles.length > 0) { printWindow.document.write('<h2>📦 CONSUMIBLES</h2>'); consumibles.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
+                      if(fijos.length > 0) { printWindow.document.write('<h2>🔧 ELEMENTOS FIJOS</h2>'); fijos.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
+                      printWindow.document.write(`<p class="fecha">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
+                      printWindow.document.close();
+                      printWindow.print();
+                    }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-100">📋 Imprimir actual</button>
+                    <button onClick={() => {
+                      document.getElementById('printStockMenu').classList.add('hidden');
+                      const ubNombres = { valija_perbio: '🧳 Valija Per-Bio', biologica: '🧬 Biológica', pericial_grande: '📦 Pericial Grande', pericial_chica: '📋 Pericial Chica', lockers: '🔐 Lockers' };
+                      const ubicaciones = ['valija_perbio', 'biologica', 'pericial_grande', 'pericial_chica', 'lockers'];
+                      const printWindow = window.open('', '_blank');
+                      printWindow.document.write(`<html><head><title>Stock Completo</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{font-size:18px;border-bottom:2px solid #333;padding-bottom:10px}h2{font-size:14px;margin-top:20px;background:#f0f0f0;padding:8px}h3{font-size:12px;color:#666;margin:10px 0 5px}.item{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #eee;font-size:11px}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:10px;color:#999;margin-top:20px}.page-break{page-break-after:always}</style></head><body>`);
+                      printWindow.document.write('<h1>📦 INVENTARIO COMPLETO</h1>');
+                      ubicaciones.forEach(ub => {
+                        const items = stockItems.filter(i => i.ubicacion === ub);
+                        const consumibles = items.filter(i => i.tipo !== 'fijo');
+                        const fijos = items.filter(i => i.tipo === 'fijo');
+                        printWindow.document.write(`<h2>${ubNombres[ub]}</h2>`);
+                        if(consumibles.length > 0) { printWindow.document.write('<h3>Consumibles</h3>'); consumibles.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
+                        if(fijos.length > 0) { printWindow.document.write('<h3>Elementos Fijos</h3>'); fijos.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
+                      });
+                      printWindow.document.write(`<p class="fecha">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
+                      printWindow.document.close();
+                      printWindow.print();
+                    }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 border-t">📦 Imprimir TODO</button>
+                    <button onClick={() => {
+                      document.getElementById('printStockMenu').classList.add('hidden');
+                      const bajos = stockItems.filter(i => i.cantidad <= i.cantidad_minima);
+                      if (bajos.length === 0) { showNotify("No hay items bajos", "error"); return; }
+                      const ubNombres = { valija_perbio: 'Per-Bio', biologica: 'Biológica', pericial_grande: 'Grande', pericial_chica: 'Chica', lockers: 'Lockers' };
+                      const printWindow = window.open('', '_blank');
+                      printWindow.document.write(`<html><head><title>Stock Bajo</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{font-size:18px;border-bottom:2px solid red;padding-bottom:10px;color:red}.item{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;font-size:12px}.ub{color:#666;font-size:10px}.fecha{text-align:right;font-size:10px;color:#999;margin-top:20px}</style></head><body>`);
+                      printWindow.document.write('<h1>⚠️ ITEMS CON STOCK BAJO</h1>');
+                      bajos.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre} <span class="ub">(${ubNombres[i.ubicacion]})</span></span><span style="color:red;font-weight:bold">${i.cantidad} / min:${i.cantidad_minima}</span></div>`));
+                      printWindow.document.write(`<p class="fecha">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
+                      printWindow.document.close();
+                      printWindow.print();
+                    }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 border-t text-red-600">⚠️ Imprimir bajos</button>
+                  </div>
+                </div>
               </div>
             </div>
             
