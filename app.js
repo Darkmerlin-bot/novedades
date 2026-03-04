@@ -2256,6 +2256,7 @@ const App = () => {
                       <span className="font-bold">{item.nombre}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-500">{ubNombres[item.ubicacion]}</span>
+                        <span className={`text-[9px] px-1 rounded ${item.tipo === 'fijo' ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-700'}`}>{item.tipo === 'fijo' ? '🔧' : '📦'}</span>
                         <span className={`font-black ${item.cantidad <= item.cantidad_minima ? 'text-red-600' : 'text-slate-800'}`}>{item.cantidad}</span>
                       </div>
                     </div>
@@ -2280,27 +2281,32 @@ const App = () => {
               {editingItem && (
                 <div className="bg-slate-50 rounded-lg p-2 mb-2 flex flex-wrap gap-1 items-center">
                   <input id="itemNombre" placeholder="Nombre" defaultValue={editingItem.nombre || ''} className="flex-1 min-w-[100px] px-2 py-1 border rounded text-xs font-bold" />
+                  <select id="itemTipo" defaultValue={editingItem.tipo || 'consumible'} className="px-2 py-1 border rounded text-xs font-bold bg-white">
+                    <option value="consumible">📦 Consumible</option>
+                    <option value="fijo">🔧 Fijo</option>
+                  </select>
                   <input id="itemCantidad" type="number" placeholder="Cant" defaultValue={editingItem.cantidad || 0} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
                   <input id="itemMinimo" type="number" placeholder="Min" defaultValue={editingItem.cantidad_minima || 5} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
                   {!editingItem.id && <label className="flex items-center gap-1 text-[10px] bg-blue-100 px-2 py-1 rounded"><input type="checkbox" id="itemReplicar" defaultChecked className="w-3 h-3" /><span>Todas</span></label>}
                   <button onClick={async () => {
                     const nombre = document.getElementById('itemNombre').value.trim();
+                    const tipo = document.getElementById('itemTipo').value;
                     const cantidad = parseInt(document.getElementById('itemCantidad').value) || 0;
                     const cantidad_minima = parseInt(document.getElementById('itemMinimo').value) || 5;
                     if (!nombre) { showNotify("Nombre requerido", "error"); return; }
                     if (editingItem.id) { 
-                      await sb.from('stock_items').update({ nombre, cantidad, cantidad_minima }).eq('id', editingItem.id); 
+                      await sb.from('stock_items').update({ nombre, tipo, cantidad, cantidad_minima }).eq('id', editingItem.id); 
                       showNotify("Actualizado");
                     } else {
                       const replicar = document.getElementById('itemReplicar')?.checked;
                       if (replicar) {
                         const ubicaciones = ['valija_perbio', 'biologica', 'pericial_grande', 'pericial_chica', 'lockers'];
-                        const items = ubicaciones.map(ub => ({ nombre, ubicacion: ub, cantidad: ub === selectedUbicacion ? cantidad : 0, cantidad_minima }));
+                        const items = ubicaciones.map(ub => ({ nombre, tipo, ubicacion: ub, cantidad: ub === selectedUbicacion ? cantidad : 0, cantidad_minima }));
                         const { error } = await sb.from('stock_items').insert(items);
                         if (error) { showNotify("Error: " + error.message, "error"); return; }
                         showNotify("Creado en 5 ubicaciones");
                       } else {
-                        await sb.from('stock_items').insert([{ nombre, ubicacion: selectedUbicacion, cantidad, cantidad_minima }]);
+                        await sb.from('stock_items').insert([{ nombre, tipo, ubicacion: selectedUbicacion, cantidad, cantidad_minima }]);
                         showNotify("Creado");
                       }
                     }
@@ -2310,14 +2316,18 @@ const App = () => {
                 </div>
               )}
               
-              <div className="space-y-0.5 max-h-[50vh] overflow-y-auto">
+              <div className="max-h-[50vh] overflow-y-auto">
                 {(() => {
                   const items = stockItems.filter(i => i.ubicacion === selectedUbicacion);
                   if (items.length === 0) return <p className="text-slate-400 text-center py-4 text-xs">Sin items</p>;
-                  return items.map((item, idx) => {
+                  
+                  const consumibles = items.filter(i => i.tipo !== 'fijo');
+                  const fijos = items.filter(i => i.tipo === 'fijo');
+                  
+                  const renderItem = (item, idx) => {
                     const bajo = item.cantidad <= item.cantidad_minima;
                     const highlighted = highlightedItem === item.id;
-                    const bgColor = highlighted ? 'bg-yellow-200 ring-2 ring-yellow-400' : bajo ? 'bg-red-50' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50';
+                    const bgColor = highlighted ? 'bg-yellow-200 ring-2 ring-yellow-400' : bajo ? 'bg-red-50' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-100';
                     return (
                       <div key={item.id} className={`flex items-center justify-between py-1 px-2 rounded ${bgColor} ${highlighted ? 'animate-pulse' : ''}`}>
                         <div className="flex items-center gap-1 flex-1 min-w-0"><span className="font-semibold text-slate-800 text-sm truncate">{item.nombre}</span>{bajo && <span className="text-[8px] bg-red-500 text-white px-1 rounded">!</span>}</div>
@@ -2332,7 +2342,34 @@ const App = () => {
                         </div>
                       </div>
                     );
-                  });
+                  };
+                  
+                  return (
+                    <div className="space-y-3">
+                      {consumibles.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-1 px-1">
+                            <span className="text-xs font-black text-amber-700 uppercase">📦 Consumibles</span>
+                            <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 rounded">{consumibles.length}</span>
+                          </div>
+                          <div className="space-y-0.5 border-l-2 border-amber-300 pl-2">
+                            {consumibles.map((item, idx) => renderItem(item, idx))}
+                          </div>
+                        </div>
+                      )}
+                      {fijos.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-1 px-1">
+                            <span className="text-xs font-black text-slate-600 uppercase">🔧 Elementos Fijos</span>
+                            <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 rounded">{fijos.length}</span>
+                          </div>
+                          <div className="space-y-0.5 border-l-2 border-slate-300 pl-2">
+                            {fijos.map((item, idx) => renderItem(item, idx))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
                 })()}
               </div>
             </div>
