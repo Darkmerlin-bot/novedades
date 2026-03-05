@@ -545,24 +545,24 @@ const App = () => {
   const extractYear = (n) => n.anio ? n.anio.toString() : n.created_at ? new Date(n.created_at).getFullYear().toString() : '';
   const sortByNumber = (a, b) => extractNumber(a.numero_novedad) - extractNumber(b.numero_novedad);
   
-  // Colores para usuarios en calendario de licencias
+  // Colores pasteles para usuarios en calendario de licencias
   const userColorPalette = [
-    { bg: 'bg-blue-500', text: 'text-white', border: 'border-blue-600' },
-    { bg: 'bg-rose-500', text: 'text-white', border: 'border-rose-600' },
-    { bg: 'bg-emerald-500', text: 'text-white', border: 'border-emerald-600' },
-    { bg: 'bg-violet-500', text: 'text-white', border: 'border-violet-600' },
-    { bg: 'bg-amber-500', text: 'text-white', border: 'border-amber-600' },
-    { bg: 'bg-cyan-500', text: 'text-white', border: 'border-cyan-600' },
-    { bg: 'bg-pink-500', text: 'text-white', border: 'border-pink-600' },
-    { bg: 'bg-lime-600', text: 'text-white', border: 'border-lime-700' },
-    { bg: 'bg-indigo-500', text: 'text-white', border: 'border-indigo-600' },
-    { bg: 'bg-orange-500', text: 'text-white', border: 'border-orange-600' },
-    { bg: 'bg-teal-500', text: 'text-white', border: 'border-teal-600' },
-    { bg: 'bg-fuchsia-500', text: 'text-white', border: 'border-fuchsia-600' },
-    { bg: 'bg-red-500', text: 'text-white', border: 'border-red-600' },
-    { bg: 'bg-sky-500', text: 'text-white', border: 'border-sky-600' },
-    { bg: 'bg-yellow-500', text: 'text-white', border: 'border-yellow-600' },
-    { bg: 'bg-purple-500', text: 'text-white', border: 'border-purple-600' },
+    { bg: 'bg-blue-200', text: 'text-blue-800', border: 'border-blue-400' },
+    { bg: 'bg-rose-200', text: 'text-rose-800', border: 'border-rose-400' },
+    { bg: 'bg-emerald-200', text: 'text-emerald-800', border: 'border-emerald-400' },
+    { bg: 'bg-violet-200', text: 'text-violet-800', border: 'border-violet-400' },
+    { bg: 'bg-amber-200', text: 'text-amber-800', border: 'border-amber-400' },
+    { bg: 'bg-cyan-200', text: 'text-cyan-800', border: 'border-cyan-400' },
+    { bg: 'bg-pink-200', text: 'text-pink-800', border: 'border-pink-400' },
+    { bg: 'bg-lime-200', text: 'text-lime-800', border: 'border-lime-400' },
+    { bg: 'bg-indigo-200', text: 'text-indigo-800', border: 'border-indigo-400' },
+    { bg: 'bg-orange-200', text: 'text-orange-800', border: 'border-orange-400' },
+    { bg: 'bg-teal-200', text: 'text-teal-800', border: 'border-teal-400' },
+    { bg: 'bg-fuchsia-200', text: 'text-fuchsia-800', border: 'border-fuchsia-400' },
+    { bg: 'bg-red-200', text: 'text-red-800', border: 'border-red-400' },
+    { bg: 'bg-sky-200', text: 'text-sky-800', border: 'border-sky-400' },
+    { bg: 'bg-yellow-200', text: 'text-yellow-800', border: 'border-yellow-400' },
+    { bg: 'bg-purple-200', text: 'text-purple-800', border: 'border-purple-400' },
   ];
   
   // Mapa de usuarios a índice de color (se calcula una vez)
