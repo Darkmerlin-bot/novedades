@@ -1999,22 +1999,35 @@ const App = () => {
               </div>
             </div>
             
-            {/* Leyenda de usuarios */}
+            {/* Leyenda de usuarios y tipos */}
             {(() => {
-              const usuariosConLicencias = [...new Set(licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString())).map(l => l.user_nombre))].filter(Boolean);
-              if (usuariosConLicencias.length === 0) return null;
+              const usuariosConLicencias = [...new Set(licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.tipo === 'licencia').map(l => l.user_nombre))].filter(Boolean);
               return (
                 <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500 mb-2">👤 Colores por usuario:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {usuariosConLicencias.map(nombre => {
-                      const color = getUserColor(nombre);
-                      return (
-                        <div key={nombre} className={`${color.bg} ${color.text} px-2 py-1 rounded text-xs font-bold`}>
-                          {nombre.split(' ')[0]}
+                  <div className="flex flex-wrap gap-4">
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 mb-2">📋 Tipos:</p>
+                      <div className="flex flex-wrap gap-2">
+                        <div className="bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">🤒 Enfermedad</div>
+                        <div className="bg-purple-500 text-white px-2 py-1 rounded text-xs font-bold">📚 Estudio</div>
+                        <div className="bg-amber-500 text-white px-2 py-1 rounded text-xs font-bold">😴 Descanso</div>
+                      </div>
+                    </div>
+                    {usuariosConLicencias.length > 0 && (
+                      <div>
+                        <p className="text-xs font-bold text-slate-500 mb-2">👤 Licencias por usuario:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {usuariosConLicencias.map(nombre => {
+                            const color = getUserColor(nombre);
+                            return (
+                              <div key={nombre} className={`${color.bg} ${color.text} px-2 py-1 rounded text-xs font-bold`}>
+                                {nombre.split(' ')[0]}
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -2048,9 +2061,23 @@ const App = () => {
                         let userName = '';
                         if (dayLicencias.length > 0) {
                           userName = dayLicencias[0].user_nombre;
-                          const userColor = getUserColor(userName);
-                          bgColor = userColor.bg;
-                          textColor = userColor.text;
+                          const tipo = dayLicencias[0].tipo;
+                          // Colores sólidos para enfermedad, estudio y descanso
+                          if (tipo === 'enfermedad') {
+                            bgColor = 'bg-red-500';
+                            textColor = 'text-white';
+                          } else if (tipo === 'estudio') {
+                            bgColor = 'bg-purple-500';
+                            textColor = 'text-white';
+                          } else if (tipo === 'descanso') {
+                            bgColor = 'bg-amber-500';
+                            textColor = 'text-white';
+                          } else {
+                            // Licencia normal: color pastel por usuario
+                            const userColor = getUserColor(userName);
+                            bgColor = userColor.bg;
+                            textColor = userColor.text;
+                          }
                         }
                         if (isToday && dayLicencias.length === 0) bgColor = 'bg-emerald-200 text-emerald-800 ring-2 ring-emerald-300';
                         
