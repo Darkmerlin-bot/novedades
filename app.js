@@ -1979,6 +1979,70 @@ const App = () => {
               <div><h2 className="text-3xl font-black text-slate-800">📅 Almanaque de Licencias</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Registro anual de ausencias</p></div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setSelectedCalendarDate('nueva')} className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-sm hover:bg-emerald-600 shadow-lg">➕ Agregar</button>
+                <button onClick={() => {
+                  const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                  const dias = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+                  const printWindow = window.open('', '_blank');
+                  printWindow.document.write(`<html><head><title>Licencias ${calendarioYear}</title><style>
+                    body { font-family: Arial, sans-serif; padding: 10px; font-size: 10px; }
+                    h1 { font-size: 16px; text-align: center; margin-bottom: 10px; }
+                    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+                    .mes { border: 1px solid #ccc; padding: 5px; border-radius: 5px; }
+                    .mes-nombre { font-weight: bold; text-align: center; margin-bottom: 5px; font-size: 11px; }
+                    .dias-header { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; color: #666; font-size: 8px; }
+                    .dias { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+                    .dia { text-align: center; padding: 2px; font-size: 8px; border-radius: 2px; }
+                    .vacio { }
+                    .finde { background: #f0f0f0; }
+                    .licencia { background: #bfdbfe; color: #1e40af; }
+                    .enfermedad { background: #ef4444; color: white; }
+                    .estudio { background: #a855f7; color: white; }
+                    .descanso { background: #f59e0b; color: white; }
+                    .leyenda { margin-top: 15px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; font-size: 9px; }
+                    .leyenda span { display: flex; align-items: center; gap: 3px; }
+                    .leyenda-color { width: 12px; height: 12px; border-radius: 2px; }
+                    .fecha-impresion { text-align: right; font-size: 8px; color: #999; margin-top: 10px; }
+                    @media print { body { padding: 5px; } .grid { gap: 5px; } }
+                  </style></head><body>`);
+                  printWindow.document.write(`<h1>📅 Almanaque de Licencias - ${calendarioYear}</h1>`);
+                  printWindow.document.write('<div class="grid">');
+                  meses.forEach((mesNombre, mesIndex) => {
+                    const firstDay = new Date(calendarioYear, mesIndex, 1).getDay();
+                    const daysInMonth = new Date(calendarioYear, mesIndex + 1, 0).getDate();
+                    const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
+                    const mesLicencias = licencias.filter(l => l.fecha?.startsWith(monthStr));
+                    printWindow.document.write(`<div class="mes"><div class="mes-nombre">${mesNombre}</div>`);
+                    printWindow.document.write(`<div class="dias-header">${dias.map(d => `<div>${d}</div>`).join('')}</div>`);
+                    printWindow.document.write('<div class="dias">');
+                    for (let i = 0; i < firstDay; i++) printWindow.document.write('<div class="dia vacio"></div>');
+                    for (let day = 1; day <= daysInMonth; day++) {
+                      const dateStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                      const dayLic = mesLicencias.filter(l => l.fecha === dateStr);
+                      const isWeekend = new Date(calendarioYear, mesIndex, day).getDay() === 0 || new Date(calendarioYear, mesIndex, day).getDay() === 6;
+                      let clase = isWeekend ? 'finde' : '';
+                      if (dayLic.length > 0) {
+                        const tipo = dayLic[0].tipo;
+                        if (tipo === 'enfermedad') clase = 'enfermedad';
+                        else if (tipo === 'estudio') clase = 'estudio';
+                        else if (tipo === 'descanso') clase = 'descanso';
+                        else clase = 'licencia';
+                      }
+                      printWindow.document.write(`<div class="dia ${clase}" title="${dayLic.map(l => l.user_nombre).join(', ')}">${day}</div>`);
+                    }
+                    printWindow.document.write('</div></div>');
+                  });
+                  printWindow.document.write('</div>');
+                  printWindow.document.write(`<div class="leyenda">
+                    <span><div class="leyenda-color" style="background:#bfdbfe"></div> Licencia</span>
+                    <span><div class="leyenda-color" style="background:#ef4444"></div> Enfermedad</span>
+                    <span><div class="leyenda-color" style="background:#a855f7"></div> Estudio</span>
+                    <span><div class="leyenda-color" style="background:#f59e0b"></div> Descanso</span>
+                  </div>`);
+                  printWindow.document.write(`<p class="fecha-impresion">Impreso: ${new Date().toLocaleString()}</p>`);
+                  printWindow.document.write('</body></html>');
+                  printWindow.document.close();
+                  printWindow.print();
+                }} className="px-4 py-2 bg-blue-500 text-white rounded-xl font-bold text-sm hover:bg-blue-600">🖨️ Imprimir</button>
                 <button onClick={() => setCalendarioYear(calendarioYear - 1)} className="p-2 bg-slate-200 rounded-xl hover:bg-slate-300 font-bold">◀</button>
                 <select value={calendarioYear} onChange={(e) => setCalendarioYear(parseInt(e.target.value))} className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-black text-slate-700 text-lg">
                   {[2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
