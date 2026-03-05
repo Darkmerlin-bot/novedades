@@ -545,6 +545,31 @@ const App = () => {
   const extractYear = (n) => n.anio ? n.anio.toString() : n.created_at ? new Date(n.created_at).getFullYear().toString() : '';
   const sortByNumber = (a, b) => extractNumber(a.numero_novedad) - extractNumber(b.numero_novedad);
   
+  // Colores para usuarios en calendario de licencias
+  const userColorPalette = [
+    { bg: 'bg-blue-500', text: 'text-white', border: 'border-blue-600' },
+    { bg: 'bg-rose-500', text: 'text-white', border: 'border-rose-600' },
+    { bg: 'bg-emerald-500', text: 'text-white', border: 'border-emerald-600' },
+    { bg: 'bg-violet-500', text: 'text-white', border: 'border-violet-600' },
+    { bg: 'bg-amber-500', text: 'text-white', border: 'border-amber-600' },
+    { bg: 'bg-cyan-500', text: 'text-white', border: 'border-cyan-600' },
+    { bg: 'bg-pink-500', text: 'text-white', border: 'border-pink-600' },
+    { bg: 'bg-lime-500', text: 'text-white', border: 'border-lime-600' },
+    { bg: 'bg-indigo-500', text: 'text-white', border: 'border-indigo-600' },
+    { bg: 'bg-orange-500', text: 'text-white', border: 'border-orange-600' },
+    { bg: 'bg-teal-500', text: 'text-white', border: 'border-teal-600' },
+    { bg: 'bg-fuchsia-500', text: 'text-white', border: 'border-fuchsia-600' },
+  ];
+  
+  const getUserColor = (userName) => {
+    if (!userName) return userColorPalette[0];
+    let hash = 0;
+    for (let i = 0; i < userName.length; i++) {
+      hash = userName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return userColorPalette[Math.abs(hash) % userColorPalette.length];
+  };
+
   // Función segura para parsear fechas de juicios (evita problemas de zona horaria)
   const parseFechaJuicio = (fechaStr) => {
     if (!fechaStr) return null;
@@ -1963,6 +1988,27 @@ const App = () => {
               </div>
             </div>
             
+            {/* Leyenda de usuarios */}
+            {(() => {
+              const usuariosConLicencias = [...new Set(licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString())).map(l => l.user_nombre))].filter(Boolean);
+              if (usuariosConLicencias.length === 0) return null;
+              return (
+                <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm">
+                  <p className="text-xs font-bold text-slate-500 mb-2">👤 Colores por usuario:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {usuariosConLicencias.map(nombre => {
+                      const color = getUserColor(nombre);
+                      return (
+                        <div key={nombre} className={`${color.bg} ${color.text} px-2 py-1 rounded text-xs font-bold`}>
+                          {nombre.split(' ')[0]}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+            
             {/* Almanaque - 12 meses */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((mesNombre, mesIndex) => {
@@ -1988,21 +2034,20 @@ const App = () => {
                         
                         let bgColor = isWeekend ? 'bg-slate-100' : 'bg-white';
                         let textColor = 'text-slate-600';
+                        let userName = '';
                         if (dayLicencias.length > 0) {
-                          const tipo = dayLicencias[0].tipo;
-                          if (tipo === 'licencia') bgColor = 'bg-blue-500 text-white';
-                          else if (tipo === 'enfermedad') bgColor = 'bg-red-500 text-white';
-                          else if (tipo === 'estudio') bgColor = 'bg-purple-500 text-white';
-                          else if (tipo === 'descanso') bgColor = 'bg-amber-500 text-white';
-                          textColor = 'text-white';
+                          userName = dayLicencias[0].user_nombre;
+                          const userColor = getUserColor(userName);
+                          bgColor = userColor.bg;
+                          textColor = userColor.text;
                         }
-                        if (isToday) bgColor = 'bg-emerald-500 text-white ring-2 ring-emerald-300';
+                        if (isToday && dayLicencias.length === 0) bgColor = 'bg-emerald-200 text-emerald-800 ring-2 ring-emerald-300';
                         
                         return (
                           <div 
                             key={day}
                             onClick={() => setSelectedCalendarDate(dateStr)}
-                            className={`text-center py-1 rounded cursor-pointer hover:ring-2 hover:ring-slate-400 ${bgColor} ${textColor} ${selectedCalendarDate === dateStr ? 'ring-2 ring-slate-800' : ''} ${dayLicencias.length > 1 ? 'ring-2 ring-offset-1 ring-slate-400' : ''}`}
+                            className={`text-center py-1 rounded cursor-pointer hover:ring-2 hover:ring-slate-400 ${bgColor} ${textColor} ${selectedCalendarDate === dateStr ? 'ring-2 ring-slate-800' : ''} ${dayLicencias.length > 1 ? 'ring-2 ring-offset-1 ring-yellow-400' : ''} ${isToday ? 'font-black' : ''}`}
                             title={dayLicencias.map(l => `${l.user_nombre}: ${l.tipo}`).join(', ')}
                           >
                             {day}
