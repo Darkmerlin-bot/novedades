@@ -554,20 +554,31 @@ const App = () => {
     { bg: 'bg-amber-500', text: 'text-white', border: 'border-amber-600' },
     { bg: 'bg-cyan-500', text: 'text-white', border: 'border-cyan-600' },
     { bg: 'bg-pink-500', text: 'text-white', border: 'border-pink-600' },
-    { bg: 'bg-lime-500', text: 'text-white', border: 'border-lime-600' },
+    { bg: 'bg-lime-600', text: 'text-white', border: 'border-lime-700' },
     { bg: 'bg-indigo-500', text: 'text-white', border: 'border-indigo-600' },
     { bg: 'bg-orange-500', text: 'text-white', border: 'border-orange-600' },
     { bg: 'bg-teal-500', text: 'text-white', border: 'border-teal-600' },
     { bg: 'bg-fuchsia-500', text: 'text-white', border: 'border-fuchsia-600' },
+    { bg: 'bg-red-500', text: 'text-white', border: 'border-red-600' },
+    { bg: 'bg-sky-500', text: 'text-white', border: 'border-sky-600' },
+    { bg: 'bg-yellow-500', text: 'text-white', border: 'border-yellow-600' },
+    { bg: 'bg-purple-500', text: 'text-white', border: 'border-purple-600' },
   ];
+  
+  // Mapa de usuarios a índice de color (se calcula una vez)
+  const userColorMap = React.useMemo(() => {
+    const uniqueUsers = [...new Set(licencias.map(l => l.user_nombre))].filter(Boolean).sort();
+    const map = {};
+    uniqueUsers.forEach((user, idx) => {
+      map[user] = idx % userColorPalette.length;
+    });
+    return map;
+  }, [licencias]);
   
   const getUserColor = (userName) => {
     if (!userName) return userColorPalette[0];
-    let hash = 0;
-    for (let i = 0; i < userName.length; i++) {
-      hash = userName.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return userColorPalette[Math.abs(hash) % userColorPalette.length];
+    const idx = userColorMap[userName] ?? 0;
+    return userColorPalette[idx];
   };
 
   // Función segura para parsear fechas de juicios (evita problemas de zona horaria)
