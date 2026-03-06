@@ -702,7 +702,7 @@ const App = () => {
   };
 
   const getUserDetailedStats = (profile, filterYear = 'todos') => {
-    const stats = { informeActuacion: { a: 0, c: 0 }, informeCriminalistico: { a: 0, c: 0 }, informePericial: { a: 0, c: 0 }, croquis: { a: 0, c: 0 }, juicios: 0 };
+    const stats = { informeActuacion: { a: 0, c: 0 }, informeCriminalistico: { a: 0, c: 0 }, informePericial: { a: 0, c: 0 }, croquis: { a: 0, c: 0 }, juicios: 0, comisiones: { cargaSgsp: 0, chofer: 0, acompanante: 0 } };
     
     // Filtrar novedades por año
     const filteredNovedades = filterYear === 'todos' ? novedades : novedades.filter(n => n.anio?.toString() === filterYear);
@@ -712,6 +712,12 @@ const App = () => {
       if ((n.informe_criminalistico || n.informeCriminalistico) === profile.nombre) { stats.informeCriminalistico.a++; if (isTaskDone(n, { checkKey: 'criminalistico_realizado', checkKeyOld: 'criminalisticoRealizado' })) stats.informeCriminalistico.c++; }
       if ((n.informe_pericial || n.informePericial) === profile.nombre) { stats.informePericial.a++; if (isTaskDone(n, { checkKey: 'pericial_realizado', checkKeyOld: 'pericialRealizado' })) stats.informePericial.c++; }
       if (n.croquis === profile.nombre) { stats.croquis.a++; if (isTaskDone(n, { checkKey: 'croquis_realizado', checkKeyOld: 'croquisRealizado' })) stats.croquis.c++; }
+      // Comisiones
+      if (n.es_comision) {
+        if (n.comision_carga_sgsp === profile.nombre) stats.comisiones.cargaSgsp++;
+        if (n.comision_chofer === profile.nombre) stats.comisiones.chofer++;
+        if (n.comision_acompanante === profile.nombre) stats.comisiones.acompanante++;
+      }
     });
     
     // Contar juicios donde el usuario está citado
@@ -723,7 +729,8 @@ const App = () => {
     
     const total = stats.informeActuacion.a + stats.informeCriminalistico.a + stats.informePericial.a + stats.croquis.a;
     const done = stats.informeActuacion.c + stats.informeCriminalistico.c + stats.informePericial.c + stats.croquis.c;
-    return { ...stats, total, done, pending: total - done };
+    const totalComisiones = stats.comisiones.cargaSgsp + stats.comisiones.chofer + stats.comisiones.acompanante;
+    return { ...stats, total, done, pending: total - done, totalComisiones };
   };
   
   // Obtener años disponibles para el filtro
@@ -749,6 +756,7 @@ const App = () => {
       totalNovedades: filteredNovedades.length,
       pendientes: filteredNovedades.filter(n => !isNovedadComplete(n)).length,
       completadas: filteredNovedades.filter(n => isNovedadComplete(n)).length,
+      comisiones: filteredNovedades.filter(n => n.es_comision).length,
       totalJuicios: filteredJuicios.length
     };
   };
@@ -2865,7 +2873,7 @@ const App = () => {
               {/* Resumen general */}
               <div>
                 <h4 className="text-[10px] font-black text-slate-500 uppercase mb-4">Resumen {statsYear !== 'todos' && `(${statsYear})`}</h4>
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-5 gap-3">
                   <div className="bg-slate-100 p-4 rounded-2xl text-center">
                     <div className="text-2xl font-black text-slate-800">{getFilteredStats().totalNovedades}</div>
                     <div className="text-[8px] uppercase font-black text-slate-500">Novedades</div>
@@ -2877,6 +2885,10 @@ const App = () => {
                   <div className="bg-emerald-100 p-4 rounded-2xl text-center">
                     <div className="text-2xl font-black text-emerald-700">{getFilteredStats().completadas}</div>
                     <div className="text-[8px] uppercase font-black text-emerald-600">Completadas</div>
+                  </div>
+                  <div className="bg-orange-100 p-4 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-orange-700">{getFilteredStats().comisiones}</div>
+                    <div className="text-[8px] uppercase font-black text-orange-600">Comisiones</div>
                   </div>
                   <div className="bg-blue-100 p-4 rounded-2xl text-center">
                     <div className="text-2xl font-black text-blue-700">{getFilteredStats().totalJuicios}</div>
@@ -2911,7 +2923,7 @@ const App = () => {
                         <div className="h-2 bg-slate-300 rounded-full overflow-hidden mb-3">
                           <div className="h-full bg-emerald-500 rounded-full" style={{ width: pct + '%' }}></div>
                         </div>
-                        <div className="grid grid-cols-4 gap-2 text-center">
+                        <div className="grid grid-cols-5 gap-2 text-center">
                           <div className="bg-white p-2 rounded-xl">
                             <div className="text-lg font-black text-slate-700">{stats.total}</div>
                             <div className="text-[8px] text-slate-500 font-bold uppercase">Tareas</div>
@@ -2923,6 +2935,10 @@ const App = () => {
                           <div className="bg-red-100 p-2 rounded-xl">
                             <div className="text-lg font-black text-red-600">{stats.pending}</div>
                             <div className="text-[8px] text-red-500 font-bold uppercase">Pend.</div>
+                          </div>
+                          <div className="bg-orange-100 p-2 rounded-xl">
+                            <div className="text-lg font-black text-orange-700">{stats.totalComisiones}</div>
+                            <div className="text-[8px] text-orange-600 font-bold uppercase">Comis.</div>
                           </div>
                           <div className="bg-blue-100 p-2 rounded-xl">
                             <div className="text-lg font-black text-blue-700">{stats.juicios}</div>
@@ -2962,6 +2978,25 @@ const App = () => {
                                 </div>
                               </div>
                             </div>
+                            {stats.totalComisiones > 0 && (
+                              <div className="mt-3">
+                                <h5 className="text-[9px] font-black text-orange-600 uppercase mb-2">🚗 Comisiones:</h5>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div className="bg-orange-50 p-2 rounded-xl text-center">
+                                    <div className="text-lg font-black text-orange-700">{stats.comisiones.cargaSgsp}</div>
+                                    <div className="text-[8px] text-orange-600 font-bold uppercase">Carga SGSP</div>
+                                  </div>
+                                  <div className="bg-orange-50 p-2 rounded-xl text-center">
+                                    <div className="text-lg font-black text-orange-700">{stats.comisiones.chofer}</div>
+                                    <div className="text-[8px] text-orange-600 font-bold uppercase">Chofer</div>
+                                  </div>
+                                  <div className="bg-orange-50 p-2 rounded-xl text-center">
+                                    <div className="text-lg font-black text-orange-700">{stats.comisiones.acompanante}</div>
+                                    <div className="text-[8px] text-orange-600 font-bold uppercase">Acompañante</div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -3248,13 +3283,21 @@ const App = () => {
                                     <div><span className="font-black text-slate-800">{p.nombre}</span><span className="text-xs text-slate-500 ml-2">{p.role}</span></div>
                                     <span className="font-black text-lg">{pct}%</span>
                                   </div>
-                                  <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                                  <div className="grid grid-cols-6 gap-2 text-center text-xs">
                                     <div className="bg-white p-2 rounded"><div className="font-bold">Inf. Actuación</div><div className="text-emerald-600">{stats.informeActuacion.c}/{stats.informeActuacion.a}</div></div>
                                     <div className="bg-white p-2 rounded"><div className="font-bold">Criminalístico</div><div className="text-emerald-600">{stats.informeCriminalistico.c}/{stats.informeCriminalistico.a}</div></div>
                                     <div className="bg-white p-2 rounded"><div className="font-bold">Pericial</div><div className="text-emerald-600">{stats.informePericial.c}/{stats.informePericial.a}</div></div>
                                     <div className="bg-white p-2 rounded"><div className="font-bold">Croquis</div><div className="text-emerald-600">{stats.croquis.c}/{stats.croquis.a}</div></div>
+                                    <div className="bg-orange-50 p-2 rounded"><div className="font-bold text-orange-700">Comisiones</div><div className="text-orange-600">{stats.totalComisiones}</div></div>
                                     <div className="bg-white p-2 rounded"><div className="font-bold">Juicios</div><div className="text-blue-600">{stats.juicios}</div></div>
                                   </div>
+                                  {stats.totalComisiones > 0 && (
+                                    <div className="mt-2 grid grid-cols-3 gap-2 text-center text-[10px]">
+                                      <div className="bg-orange-100 p-1 rounded"><span className="font-bold text-orange-700">Carga SGSP: {stats.comisiones.cargaSgsp}</span></div>
+                                      <div className="bg-orange-100 p-1 rounded"><span className="font-bold text-orange-700">Chofer: {stats.comisiones.chofer}</span></div>
+                                      <div className="bg-orange-100 p-1 rounded"><span className="font-bold text-orange-700">Acompañante: {stats.comisiones.acompanante}</span></div>
+                                    </div>
+                                  )}
                                 </div>
                               ); 
                             })}
