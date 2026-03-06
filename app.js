@@ -219,6 +219,7 @@ const App = () => {
   const [logs, setLogs] = useState([]);
   const [currentView, setCurrentView] = useState('list');
   const [editingNovedad, setEditingNovedad] = useState(null);
+  const [isComision, setIsComision] = useState(false);
   const [notification, setNotification] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [showPassModal, setShowPassModal] = useState(false);
@@ -626,8 +627,8 @@ const App = () => {
   };
 
   const areUserTasksComplete = (n, assignments) => assignments.length > 0 && assignments.every(a => n[a.checkKey] || (n.checks && n.checks[a.checkKeyOld]));
-  const isNovedadComplete = (n) => { const { completed, total } = getTaskCounts(n); return total > 0 && completed === total; };
-  const countUserPendingTasks = (profile, list) => list.filter(n => { const { isAssigned, assignments } = getUserAssignment(n, profile); return isAssigned && !areUserTasksComplete(n, assignments); }).length;
+  const isNovedadComplete = (n) => { if (n.es_comision) return true; const { completed, total } = getTaskCounts(n); return total > 0 && completed === total; };
+  const countUserPendingTasks = (profile, list) => list.filter(n => { if (n.es_comision) return false; const { isAssigned, assignments } = getUserAssignment(n, profile); return isAssigned && !areUserTasksComplete(n, assignments); }).length;
 
   const filterNovedades = (list) => {
     let f = list;
@@ -806,11 +807,12 @@ const App = () => {
       <div className={`${bg} rounded-3xl shadow-md border ${border} ${left} overflow-hidden transition-all hover:shadow-xl`}>
         <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setExpandedId(isEx ? null : n.id)}>
           <div className="flex items-center gap-5">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${completed === total && total > 0 ? 'bg-emerald-500 text-white' : total === 0 ? 'bg-slate-300 text-slate-500' : 'bg-amber-400 text-white'}`}>{total > 0 ? `${completed}/${total}` : 'N/A'}</div>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${n.es_comision ? 'bg-amber-400 text-white' : completed === total && total > 0 ? 'bg-emerald-500 text-white' : total === 0 ? 'bg-slate-300 text-slate-500' : 'bg-amber-400 text-white'}`}>{n.es_comision ? '🚗' : total > 0 ? `${completed}/${total}` : 'N/A'}</div>
             <div>
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="font-black text-slate-800 text-lg">{n.numero_novedad}</span>
                 {n.anio && <span className="text-[10px] font-black text-slate-500 bg-slate-200 px-2 py-1 rounded-full">{n.anio}</span>}
+                {n.es_comision && <span className="text-[10px] font-black text-amber-800 bg-amber-200 px-2 py-1 rounded-full">🚗 COMISIÓN</span>}
                 {n.titulo && <span className="text-sm font-bold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">{n.titulo}</span>}
                 {!isCompletedView && isAssigned && <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full ${userDone ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>{userDone ? '✓ Listo' : '⚠ Pendiente'}</span>}
               </div>
@@ -853,33 +855,67 @@ const App = () => {
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
               <div className="space-y-3">
-                <h4 className="text-[11px] font-black text-slate-500 uppercase border-b border-slate-200 pb-2">Asignaciones</h4>
-                {[{ f: 'informe_actuacion', fOld: 'informeActuacion', l: 'Informe Actuación', ck: 'actuacion_realizada', ckOld: 'actuacionRealizada' }, { f: 'informe_criminalistico', fOld: 'informeCriminalistico', l: 'Criminalístico', ck: 'criminalistico_realizado', ckOld: 'criminalisticoRealizado' }, { f: 'informe_pericial', fOld: 'informePericial', l: 'Pericial', ck: 'pericial_realizado', ckOld: 'pericialRealizado' }, { f: 'croquis', fOld: 'croquis', l: 'Croquis', ck: 'croquis_realizado', ckOld: 'croquisRealizado' }].map(item => {
-                  const person = n[item.f] || n[item.fOld];
-                  const isMe = person === userProfile.nombre;
-                  const done = isTaskDone(n, { checkKey: item.ck, checkKeyOld: item.ckOld });
-                  return (
-                    <div key={item.f} className={`flex justify-between items-center text-xs py-2 px-3 rounded-lg ${isMe ? (done ? 'bg-emerald-100' : 'bg-red-100') : 'bg-slate-50'}`}>
-                      <span className="text-slate-600 font-bold">{item.l}:</span>
-                      <span className={`font-black ${!person ? 'text-slate-400 italic' : isMe ? (done ? 'text-emerald-600' : 'text-red-600') : 'text-slate-800'}`}>{person || 'Sin asignar'}{isMe && person && <span className="ml-1">{done ? '✓' : '←'}</span>}</span>
+                {n.es_comision ? (
+                  <>
+                    <h4 className="text-[11px] font-black text-amber-600 uppercase border-b border-amber-200 pb-2">🚗 Datos de Comisión</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs py-2 px-3 rounded-lg bg-amber-50">
+                        <span className="text-amber-700 font-bold">Carga SGSP:</span>
+                        <span className="font-black text-amber-800">{n.comision_carga_sgsp || 'No asignado'}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs py-2 px-3 rounded-lg bg-amber-50">
+                        <span className="text-amber-700 font-bold">Chofer:</span>
+                        <span className="font-black text-amber-800">{n.comision_chofer || 'No asignado'}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs py-2 px-3 rounded-lg bg-amber-50">
+                        <span className="text-amber-700 font-bold">Acompañante:</span>
+                        <span className="font-black text-amber-800">{n.comision_acompanante || 'No asignado'}</span>
+                      </div>
                     </div>
-                  );
-                })}
+                  </>
+                ) : (
+                  <>
+                    <h4 className="text-[11px] font-black text-slate-500 uppercase border-b border-slate-200 pb-2">Asignaciones</h4>
+                    {[{ f: 'informe_actuacion', fOld: 'informeActuacion', l: 'Informe Actuación', ck: 'actuacion_realizada', ckOld: 'actuacionRealizada' }, { f: 'informe_criminalistico', fOld: 'informeCriminalistico', l: 'Criminalístico', ck: 'criminalistico_realizado', ckOld: 'criminalisticoRealizado' }, { f: 'informe_pericial', fOld: 'informePericial', l: 'Pericial', ck: 'pericial_realizado', ckOld: 'pericialRealizado' }, { f: 'croquis', fOld: 'croquis', l: 'Croquis', ck: 'croquis_realizado', ckOld: 'croquisRealizado' }].map(item => {
+                      const person = n[item.f] || n[item.fOld];
+                      const isMe = person === userProfile.nombre;
+                      const done = isTaskDone(n, { checkKey: item.ck, checkKeyOld: item.ckOld });
+                      return (
+                        <div key={item.f} className={`flex justify-between items-center text-xs py-2 px-3 rounded-lg ${isMe ? (done ? 'bg-emerald-100' : 'bg-red-100') : 'bg-slate-50'}`}>
+                          <span className="text-slate-600 font-bold">{item.l}:</span>
+                          <span className={`font-black ${!person ? 'text-slate-400 italic' : isMe ? (done ? 'text-emerald-600' : 'text-red-600') : 'text-slate-800'}`}>{person || 'Sin asignar'}{isMe && person && <span className="ml-1">{done ? '✓' : '←'}</span>}</span>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
               </div>
               <div className="space-y-3">
-                <h4 className="text-[11px] font-black text-slate-500 uppercase border-b border-slate-200 pb-2">Checklist ({completed}/{total})</h4>
-                {tasks.length === 0 ? <p className="text-slate-400 text-xs italic py-4 text-center bg-slate-50 rounded-xl">Sin tareas</p> : tasks.map(task => {
-                  const isMe = task.person === userProfile.nombre;
-                  const done = isTaskDone(n, task);
-                  // Admin puede todo, moderator solo sus tareas, user no puede nada
-                  const canToggle = userProfile.role === 'admin' || (userProfile.role === 'moderator' && isMe);
-                  return (
-                    <label key={task.checkKey} className={`flex items-center gap-4 py-2 ${canToggle ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'} group select-none rounded-lg px-3 ${isMe ? 'bg-slate-100' : 'bg-slate-50'}`}>
-                      <div onClick={() => canToggle && handleToggleCheck(n.id, task.checkKey, task.checkKeyOld)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'} ${!canToggle && 'opacity-50'}`}>{done && <span className="text-white text-[10px]">✓</span>}</div>
-                      <span className={`text-xs font-bold ${done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{task.label}{isMe && <span className="ml-1 text-[9px] text-emerald-600">(TÚ)</span>} <span className="text-[9px] text-slate-400">- {task.person}</span></span>
-                    </label>
-                  );
-                })}
+                {n.es_comision ? (
+                  <>
+                    <h4 className="text-[11px] font-black text-emerald-600 uppercase border-b border-emerald-200 pb-2">Estado</h4>
+                    <div className="bg-emerald-100 rounded-xl p-4 text-center">
+                      <span className="text-2xl">✅</span>
+                      <p className="text-emerald-700 font-black text-sm mt-2">Comisión Registrada</p>
+                      <p className="text-emerald-600 text-xs">Solo informativa - Sin tareas pendientes</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h4 className="text-[11px] font-black text-slate-500 uppercase border-b border-slate-200 pb-2">Checklist ({completed}/{total})</h4>
+                    {tasks.length === 0 ? <p className="text-slate-400 text-xs italic py-4 text-center bg-slate-50 rounded-xl">Sin tareas</p> : tasks.map(task => {
+                      const isMe = task.person === userProfile.nombre;
+                      const done = isTaskDone(n, task);
+                      const canToggle = userProfile.role === 'admin' || (userProfile.role === 'moderator' && isMe);
+                      return (
+                        <label key={task.checkKey} className={`flex items-center gap-4 py-2 ${canToggle ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'} group select-none rounded-lg px-3 ${isMe ? 'bg-slate-100' : 'bg-slate-50'}`}>
+                          <div onClick={() => canToggle && handleToggleCheck(n.id, task.checkKey, task.checkKeyOld)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'} ${!canToggle && 'opacity-50'}`}>{done && <span className="text-white text-[10px]">✓</span>}</div>
+                          <span className={`text-xs font-bold ${done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{task.label}{isMe && <span className="ml-1 text-[9px] text-emerald-600">(TÚ)</span>} <span className="text-[9px] text-slate-400">- {task.person}</span></span>
+                        </label>
+                      );
+                    })}
+                  </>
+                )}
               </div>
             </div>
             <div className="pt-6 flex justify-between items-center border-t border-slate-200">
@@ -889,7 +925,7 @@ const App = () => {
               </div>
               {userProfile.role === 'admin' && (
                 <div className="flex gap-2">
-                  <button onClick={() => { setEditingNovedad(n); setOriginalUpdatedAt(n.updated_at); setCurrentView('form'); }} className="text-[10px] bg-slate-200 px-4 py-2 rounded-xl font-black text-slate-700 hover:bg-slate-300 uppercase">Editar</button>
+                  <button onClick={() => { setEditingNovedad(n); setOriginalUpdatedAt(n.updated_at); setIsComision(n.es_comision || false); setCurrentView('form'); }} className="text-[10px] bg-slate-200 px-4 py-2 rounded-xl font-black text-slate-700 hover:bg-slate-300 uppercase">Editar</button>
                   <button onClick={async () => { if(confirm("¿Eliminar?")){ await sb.from('novedades').delete().eq('id', n.id); await addLog('BORRAR', 'Eliminó ' + n.numero_novedad); loadData(); showNotify("Eliminado"); } }} className="text-[10px] bg-red-100 px-4 py-2 rounded-xl font-black text-red-600 hover:bg-red-200 uppercase">Eliminar</button>
                 </div>
               )}
@@ -903,7 +939,7 @@ const App = () => {
   // APP
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={juicios.filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={recordatorios.filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} />
+      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={juicios.filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={recordatorios.filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
@@ -949,7 +985,30 @@ const App = () => {
               const isDuplicate = await checkDuplicate(num, anio, editingNovedad?.id);
               if (isDuplicate) { showNotify("Ya existe esa novedad en " + anio, "error"); setSaving(false); return; }
               
-              const payload = { numero_novedad: num, numero_sgsp: d.get('sgsp'), anio: parseInt(anio), titulo: d.get('titulo') || null, informe_actuacion: d.get('ia') || null, informe_criminalistico: d.get('ic') || null, informe_pericial: d.get('ip') || null, croquis: d.get('cr') || null };
+              const payload = isComision ? {
+                numero_novedad: num, 
+                numero_sgsp: d.get('sgsp'), 
+                anio: parseInt(anio), 
+                titulo: d.get('titulo') || null,
+                es_comision: true,
+                comision_carga_sgsp: d.get('comisionCargaSgsp') || null,
+                comision_chofer: d.get('comisionChofer') || null,
+                comision_acompanante: d.get('comisionAcompanante') || null,
+                informe_actuacion: null,
+                informe_criminalistico: null,
+                informe_pericial: null,
+                croquis: null
+              } : { 
+                numero_novedad: num, 
+                numero_sgsp: d.get('sgsp'), 
+                anio: parseInt(anio), 
+                titulo: d.get('titulo') || null, 
+                es_comision: false,
+                informe_actuacion: d.get('ia') || null, 
+                informe_criminalistico: d.get('ic') || null, 
+                informe_pericial: d.get('ip') || null, 
+                croquis: d.get('cr') || null 
+              };
               
               try {
                 if (editingNovedad) {
@@ -968,12 +1027,16 @@ const App = () => {
                   if (error) { showNotify("Error al actualizar: " + error.message, "error"); setSaving(false); return; }
                   await addLog('EDITAR', 'Editó ' + num); showNotify("Actualizado");
                 } else {
-                  const { error } = await sb.from('novedades').insert([{ ...payload, creado_por: userProfile.nombre, actuacion_realizada: false, criminalistico_realizado: false, pericial_realizado: false, croquis_realizado: false }]);
+                  const insertPayload = isComision ? 
+                    { ...payload, creado_por: userProfile.nombre, actuacion_realizada: true, criminalistico_realizado: true, pericial_realizado: true, croquis_realizado: true } :
+                    { ...payload, creado_por: userProfile.nombre, actuacion_realizada: false, criminalistico_realizado: false, pericial_realizado: false, croquis_realizado: false };
+                  const { error } = await sb.from('novedades').insert([insertPayload]);
                   if (error) { showNotify("Error al crear: " + error.message, "error"); setSaving(false); return; }
                   await addLog('CREAR', 'Creó ' + num); showNotify("Guardado");
                 }
                 setEditingNovedad(null);
                 setOriginalUpdatedAt(null);
+                setIsComision(false);
                 setCurrentView('list');
                 loadData();
               } catch (err) {
@@ -987,16 +1050,52 @@ const App = () => {
                 <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">N° SGSP *</label><input name="sgsp" defaultValue={editingNovedad?.numero_sgsp} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="SGSP-XXX" /></div>
               </div>
               <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Título</label><input name="titulo" defaultValue={editingNovedad?.titulo} className="w-full p-4 bg-emerald-50 border border-emerald-200 rounded-2xl font-bold text-emerald-700" placeholder="Descripción breve" /></div>
-              <div className="space-y-6 pt-4">
-                <h3 className="text-[11px] font-black text-slate-400 uppercase border-b border-slate-100 pb-3">Asignaciones</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {[{ n: 'ia', f: 'informe_actuacion', fOld: 'informeActuacion', l: 'Informe Actuación' }, { n: 'ic', f: 'informe_criminalistico', fOld: 'informeCriminalistico', l: 'Criminalístico' }, { n: 'ip', f: 'informe_pericial', fOld: 'informePericial', l: 'Pericial' }, { n: 'cr', f: 'croquis', fOld: 'croquis', l: 'Croquis' }].map(item => (
-                    <div key={item.n} className="space-y-1.5"><label className="text-[10px] font-black text-slate-500 uppercase ml-1">{item.l}</label><select name={item.n} defaultValue={editingNovedad ? (editingNovedad[item.f] || editingNovedad[item.fOld]) : ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm cursor-pointer"><option value="">-- Sin asignar --</option>{profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}</select></div>
-                  ))}
-                </div>
+              
+              {/* Checkbox Comisión */}
+              <div className="flex items-center gap-3 p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl">
+                <input type="checkbox" id="esComision" name="esComision" checked={isComision} onChange={(e) => setIsComision(e.target.checked)} className="w-5 h-5 rounded accent-amber-500" />
+                <label htmlFor="esComision" className="font-bold text-amber-800 cursor-pointer">🚗 Es Comisión (solo informativa, pasa directo a completada)</label>
               </div>
+              
+              {!isComision ? (
+                <div className="space-y-6 pt-4">
+                  <h3 className="text-[11px] font-black text-slate-400 uppercase border-b border-slate-100 pb-3">Asignaciones</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {[{ n: 'ia', f: 'informe_actuacion', fOld: 'informeActuacion', l: 'Informe Actuación' }, { n: 'ic', f: 'informe_criminalistico', fOld: 'informeCriminalistico', l: 'Criminalístico' }, { n: 'ip', f: 'informe_pericial', fOld: 'informePericial', l: 'Pericial' }, { n: 'cr', f: 'croquis', fOld: 'croquis', l: 'Croquis' }].map(item => (
+                      <div key={item.n} className="space-y-1.5"><label className="text-[10px] font-black text-slate-500 uppercase ml-1">{item.l}</label><select name={item.n} defaultValue={editingNovedad ? (editingNovedad[item.f] || editingNovedad[item.fOld]) : ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm cursor-pointer"><option value="">-- Sin asignar --</option>{profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}</select></div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6 pt-4">
+                  <h3 className="text-[11px] font-black text-amber-600 uppercase border-b border-amber-200 pb-3">🚗 Datos de Comisión</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-amber-600 uppercase ml-1">Carga SGSP</label>
+                      <select name="comisionCargaSgsp" defaultValue={editingNovedad?.comision_carga_sgsp || ''} className="w-full p-4 bg-amber-50 border border-amber-200 rounded-2xl font-bold text-sm cursor-pointer">
+                        <option value="">-- Seleccionar --</option>
+                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-amber-600 uppercase ml-1">Chofer</label>
+                      <select name="comisionChofer" defaultValue={editingNovedad?.comision_chofer || ''} className="w-full p-4 bg-amber-50 border border-amber-200 rounded-2xl font-bold text-sm cursor-pointer">
+                        <option value="">-- Seleccionar --</option>
+                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-amber-600 uppercase ml-1">Acompañante</label>
+                      <select name="comisionAcompanante" defaultValue={editingNovedad?.comision_acompanante || ''} className="w-full p-4 bg-amber-50 border border-amber-200 rounded-2xl font-bold text-sm cursor-pointer">
+                        <option value="">-- Seleccionar --</option>
+                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="flex gap-4 pt-10">
-                <button type="button" onClick={() => { setCurrentView('list'); setOriginalUpdatedAt(null); }} disabled={saving} className="flex-1 p-5 bg-slate-200 rounded-[1.5rem] font-black text-slate-600 uppercase text-xs disabled:opacity-50">Cancelar</button>
+                <button type="button" onClick={() => { setCurrentView('list'); setOriginalUpdatedAt(null); setIsComision(false); }} disabled={saving} className="flex-1 p-5 bg-slate-200 rounded-[1.5rem] font-black text-slate-600 uppercase text-xs disabled:opacity-50">Cancelar</button>
                 <button disabled={saving} className="flex-1 p-5 bg-emerald-500 text-white rounded-[1.5rem] font-black uppercase text-xs shadow-xl disabled:opacity-50 flex items-center justify-center gap-2">
                   {saving ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Guardando...</> : 'Guardar'}
                 </button>
