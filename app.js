@@ -2770,13 +2770,22 @@ const App = () => {
                     return isAssigned && !areUserTasksComplete(n, assignments);
                   });
                   
+                  // Comisiones donde participó el usuario
+                  const userComisiones = novedades.filter(n => 
+                    n.es_comision && (
+                      n.comision_carga_sgsp === selectedAuditUser.nombre ||
+                      n.comision_chofer === selectedAuditUser.nombre ||
+                      n.comision_acompanante === selectedAuditUser.nombre
+                    )
+                  );
+                  
                   const stats = getUserDetailedStats(selectedAuditUser);
                   const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
 
                   return (
                     <>
                       {/* Estadísticas */}
-                      <div className="grid grid-cols-4 gap-4">
+                      <div className="grid grid-cols-5 gap-4">
                         <div className="bg-white p-4 rounded-2xl text-center shadow-md border border-slate-200">
                           <div className="text-3xl font-black text-slate-800">{stats.total}</div>
                           <div className="text-[9px] text-slate-500 font-bold uppercase">Asignadas</div>
@@ -2788,6 +2797,10 @@ const App = () => {
                         <div className="bg-red-50 p-4 rounded-2xl text-center shadow-md border border-red-200">
                           <div className="text-3xl font-black text-red-600">{stats.pending}</div>
                           <div className="text-[9px] text-red-500 font-bold uppercase">Pendientes</div>
+                        </div>
+                        <div className="bg-orange-50 p-4 rounded-2xl text-center shadow-md border border-orange-200">
+                          <div className="text-3xl font-black text-orange-700">{stats.totalComisiones}</div>
+                          <div className="text-[9px] text-orange-600 font-bold uppercase">Comisiones</div>
                         </div>
                         <div className="bg-blue-50 p-4 rounded-2xl text-center shadow-md border border-blue-200">
                           <div className="text-3xl font-black text-blue-700">{pct}%</div>
@@ -2816,6 +2829,25 @@ const App = () => {
                             <div className="text-lg font-black"><span className="text-emerald-600">{stats.croquis.c}</span><span className="text-slate-400">/</span><span className="text-slate-700">{stats.croquis.a}</span></div>
                           </div>
                         </div>
+                        {stats.totalComisiones > 0 && (
+                          <div className="mt-4 pt-4 border-t border-slate-200">
+                            <h5 className="text-xs font-black text-orange-600 mb-3 uppercase">🚗 Comisiones ({stats.totalComisiones})</h5>
+                            <div className="grid grid-cols-3 gap-4">
+                              <div className="bg-orange-50 p-4 rounded-xl text-center">
+                                <div className="text-xs font-bold text-orange-600 mb-1">Carga SGSP</div>
+                                <div className="text-lg font-black text-orange-700">{stats.comisiones.cargaSgsp}</div>
+                              </div>
+                              <div className="bg-orange-50 p-4 rounded-xl text-center">
+                                <div className="text-xs font-bold text-orange-600 mb-1">Chofer</div>
+                                <div className="text-lg font-black text-orange-700">{stats.comisiones.chofer}</div>
+                              </div>
+                              <div className="bg-orange-50 p-4 rounded-xl text-center">
+                                <div className="text-xs font-bold text-orange-600 mb-1">Acompañante</div>
+                                <div className="text-lg font-black text-orange-700">{stats.comisiones.acompanante}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Lista de pendientes */}
@@ -2855,6 +2887,39 @@ const App = () => {
                           </div>
                         )}
                       </div>
+
+                      {/* Lista de comisiones */}
+                      {userComisiones.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-black text-orange-600 mb-4 uppercase">🚗 Comisiones ({userComisiones.length})</h4>
+                          <div className="space-y-3">
+                            {userComisiones.map(n => {
+                              const roles = [];
+                              if (n.comision_carga_sgsp === selectedAuditUser.nombre) roles.push('Carga SGSP');
+                              if (n.comision_chofer === selectedAuditUser.nombre) roles.push('Chofer');
+                              if (n.comision_acompanante === selectedAuditUser.nombre) roles.push('Acompañante');
+                              return (
+                                <div key={n.id} className="bg-orange-50 rounded-xl p-4 shadow-md border border-orange-200">
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <h5 className="font-black text-orange-800">Novedad {n.numero_novedad}</h5>
+                                      <p className="text-xs text-orange-600">SGSP: {n.numero_sgsp} {n.titulo && `• ${n.titulo}`}</p>
+                                    </div>
+                                    <span className="text-xs bg-orange-200 px-2 py-1 rounded font-bold text-orange-700">{n.anio}</span>
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {roles.map(r => (
+                                      <span key={r} className="text-xs px-3 py-1 rounded-full font-bold bg-orange-200 text-orange-700">
+                                        {r} ✓
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </>
                   );
                 })()}
