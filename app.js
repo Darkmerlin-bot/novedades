@@ -601,14 +601,21 @@ const App = () => {
 
   const getAssignedTasks = (n) => {
     const tasks = [];
-    if (n.informe_actuacion || n.informeActuacion) tasks.push({ field: 'informe_actuacion', checkKey: 'actuacion_realizada', checkKeyOld: 'actuacionRealizada', label: 'Informe Actuación', person: n.informe_actuacion || n.informeActuacion });
-    if (n.informe_criminalistico || n.informeCriminalistico) tasks.push({ field: 'informe_criminalistico', checkKey: 'criminalistico_realizado', checkKeyOld: 'criminalisticoRealizado', label: 'Criminalístico', person: n.informe_criminalistico || n.informeCriminalistico });
-    if (n.informe_pericial || n.informePericial) tasks.push({ field: 'informe_pericial', checkKey: 'pericial_realizado', checkKeyOld: 'pericialRealizado', label: 'Pericial', person: n.informe_pericial || n.informePericial });
-    if (n.croquis) tasks.push({ field: 'croquis', checkKey: 'croquis_realizado', checkKeyOld: 'croquisRealizado', label: 'Croquis', person: n.croquis });
+    if (n.es_comision) {
+      // Las comisiones tienen tareas especiales (siempre completadas)
+      if (n.comision_carga_sgsp) tasks.push({ field: 'comision_carga_sgsp', checkKey: 'comision_done', label: 'Carga SGSP', person: n.comision_carga_sgsp, isComision: true });
+      if (n.comision_chofer) tasks.push({ field: 'comision_chofer', checkKey: 'comision_done', label: 'Chofer', person: n.comision_chofer, isComision: true });
+      if (n.comision_acompanante) tasks.push({ field: 'comision_acompanante', checkKey: 'comision_done', label: 'Acompañante', person: n.comision_acompanante, isComision: true });
+    } else {
+      if (n.informe_actuacion || n.informeActuacion) tasks.push({ field: 'informe_actuacion', checkKey: 'actuacion_realizada', checkKeyOld: 'actuacionRealizada', label: 'Informe Actuación', person: n.informe_actuacion || n.informeActuacion });
+      if (n.informe_criminalistico || n.informeCriminalistico) tasks.push({ field: 'informe_criminalistico', checkKey: 'criminalistico_realizado', checkKeyOld: 'criminalisticoRealizado', label: 'Criminalístico', person: n.informe_criminalistico || n.informeCriminalistico });
+      if (n.informe_pericial || n.informePericial) tasks.push({ field: 'informe_pericial', checkKey: 'pericial_realizado', checkKeyOld: 'pericialRealizado', label: 'Pericial', person: n.informe_pericial || n.informePericial });
+      if (n.croquis) tasks.push({ field: 'croquis', checkKey: 'croquis_realizado', checkKeyOld: 'croquisRealizado', label: 'Croquis', person: n.croquis });
+    }
     return tasks;
   };
 
-  const isTaskDone = (n, task) => n[task.checkKey] || (n.checks && n.checks[task.checkKeyOld]);
+  const isTaskDone = (n, task) => task.isComision ? true : (n[task.checkKey] || (n.checks && n.checks[task.checkKeyOld]));
 
   const getTaskCounts = (n) => {
     const tasks = getAssignedTasks(n);
@@ -619,14 +626,21 @@ const App = () => {
     if (!profile) return { isAssigned: false, assignments: [] };
     const name = profile.nombre;
     const assignments = [];
-    if ((n.informe_actuacion || n.informeActuacion) === name) assignments.push({ checkKey: 'actuacion_realizada', checkKeyOld: 'actuacionRealizada', label: 'Informe Actuación' });
-    if ((n.informe_criminalistico || n.informeCriminalistico) === name) assignments.push({ checkKey: 'criminalistico_realizado', checkKeyOld: 'criminalisticoRealizado', label: 'Criminalístico' });
-    if ((n.informe_pericial || n.informePericial) === name) assignments.push({ checkKey: 'pericial_realizado', checkKeyOld: 'pericialRealizado', label: 'Pericial' });
-    if (n.croquis === name) assignments.push({ checkKey: 'croquis_realizado', checkKeyOld: 'croquisRealizado', label: 'Croquis' });
+    if (n.es_comision) {
+      // Asignaciones de comisión (siempre completadas)
+      if (n.comision_carga_sgsp === name) assignments.push({ checkKey: 'comision_done', label: 'Carga SGSP', isComision: true });
+      if (n.comision_chofer === name) assignments.push({ checkKey: 'comision_done', label: 'Chofer', isComision: true });
+      if (n.comision_acompanante === name) assignments.push({ checkKey: 'comision_done', label: 'Acompañante', isComision: true });
+    } else {
+      if ((n.informe_actuacion || n.informeActuacion) === name) assignments.push({ checkKey: 'actuacion_realizada', checkKeyOld: 'actuacionRealizada', label: 'Informe Actuación' });
+      if ((n.informe_criminalistico || n.informeCriminalistico) === name) assignments.push({ checkKey: 'criminalistico_realizado', checkKeyOld: 'criminalisticoRealizado', label: 'Criminalístico' });
+      if ((n.informe_pericial || n.informePericial) === name) assignments.push({ checkKey: 'pericial_realizado', checkKeyOld: 'pericialRealizado', label: 'Pericial' });
+      if (n.croquis === name) assignments.push({ checkKey: 'croquis_realizado', checkKeyOld: 'croquisRealizado', label: 'Croquis' });
+    }
     return { isAssigned: assignments.length > 0, assignments };
   };
 
-  const areUserTasksComplete = (n, assignments) => assignments.length > 0 && assignments.every(a => n[a.checkKey] || (n.checks && n.checks[a.checkKeyOld]));
+  const areUserTasksComplete = (n, assignments) => assignments.length > 0 && assignments.every(a => a.isComision ? true : (n[a.checkKey] || (n.checks && n.checks[a.checkKeyOld])));
   const isNovedadComplete = (n) => { if (n.es_comision) return true; const { completed, total } = getTaskCounts(n); return total > 0 && completed === total; };
   const countUserPendingTasks = (profile, list) => list.filter(n => { if (n.es_comision) return false; const { isAssigned, assignments } = getUserAssignment(n, profile); return isAssigned && !areUserTasksComplete(n, assignments); }).length;
 
@@ -730,7 +744,10 @@ const App = () => {
     const total = stats.informeActuacion.a + stats.informeCriminalistico.a + stats.informePericial.a + stats.croquis.a;
     const done = stats.informeActuacion.c + stats.informeCriminalistico.c + stats.informePericial.c + stats.croquis.c;
     const totalComisiones = stats.comisiones.cargaSgsp + stats.comisiones.chofer + stats.comisiones.acompanante;
-    return { ...stats, total, done, pending: total - done, totalComisiones };
+    // Las comisiones suman al total de tareas y se consideran completadas
+    const totalConComisiones = total + totalComisiones;
+    const doneConComisiones = done + totalComisiones;
+    return { ...stats, total: totalConComisiones, done: doneConComisiones, pending: totalConComisiones - doneConComisiones, totalComisiones };
   };
   
   // Obtener años disponibles para el filtro
@@ -815,7 +832,7 @@ const App = () => {
       <div className={`${bg} rounded-3xl shadow-md border ${border} ${left} overflow-hidden transition-all hover:shadow-xl`}>
         <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setExpandedId(isEx ? null : n.id)}>
           <div className="flex items-center gap-5">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${n.es_comision ? 'bg-amber-400 text-white' : completed === total && total > 0 ? 'bg-emerald-500 text-white' : total === 0 ? 'bg-slate-300 text-slate-500' : 'bg-amber-400 text-white'}`}>{n.es_comision ? '🚗' : total > 0 ? `${completed}/${total}` : 'N/A'}</div>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${n.es_comision ? 'bg-orange-500 text-white' : completed === total && total > 0 ? 'bg-emerald-500 text-white' : total === 0 ? 'bg-slate-300 text-slate-500' : 'bg-amber-400 text-white'}`}>{total > 0 ? `${completed}/${total}` : 'N/A'}</div>
             <div>
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="font-black text-slate-800 text-lg">{n.numero_novedad}</span>
@@ -865,20 +882,29 @@ const App = () => {
               <div className="space-y-3">
                 {n.es_comision ? (
                   <>
-                    <h4 className="text-[11px] font-black text-amber-600 uppercase border-b border-amber-200 pb-2">🚗 Datos de Comisión</h4>
+                    <h4 className="text-[11px] font-black text-amber-600 uppercase border-b border-amber-200 pb-2">🚗 Participantes de Comisión</h4>
                     <div className="space-y-2">
-                      <div className="flex justify-between items-center text-xs py-2 px-3 rounded-lg bg-amber-50">
-                        <span className="text-amber-700 font-bold">Carga SGSP:</span>
-                        <span className="font-black text-amber-800">{n.comision_carga_sgsp || 'No asignado'}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs py-2 px-3 rounded-lg bg-amber-50">
-                        <span className="text-amber-700 font-bold">Chofer:</span>
-                        <span className="font-black text-amber-800">{n.comision_chofer || 'No asignado'}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs py-2 px-3 rounded-lg bg-amber-50">
-                        <span className="text-amber-700 font-bold">Acompañante:</span>
-                        <span className="font-black text-amber-800">{n.comision_acompanante || 'No asignado'}</span>
-                      </div>
+                      {n.comision_carga_sgsp && (
+                        <div className={`flex justify-between items-center text-xs py-2 px-3 rounded-lg ${n.comision_carga_sgsp === userProfile.nombre ? 'bg-emerald-100' : 'bg-amber-50'}`}>
+                          <span className="text-amber-700 font-bold">Carga SGSP:</span>
+                          <span className="font-black text-emerald-700">{n.comision_carga_sgsp} ✓</span>
+                        </div>
+                      )}
+                      {n.comision_chofer && (
+                        <div className={`flex justify-between items-center text-xs py-2 px-3 rounded-lg ${n.comision_chofer === userProfile.nombre ? 'bg-emerald-100' : 'bg-amber-50'}`}>
+                          <span className="text-amber-700 font-bold">Chofer:</span>
+                          <span className="font-black text-emerald-700">{n.comision_chofer} ✓</span>
+                        </div>
+                      )}
+                      {n.comision_acompanante && (
+                        <div className={`flex justify-between items-center text-xs py-2 px-3 rounded-lg ${n.comision_acompanante === userProfile.nombre ? 'bg-emerald-100' : 'bg-amber-50'}`}>
+                          <span className="text-amber-700 font-bold">Acompañante:</span>
+                          <span className="font-black text-emerald-700">{n.comision_acompanante} ✓</span>
+                        </div>
+                      )}
+                      {!n.comision_carga_sgsp && !n.comision_chofer && !n.comision_acompanante && (
+                        <p className="text-slate-400 text-xs italic py-2 text-center">Sin participantes asignados</p>
+                      )}
                     </div>
                   </>
                 ) : (
@@ -901,11 +927,15 @@ const App = () => {
               <div className="space-y-3">
                 {n.es_comision ? (
                   <>
-                    <h4 className="text-[11px] font-black text-emerald-600 uppercase border-b border-emerald-200 pb-2">Estado</h4>
-                    <div className="bg-emerald-100 rounded-xl p-4 text-center">
-                      <span className="text-2xl">✅</span>
-                      <p className="text-emerald-700 font-black text-sm mt-2">Comisión Registrada</p>
-                      <p className="text-emerald-600 text-xs">Solo informativa - Sin tareas pendientes</p>
+                    <h4 className="text-[11px] font-black text-emerald-600 uppercase border-b border-emerald-200 pb-2">Tareas ({completed}/{total})</h4>
+                    <div className="space-y-2">
+                      {tasks.map(task => (
+                        <div key={task.field} className={`flex items-center gap-3 py-2 px-3 rounded-lg ${task.person === userProfile.nombre ? 'bg-emerald-100' : 'bg-emerald-50'}`}>
+                          <div className="w-6 h-6 rounded-lg bg-emerald-500 flex items-center justify-center"><span className="text-white text-[10px]">✓</span></div>
+                          <span className="text-xs font-bold text-emerald-700">{task.label} - {task.person}</span>
+                        </div>
+                      ))}
+                      {tasks.length === 0 && <p className="text-slate-400 text-xs italic py-4 text-center bg-slate-50 rounded-xl">Sin tareas asignadas</p>}
                     </div>
                   </>
                 ) : (
