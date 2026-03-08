@@ -220,6 +220,7 @@ const App = () => {
   const [currentView, setCurrentView] = useState('list');
   const [editingNovedad, setEditingNovedad] = useState(null);
   const [isComision, setIsComision] = useState(false);
+  const [isEventoSocial, setIsEventoSocial] = useState(false);
   const [notification, setNotification] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [showPassModal, setShowPassModal] = useState(false);
@@ -606,6 +607,12 @@ const App = () => {
       if (n.comision_carga_sgsp) tasks.push({ field: 'comision_carga_sgsp', checkKey: 'comision_done', label: 'Carga SGSP', person: n.comision_carga_sgsp, isComision: true });
       if (n.comision_chofer) tasks.push({ field: 'comision_chofer', checkKey: 'comision_done', label: 'Chofer', person: n.comision_chofer, isComision: true });
       if (n.comision_acompanante) tasks.push({ field: 'comision_acompanante', checkKey: 'comision_done', label: 'Acompañante', person: n.comision_acompanante, isComision: true });
+    } else if (n.es_evento_social) {
+      // Los eventos sociales tienen tareas especiales (siempre completadas)
+      if (n.evento_fotografo) tasks.push({ field: 'evento_fotografo', checkKey: 'evento_done', label: 'Fotógrafo', person: n.evento_fotografo, isEventoSocial: true });
+      if (n.evento_acompanante1) tasks.push({ field: 'evento_acompanante1', checkKey: 'evento_done', label: 'Acompañante', person: n.evento_acompanante1, isEventoSocial: true });
+      if (n.evento_acompanante2) tasks.push({ field: 'evento_acompanante2', checkKey: 'evento_done', label: 'Acompañante', person: n.evento_acompanante2, isEventoSocial: true });
+      if (n.evento_acompanante3) tasks.push({ field: 'evento_acompanante3', checkKey: 'evento_done', label: 'Acompañante', person: n.evento_acompanante3, isEventoSocial: true });
     } else {
       if (n.informe_actuacion || n.informeActuacion) tasks.push({ field: 'informe_actuacion', checkKey: 'actuacion_realizada', checkKeyOld: 'actuacionRealizada', label: 'Informe Actuación', person: n.informe_actuacion || n.informeActuacion });
       if (n.informe_criminalistico || n.informeCriminalistico) tasks.push({ field: 'informe_criminalistico', checkKey: 'criminalistico_realizado', checkKeyOld: 'criminalisticoRealizado', label: 'Criminalístico', person: n.informe_criminalistico || n.informeCriminalistico });
@@ -615,7 +622,7 @@ const App = () => {
     return tasks;
   };
 
-  const isTaskDone = (n, task) => task.isComision ? true : (n[task.checkKey] || (n.checks && n.checks[task.checkKeyOld]));
+  const isTaskDone = (n, task) => (task.isComision || task.isEventoSocial) ? true : (n[task.checkKey] || (n.checks && n.checks[task.checkKeyOld]));
 
   const getTaskCounts = (n) => {
     const tasks = getAssignedTasks(n);
@@ -631,6 +638,12 @@ const App = () => {
       if (n.comision_carga_sgsp === name) assignments.push({ checkKey: 'comision_done', label: 'Carga SGSP', isComision: true });
       if (n.comision_chofer === name) assignments.push({ checkKey: 'comision_done', label: 'Chofer', isComision: true });
       if (n.comision_acompanante === name) assignments.push({ checkKey: 'comision_done', label: 'Acompañante', isComision: true });
+    } else if (n.es_evento_social) {
+      // Asignaciones de evento social (siempre completadas)
+      if (n.evento_fotografo === name) assignments.push({ checkKey: 'evento_done', label: 'Fotógrafo', isEventoSocial: true });
+      if (n.evento_acompanante1 === name) assignments.push({ checkKey: 'evento_done', label: 'Acompañante', isEventoSocial: true });
+      if (n.evento_acompanante2 === name) assignments.push({ checkKey: 'evento_done', label: 'Acompañante', isEventoSocial: true });
+      if (n.evento_acompanante3 === name) assignments.push({ checkKey: 'evento_done', label: 'Acompañante', isEventoSocial: true });
     } else {
       if ((n.informe_actuacion || n.informeActuacion) === name) assignments.push({ checkKey: 'actuacion_realizada', checkKeyOld: 'actuacionRealizada', label: 'Informe Actuación' });
       if ((n.informe_criminalistico || n.informeCriminalistico) === name) assignments.push({ checkKey: 'criminalistico_realizado', checkKeyOld: 'criminalisticoRealizado', label: 'Criminalístico' });
@@ -640,9 +653,9 @@ const App = () => {
     return { isAssigned: assignments.length > 0, assignments };
   };
 
-  const areUserTasksComplete = (n, assignments) => assignments.length > 0 && assignments.every(a => a.isComision ? true : (n[a.checkKey] || (n.checks && n.checks[a.checkKeyOld])));
-  const isNovedadComplete = (n) => { if (n.es_comision) return true; const { completed, total } = getTaskCounts(n); return total > 0 && completed === total; };
-  const countUserPendingTasks = (profile, list) => list.filter(n => { if (n.es_comision) return false; const { isAssigned, assignments } = getUserAssignment(n, profile); return isAssigned && !areUserTasksComplete(n, assignments); }).length;
+  const areUserTasksComplete = (n, assignments) => assignments.length > 0 && assignments.every(a => (a.isComision || a.isEventoSocial) ? true : (n[a.checkKey] || (n.checks && n.checks[a.checkKeyOld])));
+  const isNovedadComplete = (n) => { if (n.es_comision || n.es_evento_social) return true; const { completed, total } = getTaskCounts(n); return total > 0 && completed === total; };
+  const countUserPendingTasks = (profile, list) => list.filter(n => { if (n.es_comision || n.es_evento_social) return false; const { isAssigned, assignments } = getUserAssignment(n, profile); return isAssigned && !areUserTasksComplete(n, assignments); }).length;
 
   const filterNovedades = (list) => {
     let f = list;
@@ -716,7 +729,7 @@ const App = () => {
   };
 
   const getUserDetailedStats = (profile, filterYear = 'todos') => {
-    const stats = { informeActuacion: { a: 0, c: 0 }, informeCriminalistico: { a: 0, c: 0 }, informePericial: { a: 0, c: 0 }, croquis: { a: 0, c: 0 }, juicios: 0, comisiones: { cargaSgsp: 0, chofer: 0, acompanante: 0 } };
+    const stats = { informeActuacion: { a: 0, c: 0 }, informeCriminalistico: { a: 0, c: 0 }, informePericial: { a: 0, c: 0 }, croquis: { a: 0, c: 0 }, juicios: 0, comisiones: { cargaSgsp: 0, chofer: 0, acompanante: 0 }, eventos: { fotografo: 0, acompanante: 0 } };
     
     // Filtrar novedades por año
     const filteredNovedades = filterYear === 'todos' ? novedades : novedades.filter(n => n.anio?.toString() === filterYear);
@@ -732,6 +745,13 @@ const App = () => {
         if (n.comision_chofer === profile.nombre) stats.comisiones.chofer++;
         if (n.comision_acompanante === profile.nombre) stats.comisiones.acompanante++;
       }
+      // Eventos sociales
+      if (n.es_evento_social) {
+        if (n.evento_fotografo === profile.nombre) stats.eventos.fotografo++;
+        if (n.evento_acompanante1 === profile.nombre) stats.eventos.acompanante++;
+        if (n.evento_acompanante2 === profile.nombre) stats.eventos.acompanante++;
+        if (n.evento_acompanante3 === profile.nombre) stats.eventos.acompanante++;
+      }
     });
     
     // Contar juicios donde el usuario está citado
@@ -743,11 +763,12 @@ const App = () => {
     
     const total = stats.informeActuacion.a + stats.informeCriminalistico.a + stats.informePericial.a + stats.croquis.a;
     const done = stats.informeActuacion.c + stats.informeCriminalistico.c + stats.informePericial.c + stats.croquis.c;
-    const totalComisiones = stats.comisiones.cargaSgsp + stats.comisiones.chofer + stats.comisiones.acompanante;
-    // Las comisiones suman al total de tareas y se consideran completadas
-    const totalConComisiones = total + totalComisiones;
-    const doneConComisiones = done + totalComisiones;
-    return { ...stats, total: totalConComisiones, done: doneConComisiones, pending: totalConComisiones - doneConComisiones, totalComisiones };
+    const totalComisiones = stats.comisiones.chofer + stats.comisiones.acompanante; // cargaSgsp no suma, solo se registra
+    const totalEventos = stats.eventos.fotografo + stats.eventos.acompanante;
+    // Las comisiones y eventos suman al total de tareas y se consideran completadas
+    const totalConExtras = total + totalComisiones + totalEventos;
+    const doneConExtras = done + totalComisiones + totalEventos;
+    return { ...stats, total: totalConExtras, done: doneConExtras, pending: totalConExtras - doneConExtras, totalComisiones, totalEventos };
   };
   
   // Obtener años disponibles para el filtro
@@ -832,12 +853,13 @@ const App = () => {
       <div className={`${bg} rounded-3xl shadow-md border ${border} ${left} overflow-hidden transition-all hover:shadow-xl`}>
         <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setExpandedId(isEx ? null : n.id)}>
           <div className="flex items-center gap-5">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${n.es_comision ? 'bg-orange-500 text-white' : completed === total && total > 0 ? 'bg-emerald-500 text-white' : total === 0 ? 'bg-slate-300 text-slate-500' : 'bg-amber-400 text-white'}`}>{total > 0 ? `${completed}/${total}` : 'N/A'}</div>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${n.es_comision ? 'bg-orange-500 text-white' : n.es_evento_social ? 'bg-pink-500 text-white' : completed === total && total > 0 ? 'bg-emerald-500 text-white' : total === 0 ? 'bg-slate-300 text-slate-500' : 'bg-amber-400 text-white'}`}>{total > 0 ? `${completed}/${total}` : 'N/A'}</div>
             <div>
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="font-black text-slate-800 text-lg">{n.numero_novedad}</span>
                 {n.anio && <span className="text-[10px] font-black text-slate-500 bg-slate-200 px-2 py-1 rounded-full">{n.anio}</span>}
                 {n.es_comision && <span className="text-[10px] font-black text-amber-800 bg-amber-200 px-2 py-1 rounded-full">🚗 COMISIÓN</span>}
+                {n.es_evento_social && <span className="text-[10px] font-black text-pink-800 bg-pink-200 px-2 py-1 rounded-full">🎉 EVENTO SOCIAL</span>}
                 {n.titulo && <span className="text-sm font-bold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">{n.titulo}</span>}
                 {!isCompletedView && isAssigned && <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full ${userDone ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>{userDone ? '✓ Listo' : '⚠ Pendiente'}</span>}
               </div>
@@ -963,7 +985,7 @@ const App = () => {
               </div>
               {userProfile.role === 'admin' && (
                 <div className="flex gap-2">
-                  <button onClick={() => { setEditingNovedad(n); setOriginalUpdatedAt(n.updated_at); setIsComision(n.es_comision || false); setCurrentView('form'); }} className="text-[10px] bg-slate-200 px-4 py-2 rounded-xl font-black text-slate-700 hover:bg-slate-300 uppercase">Editar</button>
+                  <button onClick={() => { setEditingNovedad(n); setOriginalUpdatedAt(n.updated_at); setIsComision(n.es_comision || false); setIsEventoSocial(n.es_evento_social || false); setCurrentView('form'); }} className="text-[10px] bg-slate-200 px-4 py-2 rounded-xl font-black text-slate-700 hover:bg-slate-300 uppercase">Editar</button>
                   <button onClick={async () => { if(confirm("¿Eliminar?")){ await sb.from('novedades').delete().eq('id', n.id); await addLog('BORRAR', 'Eliminó ' + n.numero_novedad); loadData(); showNotify("Eliminado"); } }} className="text-[10px] bg-red-100 px-4 py-2 rounded-xl font-black text-red-600 hover:bg-red-200 uppercase">Eliminar</button>
                 </div>
               )}
@@ -977,7 +999,7 @@ const App = () => {
   // APP
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={juicios.filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={recordatorios.filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} />
+      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={juicios.filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={recordatorios.filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
@@ -1029,19 +1051,43 @@ const App = () => {
                 anio: parseInt(anio), 
                 titulo: d.get('titulo') || null,
                 es_comision: true,
+                es_evento_social: false,
                 comision_carga_sgsp: d.get('comisionCargaSgsp') || null,
                 comision_chofer: d.get('comisionChofer') || null,
                 comision_acompanante: d.get('comisionAcompanante') || null,
                 informe_actuacion: null,
                 informe_criminalistico: null,
                 informe_pericial: null,
-                croquis: null
+                croquis: null,
+                evento_fotografo: null,
+                evento_acompanante1: null,
+                evento_acompanante2: null,
+                evento_acompanante3: null
+              } : isEventoSocial ? {
+                numero_novedad: num, 
+                numero_sgsp: d.get('sgsp') || null, 
+                anio: parseInt(anio), 
+                titulo: d.get('titulo') || null,
+                es_comision: false,
+                es_evento_social: true,
+                evento_fotografo: d.get('eventoFotografo') || null,
+                evento_acompanante1: d.get('eventoAcompanante1') || null,
+                evento_acompanante2: d.get('eventoAcompanante2') || null,
+                evento_acompanante3: d.get('eventoAcompanante3') || null,
+                informe_actuacion: null,
+                informe_criminalistico: null,
+                informe_pericial: null,
+                croquis: null,
+                comision_carga_sgsp: null,
+                comision_chofer: null,
+                comision_acompanante: null
               } : { 
                 numero_novedad: num, 
                 numero_sgsp: d.get('sgsp'), 
                 anio: parseInt(anio), 
                 titulo: d.get('titulo') || null, 
                 es_comision: false,
+                es_evento_social: false,
                 informe_actuacion: d.get('ia') || null, 
                 informe_criminalistico: d.get('ic') || null, 
                 informe_pericial: d.get('ip') || null, 
@@ -1065,7 +1111,7 @@ const App = () => {
                   if (error) { showNotify("Error al actualizar: " + error.message, "error"); setSaving(false); return; }
                   await addLog('EDITAR', 'Editó ' + num); showNotify("Actualizado");
                 } else {
-                  const insertPayload = isComision ? 
+                  const insertPayload = (isComision || isEventoSocial) ? 
                     { ...payload, creado_por: userProfile.nombre, actuacion_realizada: true, criminalistico_realizado: true, pericial_realizado: true, croquis_realizado: true } :
                     { ...payload, creado_por: userProfile.nombre, actuacion_realizada: false, criminalistico_realizado: false, pericial_realizado: false, croquis_realizado: false };
                   const { error } = await sb.from('novedades').insert([insertPayload]);
@@ -1075,6 +1121,7 @@ const App = () => {
                 setEditingNovedad(null);
                 setOriginalUpdatedAt(null);
                 setIsComision(false);
+                setIsEventoSocial(false);
                 setCurrentView('list');
                 loadData();
               } catch (err) {
@@ -1089,13 +1136,19 @@ const App = () => {
               </div>
               <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Título</label><input name="titulo" defaultValue={editingNovedad?.titulo} className="w-full p-4 bg-emerald-50 border border-emerald-200 rounded-2xl font-bold text-emerald-700" placeholder="Descripción breve" /></div>
               
-              {/* Checkbox Comisión */}
-              <div className="flex items-center gap-3 p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl">
-                <input type="checkbox" id="esComision" name="esComision" checked={isComision} onChange={(e) => setIsComision(e.target.checked)} className="w-5 h-5 rounded accent-amber-500" />
-                <label htmlFor="esComision" className="font-bold text-amber-800 cursor-pointer">🚗 Es Comisión (solo informativa, pasa directo a completada)</label>
+              {/* Checkboxes Comisión y Evento Social */}
+              <div className="flex flex-wrap gap-3">
+                <div className={`flex items-center gap-3 p-4 rounded-2xl flex-1 min-w-[200px] ${isComision ? 'bg-amber-100 border-2 border-amber-400' : 'bg-amber-50 border-2 border-amber-200'}`}>
+                  <input type="checkbox" id="esComision" name="esComision" checked={isComision} onChange={(e) => { setIsComision(e.target.checked); if(e.target.checked) setIsEventoSocial(false); }} className="w-5 h-5 rounded accent-amber-500" />
+                  <label htmlFor="esComision" className="font-bold text-amber-800 cursor-pointer text-sm">🚗 Comisión</label>
+                </div>
+                <div className={`flex items-center gap-3 p-4 rounded-2xl flex-1 min-w-[200px] ${isEventoSocial ? 'bg-pink-100 border-2 border-pink-400' : 'bg-pink-50 border-2 border-pink-200'}`}>
+                  <input type="checkbox" id="esEventoSocial" name="esEventoSocial" checked={isEventoSocial} onChange={(e) => { setIsEventoSocial(e.target.checked); if(e.target.checked) setIsComision(false); }} className="w-5 h-5 rounded accent-pink-500" />
+                  <label htmlFor="esEventoSocial" className="font-bold text-pink-800 cursor-pointer text-sm">🎉 Evento Social</label>
+                </div>
               </div>
               
-              {!isComision ? (
+              {!isComision && !isEventoSocial ? (
                 <div className="space-y-6 pt-4">
                   <h3 className="text-[11px] font-black text-slate-400 uppercase border-b border-slate-100 pb-3">Asignaciones</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -1104,7 +1157,7 @@ const App = () => {
                     ))}
                   </div>
                 </div>
-              ) : (
+              ) : isComision ? (
                 <div className="space-y-6 pt-4">
                   <h3 className="text-[11px] font-black text-amber-600 uppercase border-b border-amber-200 pb-3">🚗 Datos de Comisión</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -1131,9 +1184,43 @@ const App = () => {
                     </div>
                   </div>
                 </div>
+              ) : (
+                <div className="space-y-6 pt-4">
+                  <h3 className="text-[11px] font-black text-pink-600 uppercase border-b border-pink-200 pb-3">🎉 Datos de Evento Social</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-pink-600 uppercase ml-1">📷 Fotógrafo</label>
+                      <select name="eventoFotografo" defaultValue={editingNovedad?.evento_fotografo || ''} className="w-full p-4 bg-pink-50 border border-pink-200 rounded-2xl font-bold text-sm cursor-pointer">
+                        <option value="">-- Seleccionar --</option>
+                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-pink-600 uppercase ml-1">👤 Acompañante 1</label>
+                      <select name="eventoAcompanante1" defaultValue={editingNovedad?.evento_acompanante1 || ''} className="w-full p-4 bg-pink-50 border border-pink-200 rounded-2xl font-bold text-sm cursor-pointer">
+                        <option value="">-- Seleccionar --</option>
+                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-pink-600 uppercase ml-1">👤 Acompañante 2</label>
+                      <select name="eventoAcompanante2" defaultValue={editingNovedad?.evento_acompanante2 || ''} className="w-full p-4 bg-pink-50 border border-pink-200 rounded-2xl font-bold text-sm cursor-pointer">
+                        <option value="">-- Seleccionar --</option>
+                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-pink-600 uppercase ml-1">👤 Acompañante 3</label>
+                      <select name="eventoAcompanante3" defaultValue={editingNovedad?.evento_acompanante3 || ''} className="w-full p-4 bg-pink-50 border border-pink-200 rounded-2xl font-bold text-sm cursor-pointer">
+                        <option value="">-- Seleccionar --</option>
+                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
               )}
               <div className="flex gap-4 pt-10">
-                <button type="button" onClick={() => { setCurrentView('list'); setOriginalUpdatedAt(null); setIsComision(false); }} disabled={saving} className="flex-1 p-5 bg-slate-200 rounded-[1.5rem] font-black text-slate-600 uppercase text-xs disabled:opacity-50">Cancelar</button>
+                <button type="button" onClick={() => { setCurrentView('list'); setOriginalUpdatedAt(null); setIsComision(false); setIsEventoSocial(false); }} disabled={saving} className="flex-1 p-5 bg-slate-200 rounded-[1.5rem] font-black text-slate-600 uppercase text-xs disabled:opacity-50">Cancelar</button>
                 <button disabled={saving} className="flex-1 p-5 bg-emerald-500 text-white rounded-[1.5rem] font-black uppercase text-xs shadow-xl disabled:opacity-50 flex items-center justify-center gap-2">
                   {saving ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Guardando...</> : 'Guardar'}
                 </button>
@@ -2128,7 +2215,8 @@ const App = () => {
                     .mes-nombre { font-weight: bold; text-align: center; margin-bottom: 5px; font-size: 11px; }
                     .dias-header { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; color: #666; font-size: 8px; }
                     .dias { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
-                    .dia { text-align: center; padding: 2px; font-size: 8px; border-radius: 2px; }
+                    .dia { text-align: center; padding: 2px; font-size: 8px; border-radius: 2px; position: relative; }
+                    .dia .inicial { font-size: 6px; font-weight: bold; display: block; line-height: 1; }
                     .vacio { }
                     .finde { background: #f0f0f0; }
                     .licencia { background: #bfdbfe; color: #1e40af; }
@@ -2138,6 +2226,11 @@ const App = () => {
                     .leyenda { margin-top: 15px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; font-size: 9px; }
                     .leyenda span { display: flex; align-items: center; gap: 3px; }
                     .leyenda-color { width: 12px; height: 12px; border-radius: 2px; }
+                    .detalle { margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; }
+                    .detalle h2 { font-size: 12px; margin-bottom: 10px; }
+                    .detalle-mes { margin-bottom: 10px; }
+                    .detalle-mes h3 { font-size: 10px; background: #f0f0f0; padding: 3px 5px; margin-bottom: 5px; }
+                    .detalle-item { font-size: 9px; padding: 2px 5px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
                     .fecha-impresion { text-align: right; font-size: 8px; color: #999; margin-top: 10px; }
                     @media print { body { padding: 5px; } .grid { gap: 5px; } }
                   </style></head><body>`);
@@ -2157,14 +2250,16 @@ const App = () => {
                       const dayLic = mesLicencias.filter(l => l.fecha === dateStr);
                       const isWeekend = new Date(calendarioYear, mesIndex, day).getDay() === 0 || new Date(calendarioYear, mesIndex, day).getDay() === 6;
                       let clase = isWeekend ? 'finde' : '';
+                      let inicial = '';
                       if (dayLic.length > 0) {
                         const tipo = dayLic[0].tipo;
                         if (tipo === 'enfermedad') clase = 'enfermedad';
                         else if (tipo === 'estudio') clase = 'estudio';
                         else if (tipo === 'descanso') clase = 'descanso';
                         else clase = 'licencia';
+                        inicial = dayLic.map(l => l.user_nombre?.charAt(0) || '').join('');
                       }
-                      printWindow.document.write(`<div class="dia ${clase}" title="${dayLic.map(l => l.user_nombre).join(', ')}">${day}</div>`);
+                      printWindow.document.write(`<div class="dia ${clase}">${day}${inicial ? `<span class="inicial">${inicial}</span>` : ''}</div>`);
                     }
                     printWindow.document.write('</div></div>');
                   });
@@ -2175,6 +2270,25 @@ const App = () => {
                     <span><div class="leyenda-color" style="background:#a855f7"></div> Estudio</span>
                     <span><div class="leyenda-color" style="background:#f59e0b"></div> Descanso</span>
                   </div>`);
+                  // Detalle de licencias por mes
+                  const licenciasYear = licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString()));
+                  if (licenciasYear.length > 0) {
+                    printWindow.document.write('<div class="detalle"><h2>📋 Detalle de Licencias</h2>');
+                    meses.forEach((mesNombre, mesIndex) => {
+                      const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
+                      const mesLics = licenciasYear.filter(l => l.fecha?.startsWith(monthStr)).sort((a,b) => a.fecha.localeCompare(b.fecha));
+                      if (mesLics.length > 0) {
+                        printWindow.document.write(`<div class="detalle-mes"><h3>${mesNombre} (${mesLics.length})</h3>`);
+                        mesLics.forEach(l => {
+                          const tipoLabel = l.tipo === 'licencia' ? '📋 Licencia' : l.tipo === 'enfermedad' ? '🤒 Enfermedad' : l.tipo === 'estudio' ? '📚 Estudio' : '😴 Descanso';
+                          const dia = l.fecha.split('-')[2];
+                          printWindow.document.write(`<div class="detalle-item"><span>${dia} - ${l.user_nombre}</span><span>${tipoLabel}</span></div>`);
+                        });
+                        printWindow.document.write('</div>');
+                      }
+                    });
+                    printWindow.document.write('</div>');
+                  }
                   printWindow.document.write(`<p class="fecha-impresion">Impreso: ${new Date().toLocaleString()}</p>`);
                   printWindow.document.write('</body></html>');
                   printWindow.document.close();
@@ -2779,32 +2893,46 @@ const App = () => {
                     )
                   );
                   
+                  // Eventos sociales donde participó el usuario
+                  const userEventos = novedades.filter(n => 
+                    n.es_evento_social && (
+                      n.evento_fotografo === selectedAuditUser.nombre ||
+                      n.evento_acompanante1 === selectedAuditUser.nombre ||
+                      n.evento_acompanante2 === selectedAuditUser.nombre ||
+                      n.evento_acompanante3 === selectedAuditUser.nombre
+                    )
+                  );
+                  
                   const stats = getUserDetailedStats(selectedAuditUser);
                   const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
 
                   return (
                     <>
                       {/* Estadísticas */}
-                      <div className="grid grid-cols-5 gap-4">
-                        <div className="bg-white p-4 rounded-2xl text-center shadow-md border border-slate-200">
-                          <div className="text-3xl font-black text-slate-800">{stats.total}</div>
-                          <div className="text-[9px] text-slate-500 font-bold uppercase">Asignadas</div>
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                        <div className="bg-white p-3 rounded-2xl text-center shadow-md border border-slate-200">
+                          <div className="text-2xl font-black text-slate-800">{stats.total}</div>
+                          <div className="text-[8px] text-slate-500 font-bold uppercase">Asignadas</div>
                         </div>
-                        <div className="bg-emerald-50 p-4 rounded-2xl text-center shadow-md border border-emerald-200">
-                          <div className="text-3xl font-black text-emerald-700">{stats.done}</div>
-                          <div className="text-[9px] text-emerald-600 font-bold uppercase">Completadas</div>
+                        <div className="bg-emerald-50 p-3 rounded-2xl text-center shadow-md border border-emerald-200">
+                          <div className="text-2xl font-black text-emerald-700">{stats.done}</div>
+                          <div className="text-[8px] text-emerald-600 font-bold uppercase">Completadas</div>
                         </div>
-                        <div className="bg-red-50 p-4 rounded-2xl text-center shadow-md border border-red-200">
-                          <div className="text-3xl font-black text-red-600">{stats.pending}</div>
-                          <div className="text-[9px] text-red-500 font-bold uppercase">Pendientes</div>
+                        <div className="bg-red-50 p-3 rounded-2xl text-center shadow-md border border-red-200">
+                          <div className="text-2xl font-black text-red-600">{stats.pending}</div>
+                          <div className="text-[8px] text-red-500 font-bold uppercase">Pendientes</div>
                         </div>
-                        <div className="bg-orange-50 p-4 rounded-2xl text-center shadow-md border border-orange-200">
-                          <div className="text-3xl font-black text-orange-700">{stats.totalComisiones}</div>
-                          <div className="text-[9px] text-orange-600 font-bold uppercase">Comisiones</div>
+                        <div className="bg-orange-50 p-3 rounded-2xl text-center shadow-md border border-orange-200">
+                          <div className="text-2xl font-black text-orange-700">{stats.totalComisiones}</div>
+                          <div className="text-[8px] text-orange-600 font-bold uppercase">Comisiones</div>
                         </div>
-                        <div className="bg-blue-50 p-4 rounded-2xl text-center shadow-md border border-blue-200">
-                          <div className="text-3xl font-black text-blue-700">{pct}%</div>
-                          <div className="text-[9px] text-blue-600 font-bold uppercase">Avance</div>
+                        <div className="bg-pink-50 p-3 rounded-2xl text-center shadow-md border border-pink-200">
+                          <div className="text-2xl font-black text-pink-700">{stats.totalEventos || 0}</div>
+                          <div className="text-[8px] text-pink-600 font-bold uppercase">Eventos</div>
+                        </div>
+                        <div className="bg-blue-50 p-3 rounded-2xl text-center shadow-md border border-blue-200">
+                          <div className="text-2xl font-black text-blue-700">{pct}%</div>
+                          <div className="text-[8px] text-blue-600 font-bold uppercase">Avance</div>
                         </div>
                       </div>
 
@@ -2844,6 +2972,21 @@ const App = () => {
                               <div className="bg-orange-50 p-4 rounded-xl text-center">
                                 <div className="text-xs font-bold text-orange-600 mb-1">Acompañante</div>
                                 <div className="text-lg font-black text-orange-700">{stats.comisiones.acompanante}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {stats.totalEventos > 0 && (
+                          <div className="mt-4 pt-4 border-t border-slate-200">
+                            <h5 className="text-xs font-black text-pink-600 mb-3 uppercase">🎉 Eventos Sociales ({stats.totalEventos})</h5>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="bg-pink-50 p-4 rounded-xl text-center">
+                                <div className="text-xs font-bold text-pink-600 mb-1">Fotógrafo</div>
+                                <div className="text-lg font-black text-pink-700">{stats.eventos.fotografo}</div>
+                              </div>
+                              <div className="bg-pink-50 p-4 rounded-xl text-center">
+                                <div className="text-xs font-bold text-pink-600 mb-1">Acompañante</div>
+                                <div className="text-lg font-black text-pink-700">{stats.eventos.acompanante}</div>
                               </div>
                             </div>
                           </div>
@@ -2910,6 +3053,40 @@ const App = () => {
                                   <div className="mt-3 flex flex-wrap gap-2">
                                     {roles.map(r => (
                                       <span key={r} className="text-xs px-3 py-1 rounded-full font-bold bg-orange-200 text-orange-700">
+                                        {r} ✓
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Lista de eventos sociales */}
+                      {userEventos.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-black text-pink-600 mb-4 uppercase">🎉 Eventos Sociales ({userEventos.length})</h4>
+                          <div className="space-y-3">
+                            {userEventos.map(n => {
+                              const roles = [];
+                              if (n.evento_fotografo === selectedAuditUser.nombre) roles.push('Fotógrafo');
+                              if (n.evento_acompanante1 === selectedAuditUser.nombre) roles.push('Acompañante');
+                              if (n.evento_acompanante2 === selectedAuditUser.nombre) roles.push('Acompañante');
+                              if (n.evento_acompanante3 === selectedAuditUser.nombre) roles.push('Acompañante');
+                              return (
+                                <div key={n.id} className="bg-pink-50 rounded-xl p-4 shadow-md border border-pink-200">
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <h5 className="font-black text-pink-800">Novedad {n.numero_novedad}</h5>
+                                      <p className="text-xs text-pink-600">{n.numero_sgsp ? `SGSP: ${n.numero_sgsp}` : 'Sin SGSP'} {n.titulo && `• ${n.titulo}`}</p>
+                                    </div>
+                                    <span className="text-xs bg-pink-200 px-2 py-1 rounded font-bold text-pink-700">{n.anio}</span>
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {roles.map((r, idx) => (
+                                      <span key={idx} className="text-xs px-3 py-1 rounded-full font-bold bg-pink-200 text-pink-700">
                                         {r} ✓
                                       </span>
                                     ))}
