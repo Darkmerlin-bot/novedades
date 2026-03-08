@@ -259,6 +259,7 @@ const App = () => {
   // Estados para Licencias/Calendario
   const [licencias, setLicencias] = useState([]);
   const [calendarioYear, setCalendarioYear] = useState(new Date().getFullYear());
+  const [licPrintUser, setLicPrintUser] = useState(''); // Para imprimir por usuario
   const [calendarioMonth, setCalendarioMonth] = useState(new Date().getMonth());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
   
@@ -2203,97 +2204,244 @@ const App = () => {
               <div><h2 className="text-3xl font-black text-slate-800">📅 Almanaque de Licencias</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Registro anual de ausencias</p></div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setSelectedCalendarDate('nueva')} className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-sm hover:bg-emerald-600 shadow-lg">➕ Agregar</button>
-                <button onClick={() => {
-                  const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-                  const dias = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
-                  const printWindow = window.open('', '_blank');
-                  printWindow.document.write(`<html><head><title>Licencias ${calendarioYear}</title><style>
-                    body { font-family: Arial, sans-serif; padding: 10px; font-size: 10px; }
-                    h1 { font-size: 16px; text-align: center; margin-bottom: 10px; }
-                    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-                    .mes { border: 1px solid #ccc; padding: 5px; border-radius: 5px; }
-                    .mes-nombre { font-weight: bold; text-align: center; margin-bottom: 5px; font-size: 11px; }
-                    .dias-header { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; color: #666; font-size: 8px; }
-                    .dias { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
-                    .dia { text-align: center; padding: 2px; font-size: 8px; border-radius: 2px; position: relative; }
-                    .dia .inicial { font-size: 6px; font-weight: bold; display: block; line-height: 1; }
-                    .vacio { }
-                    .finde { background: #f0f0f0; }
-                    .licencia { background: #bfdbfe; color: #1e40af; }
-                    .enfermedad { background: #ef4444; color: white; }
-                    .estudio { background: #a855f7; color: white; }
-                    .descanso { background: #f59e0b; color: white; }
-                    .leyenda { margin-top: 15px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; font-size: 9px; }
-                    .leyenda span { display: flex; align-items: center; gap: 3px; }
-                    .leyenda-color { width: 12px; height: 12px; border-radius: 2px; }
-                    .detalle { margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; }
-                    .detalle h2 { font-size: 12px; margin-bottom: 10px; }
-                    .detalle-mes { margin-bottom: 10px; }
-                    .detalle-mes h3 { font-size: 10px; background: #f0f0f0; padding: 3px 5px; margin-bottom: 5px; }
-                    .detalle-item { font-size: 9px; padding: 2px 5px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
-                    .fecha-impresion { text-align: right; font-size: 8px; color: #999; margin-top: 10px; }
-                    @media print { body { padding: 5px; } .grid { gap: 5px; } }
-                  </style></head><body>`);
-                  printWindow.document.write(`<h1>📅 Almanaque de Licencias - ${calendarioYear}</h1>`);
-                  printWindow.document.write('<div class="grid">');
-                  meses.forEach((mesNombre, mesIndex) => {
-                    const firstDay = new Date(calendarioYear, mesIndex, 1).getDay();
-                    const daysInMonth = new Date(calendarioYear, mesIndex + 1, 0).getDate();
-                    const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
-                    const mesLicencias = licencias.filter(l => l.fecha?.startsWith(monthStr));
-                    printWindow.document.write(`<div class="mes"><div class="mes-nombre">${mesNombre}</div>`);
-                    printWindow.document.write(`<div class="dias-header">${dias.map(d => `<div>${d}</div>`).join('')}</div>`);
-                    printWindow.document.write('<div class="dias">');
-                    for (let i = 0; i < firstDay; i++) printWindow.document.write('<div class="dia vacio"></div>');
-                    for (let day = 1; day <= daysInMonth; day++) {
-                      const dateStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                      const dayLic = mesLicencias.filter(l => l.fecha === dateStr);
-                      const isWeekend = new Date(calendarioYear, mesIndex, day).getDay() === 0 || new Date(calendarioYear, mesIndex, day).getDay() === 6;
-                      let clase = isWeekend ? 'finde' : '';
-                      let inicial = '';
-                      if (dayLic.length > 0) {
-                        const tipo = dayLic[0].tipo;
-                        if (tipo === 'enfermedad') clase = 'enfermedad';
-                        else if (tipo === 'estudio') clase = 'estudio';
-                        else if (tipo === 'descanso') clase = 'descanso';
-                        else clase = 'licencia';
-                        inicial = dayLic.map(l => l.user_nombre?.charAt(0) || '').join('');
-                      }
-                      printWindow.document.write(`<div class="dia ${clase}">${day}${inicial ? `<span class="inicial">${inicial}</span>` : ''}</div>`);
-                    }
-                    printWindow.document.write('</div></div>');
-                  });
-                  printWindow.document.write('</div>');
-                  printWindow.document.write(`<div class="leyenda">
-                    <span><div class="leyenda-color" style="background:#bfdbfe"></div> Licencia</span>
-                    <span><div class="leyenda-color" style="background:#ef4444"></div> Enfermedad</span>
-                    <span><div class="leyenda-color" style="background:#a855f7"></div> Estudio</span>
-                    <span><div class="leyenda-color" style="background:#f59e0b"></div> Descanso</span>
-                  </div>`);
-                  // Detalle de licencias por mes
-                  const licenciasYear = licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString()));
-                  if (licenciasYear.length > 0) {
-                    printWindow.document.write('<div class="detalle"><h2>📋 Detalle de Licencias</h2>');
-                    meses.forEach((mesNombre, mesIndex) => {
-                      const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
-                      const mesLics = licenciasYear.filter(l => l.fecha?.startsWith(monthStr)).sort((a,b) => a.fecha.localeCompare(b.fecha));
-                      if (mesLics.length > 0) {
-                        printWindow.document.write(`<div class="detalle-mes"><h3>${mesNombre} (${mesLics.length})</h3>`);
-                        mesLics.forEach(l => {
-                          const tipoLabel = l.tipo === 'licencia' ? '📋 Licencia' : l.tipo === 'enfermedad' ? '🤒 Enfermedad' : l.tipo === 'estudio' ? '📚 Estudio' : '😴 Descanso';
-                          const dia = l.fecha.split('-')[2];
-                          printWindow.document.write(`<div class="detalle-item"><span>${dia} - ${l.user_nombre}</span><span>${tipoLabel}</span></div>`);
+                
+                {/* Menú desplegable de impresión */}
+                <div className="relative">
+                  <button onClick={() => document.getElementById('printLicMenu').classList.toggle('hidden')} className="px-4 py-2 bg-blue-500 text-white rounded-xl font-bold text-sm hover:bg-blue-600 flex items-center gap-2">🖨️ Imprimir ▼</button>
+                  <div id="printLicMenu" className="hidden absolute right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 min-w-[220px]">
+                    {/* Solo Calendario */}
+                    <button onClick={() => {
+                      document.getElementById('printLicMenu').classList.add('hidden');
+                      const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                      const dias = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+                      const printWindow = window.open('', '_blank');
+                      printWindow.document.write(`<html><head><title>Calendario ${calendarioYear}</title><style>
+                        body { font-family: Arial, sans-serif; padding: 10px; font-size: 10px; }
+                        h1 { font-size: 16px; text-align: center; margin-bottom: 10px; }
+                        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+                        .mes { border: 1px solid #ccc; padding: 5px; border-radius: 5px; }
+                        .mes-nombre { font-weight: bold; text-align: center; margin-bottom: 5px; font-size: 11px; }
+                        .dias-header { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; color: #666; font-size: 8px; }
+                        .dias { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+                        .dia { text-align: center; padding: 2px; font-size: 8px; border-radius: 2px; position: relative; }
+                        .dia .inicial { font-size: 6px; font-weight: bold; display: block; line-height: 1; }
+                        .finde { background: #f0f0f0; } .licencia { background: #bfdbfe; color: #1e40af; }
+                        .enfermedad { background: #ef4444; color: white; } .estudio { background: #a855f7; color: white; }
+                        .descanso { background: #f59e0b; color: white; }
+                        .leyenda { margin-top: 15px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; font-size: 9px; }
+                        .leyenda span { display: flex; align-items: center; gap: 3px; }
+                        .leyenda-color { width: 12px; height: 12px; border-radius: 2px; }
+                        .fecha-impresion { text-align: right; font-size: 8px; color: #999; margin-top: 10px; }
+                      </style></head><body>`);
+                      printWindow.document.write(`<h1>📅 Almanaque - ${calendarioYear}</h1><div class="grid">`);
+                      meses.forEach((mesNombre, mesIndex) => {
+                        const firstDay = new Date(calendarioYear, mesIndex, 1).getDay();
+                        const daysInMonth = new Date(calendarioYear, mesIndex + 1, 0).getDate();
+                        const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
+                        const mesLicencias = licencias.filter(l => l.fecha?.startsWith(monthStr));
+                        printWindow.document.write(`<div class="mes"><div class="mes-nombre">${mesNombre}</div><div class="dias-header">${dias.map(d => `<div>${d}</div>`).join('')}</div><div class="dias">`);
+                        for (let i = 0; i < firstDay; i++) printWindow.document.write('<div class="dia"></div>');
+                        for (let day = 1; day <= daysInMonth; day++) {
+                          const dateStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                          const dayLic = mesLicencias.filter(l => l.fecha === dateStr);
+                          const isWeekend = [0,6].includes(new Date(calendarioYear, mesIndex, day).getDay());
+                          let clase = isWeekend ? 'finde' : '', inicial = '';
+                          if (dayLic.length > 0) { clase = dayLic[0].tipo === 'enfermedad' ? 'enfermedad' : dayLic[0].tipo === 'estudio' ? 'estudio' : dayLic[0].tipo === 'descanso' ? 'descanso' : 'licencia'; inicial = dayLic.map(l => l.user_nombre?.charAt(0) || '').join(''); }
+                          printWindow.document.write(`<div class="dia ${clase}">${day}${inicial ? `<span class="inicial">${inicial}</span>` : ''}</div>`);
+                        }
+                        printWindow.document.write('</div></div>');
+                      });
+                      printWindow.document.write('</div><div class="leyenda"><span><div class="leyenda-color" style="background:#bfdbfe"></div> Licencia</span><span><div class="leyenda-color" style="background:#ef4444"></div> Enfermedad</span><span><div class="leyenda-color" style="background:#a855f7"></div> Estudio</span><span><div class="leyenda-color" style="background:#f59e0b"></div> Descanso</span></div>');
+                      printWindow.document.write(`<p class="fecha-impresion">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
+                      printWindow.document.close(); printWindow.print();
+                    }} className="w-full text-left px-4 py-3 text-sm hover:bg-slate-100 rounded-t-xl">📅 Solo Calendario</button>
+                    
+                    {/* Calendario + Detalle completo */}
+                    <button onClick={() => {
+                      document.getElementById('printLicMenu').classList.add('hidden');
+                      const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                      const dias = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+                      const printWindow = window.open('', '_blank');
+                      printWindow.document.write(`<html><head><title>Licencias ${calendarioYear}</title><style>
+                        body { font-family: Arial, sans-serif; padding: 10px; font-size: 10px; }
+                        h1 { font-size: 16px; text-align: center; margin-bottom: 10px; }
+                        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+                        .mes { border: 1px solid #ccc; padding: 5px; border-radius: 5px; }
+                        .mes-nombre { font-weight: bold; text-align: center; margin-bottom: 5px; font-size: 11px; }
+                        .dias-header { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; color: #666; font-size: 8px; }
+                        .dias { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+                        .dia { text-align: center; padding: 2px; font-size: 8px; border-radius: 2px; position: relative; }
+                        .dia .inicial { font-size: 6px; font-weight: bold; display: block; line-height: 1; }
+                        .finde { background: #f0f0f0; } .licencia { background: #bfdbfe; color: #1e40af; }
+                        .enfermedad { background: #ef4444; color: white; } .estudio { background: #a855f7; color: white; }
+                        .descanso { background: #f59e0b; color: white; }
+                        .leyenda { margin-top: 15px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; font-size: 9px; }
+                        .leyenda span { display: flex; align-items: center; gap: 3px; }
+                        .leyenda-color { width: 12px; height: 12px; border-radius: 2px; }
+                        .detalle { margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; }
+                        .detalle h2 { font-size: 12px; margin-bottom: 10px; }
+                        .detalle-mes { margin-bottom: 10px; }
+                        .detalle-mes h3 { font-size: 10px; background: #f0f0f0; padding: 3px 5px; margin-bottom: 5px; }
+                        .detalle-item { font-size: 9px; padding: 2px 5px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+                        .fecha-impresion { text-align: right; font-size: 8px; color: #999; margin-top: 10px; }
+                      </style></head><body>`);
+                      printWindow.document.write(`<h1>📅 Almanaque de Licencias - ${calendarioYear}</h1><div class="grid">`);
+                      meses.forEach((mesNombre, mesIndex) => {
+                        const firstDay = new Date(calendarioYear, mesIndex, 1).getDay();
+                        const daysInMonth = new Date(calendarioYear, mesIndex + 1, 0).getDate();
+                        const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
+                        const mesLicencias = licencias.filter(l => l.fecha?.startsWith(monthStr));
+                        printWindow.document.write(`<div class="mes"><div class="mes-nombre">${mesNombre}</div><div class="dias-header">${dias.map(d => `<div>${d}</div>`).join('')}</div><div class="dias">`);
+                        for (let i = 0; i < firstDay; i++) printWindow.document.write('<div class="dia"></div>');
+                        for (let day = 1; day <= daysInMonth; day++) {
+                          const dateStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                          const dayLic = mesLicencias.filter(l => l.fecha === dateStr);
+                          const isWeekend = [0,6].includes(new Date(calendarioYear, mesIndex, day).getDay());
+                          let clase = isWeekend ? 'finde' : '', inicial = '';
+                          if (dayLic.length > 0) { clase = dayLic[0].tipo === 'enfermedad' ? 'enfermedad' : dayLic[0].tipo === 'estudio' ? 'estudio' : dayLic[0].tipo === 'descanso' ? 'descanso' : 'licencia'; inicial = dayLic.map(l => l.user_nombre?.charAt(0) || '').join(''); }
+                          printWindow.document.write(`<div class="dia ${clase}">${day}${inicial ? `<span class="inicial">${inicial}</span>` : ''}</div>`);
+                        }
+                        printWindow.document.write('</div></div>');
+                      });
+                      printWindow.document.write('</div><div class="leyenda"><span><div class="leyenda-color" style="background:#bfdbfe"></div> Licencia</span><span><div class="leyenda-color" style="background:#ef4444"></div> Enfermedad</span><span><div class="leyenda-color" style="background:#a855f7"></div> Estudio</span><span><div class="leyenda-color" style="background:#f59e0b"></div> Descanso</span></div>');
+                      const licenciasYear = licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString()));
+                      if (licenciasYear.length > 0) {
+                        printWindow.document.write('<div class="detalle"><h2>📋 Detalle de Licencias</h2>');
+                        meses.forEach((mesNombre, mesIndex) => {
+                          const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
+                          const mesLics = licenciasYear.filter(l => l.fecha?.startsWith(monthStr)).sort((a,b) => a.fecha.localeCompare(b.fecha));
+                          if (mesLics.length > 0) {
+                            printWindow.document.write(`<div class="detalle-mes"><h3>${mesNombre} (${mesLics.length})</h3>`);
+                            mesLics.forEach(l => { const tipoLabel = l.tipo === 'licencia' ? '📋 Licencia' : l.tipo === 'enfermedad' ? '🤒 Enfermedad' : l.tipo === 'estudio' ? '📚 Estudio' : '😴 Descanso'; printWindow.document.write(`<div class="detalle-item"><span>${l.fecha.split('-')[2]} - ${l.user_nombre}</span><span>${tipoLabel}</span></div>`); });
+                            printWindow.document.write('</div>');
+                          }
                         });
                         printWindow.document.write('</div>');
                       }
-                    });
-                    printWindow.document.write('</div>');
-                  }
-                  printWindow.document.write(`<p class="fecha-impresion">Impreso: ${new Date().toLocaleString()}</p>`);
-                  printWindow.document.write('</body></html>');
-                  printWindow.document.close();
-                  printWindow.print();
-                }} className="px-4 py-2 bg-blue-500 text-white rounded-xl font-bold text-sm hover:bg-blue-600">🖨️ Imprimir</button>
+                      printWindow.document.write(`<p class="fecha-impresion">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
+                      printWindow.document.close(); printWindow.print();
+                    }} className="w-full text-left px-4 py-3 text-sm hover:bg-slate-100 border-t">📋 Calendario + Detalle</button>
+                    
+                    {/* Solo Enfermedad/Estudio/Descanso */}
+                    <button onClick={() => {
+                      document.getElementById('printLicMenu').classList.add('hidden');
+                      const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                      const licenciasYear = licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && ['enfermedad', 'estudio', 'descanso'].includes(l.tipo));
+                      if (licenciasYear.length === 0) { showNotify("No hay registros de enfermedad/estudio/descanso", "error"); return; }
+                      const printWindow = window.open('', '_blank');
+                      printWindow.document.write(`<html><head><title>Enf/Est/Desc ${calendarioYear}</title><style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { font-size: 16px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                        .section { margin-bottom: 20px; }
+                        .section h2 { font-size: 14px; padding: 5px 10px; margin-bottom: 10px; border-radius: 5px; }
+                        .enfermedad h2 { background: #fee2e2; color: #dc2626; }
+                        .estudio h2 { background: #f3e8ff; color: #9333ea; }
+                        .descanso h2 { background: #fef3c7; color: #d97706; }
+                        .mes { margin-bottom: 10px; }
+                        .mes h3 { font-size: 11px; background: #f0f0f0; padding: 3px 8px; margin-bottom: 5px; }
+                        .item { font-size: 10px; padding: 3px 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+                        .fecha-impresion { text-align: right; font-size: 9px; color: #999; margin-top: 20px; }
+                      </style></head><body>`);
+                      printWindow.document.write(`<h1>🤒📚😴 Enfermedad / Estudio / Descanso - ${calendarioYear}</h1>`);
+                      ['enfermedad', 'estudio', 'descanso'].forEach(tipo => {
+                        const tipoLics = licenciasYear.filter(l => l.tipo === tipo);
+                        if (tipoLics.length === 0) return;
+                        const emoji = tipo === 'enfermedad' ? '🤒' : tipo === 'estudio' ? '📚' : '😴';
+                        printWindow.document.write(`<div class="section ${tipo}"><h2>${emoji} ${tipo.charAt(0).toUpperCase() + tipo.slice(1)} (${tipoLics.length})</h2>`);
+                        meses.forEach((mesNombre, mesIndex) => {
+                          const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
+                          const mesLics = tipoLics.filter(l => l.fecha?.startsWith(monthStr)).sort((a,b) => a.fecha.localeCompare(b.fecha));
+                          if (mesLics.length > 0) {
+                            printWindow.document.write(`<div class="mes"><h3>${mesNombre}</h3>`);
+                            mesLics.forEach(l => printWindow.document.write(`<div class="item"><span>${l.fecha.split('-')[2]}</span><span>${l.user_nombre}</span></div>`));
+                            printWindow.document.write('</div>');
+                          }
+                        });
+                        printWindow.document.write('</div>');
+                      });
+                      printWindow.document.write(`<p class="fecha-impresion">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
+                      printWindow.document.close(); printWindow.print();
+                    }} className="w-full text-left px-4 py-3 text-sm hover:bg-slate-100 border-t text-red-600">🤒📚😴 Enf/Est/Desc</button>
+                    
+                    {/* Solo Licencias */}
+                    <button onClick={() => {
+                      document.getElementById('printLicMenu').classList.add('hidden');
+                      const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                      const licenciasYear = licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.tipo === 'licencia');
+                      if (licenciasYear.length === 0) { showNotify("No hay licencias registradas", "error"); return; }
+                      const printWindow = window.open('', '_blank');
+                      printWindow.document.write(`<html><head><title>Licencias ${calendarioYear}</title><style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { font-size: 16px; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; color: #1e40af; }
+                        .mes { margin-bottom: 15px; }
+                        .mes h2 { font-size: 12px; background: #dbeafe; color: #1e40af; padding: 5px 10px; margin-bottom: 8px; border-radius: 5px; }
+                        .item { font-size: 10px; padding: 4px 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+                        .fecha-impresion { text-align: right; font-size: 9px; color: #999; margin-top: 20px; }
+                      </style></head><body>`);
+                      printWindow.document.write(`<h1>📋 Licencias - ${calendarioYear}</h1>`);
+                      meses.forEach((mesNombre, mesIndex) => {
+                        const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
+                        const mesLics = licenciasYear.filter(l => l.fecha?.startsWith(monthStr)).sort((a,b) => a.fecha.localeCompare(b.fecha));
+                        if (mesLics.length > 0) {
+                          printWindow.document.write(`<div class="mes"><h2>${mesNombre} (${mesLics.length})</h2>`);
+                          mesLics.forEach(l => printWindow.document.write(`<div class="item"><span>Día ${l.fecha.split('-')[2]}</span><span>${l.user_nombre}</span></div>`));
+                          printWindow.document.write('</div>');
+                        }
+                      });
+                      printWindow.document.write(`<p class="fecha-impresion">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
+                      printWindow.document.close(); printWindow.print();
+                    }} className="w-full text-left px-4 py-3 text-sm hover:bg-slate-100 border-t text-blue-600">📋 Solo Licencias</button>
+                    
+                    {/* Separador */}
+                    <div className="border-t-2 border-slate-300 my-1"></div>
+                    
+                    {/* Por Usuario - Selector */}
+                    <div className="px-4 py-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">👤 Por Usuario:</label>
+                      <select value={licPrintUser} onChange={(e) => setLicPrintUser(e.target.value)} className="w-full mt-1 p-2 text-sm border border-slate-200 rounded-lg">
+                        <option value="">-- Seleccionar --</option>
+                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                    <button onClick={() => {
+                      if (!licPrintUser) { showNotify("Seleccioná un usuario", "error"); return; }
+                      document.getElementById('printLicMenu').classList.add('hidden');
+                      const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                      const userLics = licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.user_nombre === licPrintUser);
+                      if (userLics.length === 0) { showNotify(`${licPrintUser} no tiene registros en ${calendarioYear}`, "error"); return; }
+                      const printWindow = window.open('', '_blank');
+                      printWindow.document.write(`<html><head><title>${licPrintUser} - ${calendarioYear}</title><style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { font-size: 16px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                        .resumen { display: flex; gap: 20px; margin: 15px 0; padding: 10px; background: #f8fafc; border-radius: 8px; }
+                        .resumen div { text-align: center; }
+                        .resumen .num { font-size: 20px; font-weight: bold; }
+                        .resumen .label { font-size: 9px; color: #666; }
+                        .mes { margin-bottom: 12px; }
+                        .mes h2 { font-size: 11px; background: #e2e8f0; padding: 4px 8px; margin-bottom: 5px; border-radius: 4px; }
+                        .item { font-size: 10px; padding: 3px 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+                        .licencia { color: #1e40af; } .enfermedad { color: #dc2626; } .estudio { color: #9333ea; } .descanso { color: #d97706; }
+                        .fecha-impresion { text-align: right; font-size: 9px; color: #999; margin-top: 20px; }
+                      </style></head><body>`);
+                      printWindow.document.write(`<h1>👤 ${licPrintUser} - ${calendarioYear}</h1>`);
+                      const conteo = { licencia: 0, enfermedad: 0, estudio: 0, descanso: 0 };
+                      userLics.forEach(l => conteo[l.tipo]++);
+                      printWindow.document.write(`<div class="resumen"><div><div class="num" style="color:#1e40af">${conteo.licencia}</div><div class="label">Licencias</div></div><div><div class="num" style="color:#dc2626">${conteo.enfermedad}</div><div class="label">Enfermedad</div></div><div><div class="num" style="color:#9333ea">${conteo.estudio}</div><div class="label">Estudio</div></div><div><div class="num" style="color:#d97706">${conteo.descanso}</div><div class="label">Descanso</div></div><div><div class="num">${userLics.length}</div><div class="label">TOTAL</div></div></div>`);
+                      meses.forEach((mesNombre, mesIndex) => {
+                        const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
+                        const mesLics = userLics.filter(l => l.fecha?.startsWith(monthStr)).sort((a,b) => a.fecha.localeCompare(b.fecha));
+                        if (mesLics.length > 0) {
+                          printWindow.document.write(`<div class="mes"><h2>${mesNombre} (${mesLics.length})</h2>`);
+                          mesLics.forEach(l => { const tipoLabel = l.tipo === 'licencia' ? '📋 Licencia' : l.tipo === 'enfermedad' ? '🤒 Enfermedad' : l.tipo === 'estudio' ? '📚 Estudio' : '😴 Descanso'; printWindow.document.write(`<div class="item"><span>Día ${l.fecha.split('-')[2]}</span><span class="${l.tipo}">${tipoLabel}</span></div>`); });
+                          printWindow.document.write('</div>');
+                        }
+                      });
+                      printWindow.document.write(`<p class="fecha-impresion">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
+                      printWindow.document.close(); printWindow.print();
+                      setLicPrintUser('');
+                    }} className="w-full text-left px-4 py-3 text-sm hover:bg-slate-100 border-t rounded-b-xl text-emerald-600 font-bold">🖨️ Imprimir Usuario</button>
+                  </div>
+                </div>
                 <button onClick={() => setCalendarioYear(calendarioYear - 1)} className="p-2 bg-slate-200 rounded-xl hover:bg-slate-300 font-bold">◀</button>
                 <select value={calendarioYear} onChange={(e) => setCalendarioYear(parseInt(e.target.value))} className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-black text-slate-700 text-lg">
                   {[2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
