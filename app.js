@@ -1532,27 +1532,30 @@ const App = () => {
                 {!editingProfile.isSelf && (
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-indigo-500 uppercase ml-1">Turno Asignado</label>
-                    <select name="turno" defaultValue={editingProfile.turno || 1} onChange={async (e) => {
-                      const newTurno = parseInt(e.target.value);
-                      try {
-                        const { error } = await sb.from('profiles').update({ turno: newTurno }).eq('id', editingProfile.id);
-                        if (error) {
-                          showNotify("Error al cambiar turno: " + error.message, "error");
-                          e.target.value = editingProfile.turno || 1;
-                          return;
+                    <select 
+                      name="turno" 
+                      value={editingProfile.turno || 1} 
+                      onChange={async (e) => {
+                        const newTurno = parseInt(e.target.value);
+                        try {
+                          const { error } = await sb.from('profiles').update({ turno: newTurno }).eq('id', editingProfile.id);
+                          if (error) {
+                            showNotify("Error al cambiar turno: " + error.message, "error");
+                            return;
+                          }
+                          await addLog('CAMBIO_TURNO', `${editingProfile.nombre} asignado a ${TURNOS[newTurno]}`);
+                          showNotify("Turno actualizado");
+                          setEditingProfile({...editingProfile, turno: newTurno});
+                          loadData();
+                        } catch (err) {
+                          showNotify("Error: " + err.message, "error");
                         }
-                        await addLog('CAMBIO_TURNO', `${editingProfile.nombre} asignado a ${TURNOS[newTurno]}`);
-                        showNotify("Turno actualizado");
-                        setEditingProfile({...editingProfile, turno: newTurno});
-                        loadData();
-                      } catch (err) {
-                        showNotify("Error: " + err.message, "error");
-                        e.target.value = editingProfile.turno || 1;
-                      }
-                    }} className="w-full p-4 bg-indigo-50 border border-indigo-200 rounded-2xl font-bold cursor-pointer text-indigo-700">
-                      <option value="1">1er Turno</option>
-                      <option value="2">2do Turno</option>
-                      <option value="3">3er Turno</option>
+                      }} 
+                      className="w-full p-4 bg-indigo-50 border border-indigo-200 rounded-2xl font-bold cursor-pointer text-indigo-700"
+                    >
+                      <option value={1}>1er Turno</option>
+                      <option value={2}>2do Turno</option>
+                      <option value={3}>3er Turno</option>
                     </select>
                     {['admin', 'supervisor'].includes(editingProfile.role) && (
                       <p className="text-[9px] text-slate-400 ml-1">Admin y Supervisor ven todos los turnos automáticamente</p>
@@ -1661,7 +1664,11 @@ const App = () => {
                   
                   // Actualizar turno del usuario
                   if (newUserId) {
-                    await sb.from('profiles').update({ turno }).eq('id', newUserId);
+                    const { error: turnoError } = await sb.from('profiles').update({ turno }).eq('id', newUserId);
+                    if (turnoError) {
+                      console.error("Error al asignar turno:", turnoError);
+                      showNotify("Usuario creado pero error al asignar turno. ¿Ejecutaste el SQL?", "error");
+                    }
                   }
                   
                   await addLog('CREAR_USUARIO', `Creó usuario: ${nombre} (${role}) - T${turno}`);
@@ -1698,10 +1705,10 @@ const App = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-indigo-500 uppercase ml-1">Turno Asignado</label>
-                  <select name="turno" defaultValue="1" className="w-full p-4 bg-indigo-50 border border-indigo-200 rounded-2xl font-bold cursor-pointer text-indigo-700">
-                    <option value="1">1er Turno</option>
-                    <option value="2">2do Turno</option>
-                    <option value="3">3er Turno</option>
+                  <select name="turno" defaultValue={1} className="w-full p-4 bg-indigo-50 border border-indigo-200 rounded-2xl font-bold cursor-pointer text-indigo-700">
+                    <option value={1}>1er Turno</option>
+                    <option value={2}>2do Turno</option>
+                    <option value={3}>3er Turno</option>
                   </select>
                   <p className="text-[9px] text-slate-400 ml-1">Admin y Supervisor ven todos los turnos automáticamente</p>
                 </div>
