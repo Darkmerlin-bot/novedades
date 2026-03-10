@@ -34,16 +34,25 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
         <div className="flex items-center justify-between md:justify-end gap-3">
           <div className="flex flex-col items-end mr-2">
             <span className="text-sm font-bold text-emerald-400">{userProfile?.nombre}</span>
-            <span className="text-[10px] text-slate-500 font-black uppercase tracking-tighter">{userProfile?.role === 'admin' ? 'Admin' : userProfile?.role === 'moderator' ? 'Moderador' : 'Usuario'}</span>
+            <div className="flex items-center gap-2">
+              <span className={`text-[9px] px-2 py-0.5 rounded font-black uppercase ${userProfile?.role === 'admin' ? 'bg-red-500/20 text-red-400' : userProfile?.role === 'supervisor' ? 'bg-purple-500/20 text-purple-400' : userProfile?.role === 'encargado' ? 'bg-blue-500/20 text-blue-400' : userProfile?.role === 'moderator' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-500/20 text-slate-400'}`}>
+                {userProfile?.role === 'admin' ? 'Admin' : userProfile?.role === 'supervisor' ? 'Supervisor' : userProfile?.role === 'encargado' ? 'Encargado' : userProfile?.role === 'moderator' ? 'Moderador' : 'Usuario'}
+              </span>
+              {!['admin', 'supervisor'].includes(userProfile?.role) && (
+                <span className="text-[9px] px-2 py-0.5 rounded font-black uppercase bg-indigo-500/20 text-indigo-400">T{userProfile?.turno || 1}</span>
+              )}
+            </div>
           </div>
           <div className="flex gap-1.5">
             <button onClick={onShowPass} className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all" title="Cambiar Contraseña">🔑</button>
-            {userProfile?.role === 'admin' && (
+            {['admin', 'supervisor', 'encargado'].includes(userProfile?.role) && (
               <>
                 <button onClick={onShowStats} className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all" title="Estadísticas">📊</button>
                 <button onClick={onShowReport} className="p-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl transition-all" title="Imprimir Reporte">🖨️</button>
-                <button onClick={onBackup} className="p-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all" title="Descargar Respaldo">💾</button>
               </>
+            )}
+            {['admin', 'supervisor'].includes(userProfile?.role) && (
+              <button onClick={onBackup} className="p-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all" title="Descargar Respaldo">💾</button>
             )}
             <button onClick={onLogout} className="px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all font-bold text-sm flex items-center gap-2 shadow-lg">🚪 Salir</button>
           </div>
@@ -68,10 +77,14 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
         <button onClick={() => setView('stock')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${currentView === 'stock' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
           📦 Stock {stockBajoCount > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse">{stockBajoCount}</span>}
         </button>
+        {['admin', 'supervisor', 'encargado', 'moderator'].includes(userProfile?.role) && (
+          <button onClick={() => setView('form')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'form' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>➕ Nueva</button>
+        )}
+        {['admin', 'supervisor', 'encargado'].includes(userProfile?.role) && (
+          <button onClick={() => setView('auditoria')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'auditoria' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>🔍 Auditar</button>
+        )}
         {userProfile?.role === 'admin' && (
           <>
-            <button onClick={() => setView('form')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'form' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>➕ Nueva</button>
-            <button onClick={() => setView('auditoria')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'auditoria' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>🔍 Auditar</button>
             <button onClick={() => setView('users')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'users' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>👥 Personal</button>
             <button onClick={() => setView('logs')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'logs' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>📜 Logs</button>
           </>
@@ -228,6 +241,7 @@ const App = () => {
   const [modalShownOnce, setModalShownOnce] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showNewUser, setShowNewUser] = useState(false);
+  const [selectedUserTurno, setSelectedUserTurno] = useState(0); // 0 = todos
   const [selectedUserStats, setSelectedUserStats] = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [expandedId, setExpandedId] = useState(null);
@@ -546,6 +560,46 @@ const App = () => {
   // UTILIDADES
   const extractNumber = (str) => { if (!str) return 0; const m = str.match(/\d+/g); return m ? parseInt(m[m.length - 1], 10) : 0; };
   const extractYear = (n) => n.anio ? n.anio.toString() : n.created_at ? new Date(n.created_at).getFullYear().toString() : '';
+
+  // ==================== SISTEMA DE TURNOS Y PERMISOS ====================
+  const TURNOS = { 1: '1er Turno', 2: '2do Turno', 3: '3er Turno' };
+  const ROLES = {
+    admin: { label: 'Administrador', color: 'bg-red-500' },
+    supervisor: { label: 'Supervisor', color: 'bg-purple-500' },
+    encargado: { label: 'Encargado', color: 'bg-blue-500' },
+    moderator: { label: 'Moderador', color: 'bg-amber-500' },
+    user: { label: 'Usuario', color: 'bg-slate-500' }
+  };
+
+  // Funciones de permisos
+  const canSeeAllTurnos = () => ['admin', 'supervisor'].includes(userProfile?.role);
+  const canManageUsers = () => userProfile?.role === 'admin';
+  const canSeeLogs = () => userProfile?.role === 'admin';
+  const canManageNovedades = () => ['admin', 'supervisor', 'encargado', 'moderator'].includes(userProfile?.role);
+  const canManageJuicios = () => ['admin', 'supervisor', 'encargado', 'moderator'].includes(userProfile?.role);
+  const canManageLicencias = () => ['admin', 'supervisor', 'encargado', 'moderator'].includes(userProfile?.role);
+  const canManageStock = () => ['admin', 'supervisor', 'encargado', 'moderator'].includes(userProfile?.role);
+  const canSeeStats = () => ['admin', 'supervisor', 'encargado'].includes(userProfile?.role);
+  const canAudit = () => ['admin', 'supervisor', 'encargado'].includes(userProfile?.role);
+  const canBackup = () => ['admin', 'supervisor'].includes(userProfile?.role);
+  const canPrint = () => ['admin', 'supervisor', 'encargado'].includes(userProfile?.role);
+  const getUserTurno = () => userProfile?.turno || 1;
+
+  // Filtrar datos por turno (admin y supervisor ven todo, otros solo su turno)
+  const filterByTurno = (items) => {
+    if (!items || !Array.isArray(items)) return [];
+    if (canSeeAllTurnos()) return items;
+    const miTurno = getUserTurno();
+    return items.filter(item => item.turno === miTurno || !item.turno);
+  };
+
+  // Filtrar profiles por turno (para selectores)
+  const getProfilesByTurno = () => {
+    if (canSeeAllTurnos()) return profiles;
+    const miTurno = getUserTurno();
+    return profiles.filter(p => p.turno === miTurno);
+  };
+  // ==================== FIN SISTEMA DE TURNOS ====================
   const sortByNumber = (a, b) => extractNumber(a.numero_novedad) - extractNumber(b.numero_novedad);
   
   // Colores pasteles para usuarios en calendario de licencias
@@ -659,7 +713,8 @@ const App = () => {
   const countUserPendingTasks = (profile, list) => list.filter(n => { if (n.es_comision || n.es_evento_social) return false; const { isAssigned, assignments } = getUserAssignment(n, profile); return isAssigned && !areUserTasksComplete(n, assignments); }).length;
 
   const filterNovedades = (list) => {
-    let f = list;
+    // Primero filtrar por turno
+    let f = filterByTurno(list);
     if (selectedYear) f = f.filter(n => extractYear(n) === selectedYear);
     if (searchTerm.trim()) { const t = searchTerm.toLowerCase(); f = f.filter(n => (n.numero_novedad || '').toLowerCase().includes(t) || (n.numero_sgsp || '').toLowerCase().includes(t) || (n.titulo || '').toLowerCase().includes(t)); }
     return f;
@@ -1041,7 +1096,7 @@ const App = () => {
           <div className="space-y-4">
             <div className="flex justify-between items-center mb-6">
               <div><h2 className="text-3xl font-black text-slate-800">Pendientes</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tus tareas primero</p></div>
-              {userProfile?.role === 'admin' && <button onClick={() => setCurrentView('form')} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo</button>}
+              {canManageNovedades() && <button onClick={() => setCurrentView('form')} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo</button>}
             </div>
             <SearchAndFilter searchTerm={searchTerm} onSearchChange={setSearchTerm} selectedYear={selectedYear} onYearChange={setSelectedYear} />
             <div className="flex flex-wrap gap-4 mb-6 p-4 bg-white rounded-2xl border border-slate-200">
@@ -1063,7 +1118,7 @@ const App = () => {
         )}
 
         {/* FORMULARIO (Solo Admin) */}
-        {currentView === 'form' && userProfile?.role === 'admin' && (
+        {currentView === 'form' && canManageNovedades() && (
           <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden max-w-2xl mx-auto border border-slate-200">
             <div className="p-10 bg-slate-900 text-white flex justify-between items-center">
               <div><h2 className="text-3xl font-black">{editingNovedad ? 'Editar' : 'Nueva'} Novedad</h2><p className="text-slate-400 text-xs mt-1 font-bold uppercase">Datos de la actuación</p></div>
@@ -1146,8 +1201,8 @@ const App = () => {
                   await addLog('EDITAR', 'Editó ' + num); showNotify("Actualizado");
                 } else {
                   const insertPayload = (isComision || isEventoSocial) ? 
-                    { ...payload, creado_por: userProfile.nombre, actuacion_realizada: true, criminalistico_realizado: true, pericial_realizado: true, croquis_realizado: true } :
-                    { ...payload, creado_por: userProfile.nombre, actuacion_realizada: false, criminalistico_realizado: false, pericial_realizado: false, croquis_realizado: false };
+                    { ...payload, turno: getUserTurno(), creado_por: userProfile.nombre, actuacion_realizada: true, criminalistico_realizado: true, pericial_realizado: true, croquis_realizado: true } :
+                    { ...payload, turno: getUserTurno(), creado_por: userProfile.nombre, actuacion_realizada: false, criminalistico_realizado: false, pericial_realizado: false, croquis_realizado: false };
                   const { error } = await sb.from('novedades').insert([insertPayload]);
                   if (error) { showNotify("Error al crear: " + error.message, "error"); setSaving(false); return; }
                   await addLog('CREAR', 'Creó ' + num); showNotify("Guardado");
@@ -1187,7 +1242,7 @@ const App = () => {
                   <h3 className="text-[11px] font-black text-slate-400 uppercase border-b border-slate-100 pb-3">Asignaciones</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     {[{ n: 'ia', f: 'informe_actuacion', fOld: 'informeActuacion', l: 'Informe Actuación' }, { n: 'ic', f: 'informe_criminalistico', fOld: 'informeCriminalistico', l: 'Criminalístico' }, { n: 'ip', f: 'informe_pericial', fOld: 'informePericial', l: 'Pericial' }, { n: 'cr', f: 'croquis', fOld: 'croquis', l: 'Croquis' }].map(item => (
-                      <div key={item.n} className="space-y-1.5"><label className="text-[10px] font-black text-slate-500 uppercase ml-1">{item.l}</label><select name={item.n} defaultValue={editingNovedad ? (editingNovedad[item.f] || editingNovedad[item.fOld]) : ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm cursor-pointer"><option value="">-- Sin asignar --</option>{profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}</select></div>
+                      <div key={item.n} className="space-y-1.5"><label className="text-[10px] font-black text-slate-500 uppercase ml-1">{item.l}</label><select name={item.n} defaultValue={editingNovedad ? (editingNovedad[item.f] || editingNovedad[item.fOld]) : ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm cursor-pointer"><option value="">-- Sin asignar --</option>{getProfilesByTurno().map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}</select></div>
                     ))}
                   </div>
                 </div>
@@ -1199,21 +1254,21 @@ const App = () => {
                       <label className="text-[10px] font-black text-amber-600 uppercase ml-1">Carga SGSP</label>
                       <select name="comisionCargaSgsp" defaultValue={editingNovedad?.comision_carga_sgsp || ''} className="w-full p-4 bg-amber-50 border border-amber-200 rounded-2xl font-bold text-sm cursor-pointer">
                         <option value="">-- Seleccionar --</option>
-                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                        {getProfilesByTurno().map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-amber-600 uppercase ml-1">Chofer</label>
                       <select name="comisionChofer" defaultValue={editingNovedad?.comision_chofer || ''} className="w-full p-4 bg-amber-50 border border-amber-200 rounded-2xl font-bold text-sm cursor-pointer">
                         <option value="">-- Seleccionar --</option>
-                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                        {getProfilesByTurno().map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-amber-600 uppercase ml-1">Acompañante</label>
                       <select name="comisionAcompanante" defaultValue={editingNovedad?.comision_acompanante || ''} className="w-full p-4 bg-amber-50 border border-amber-200 rounded-2xl font-bold text-sm cursor-pointer">
                         <option value="">-- Seleccionar --</option>
-                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                        {getProfilesByTurno().map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
                       </select>
                     </div>
                   </div>
@@ -1226,28 +1281,28 @@ const App = () => {
                       <label className="text-[10px] font-black text-pink-600 uppercase ml-1">📷 Fotógrafo</label>
                       <select name="eventoFotografo" defaultValue={editingNovedad?.evento_fotografo || ''} className="w-full p-4 bg-pink-50 border border-pink-200 rounded-2xl font-bold text-sm cursor-pointer">
                         <option value="">-- Seleccionar --</option>
-                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                        {getProfilesByTurno().map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-pink-600 uppercase ml-1">👤 Acompañante 1</label>
                       <select name="eventoAcompanante1" defaultValue={editingNovedad?.evento_acompanante1 || ''} className="w-full p-4 bg-pink-50 border border-pink-200 rounded-2xl font-bold text-sm cursor-pointer">
                         <option value="">-- Seleccionar --</option>
-                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                        {getProfilesByTurno().map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-pink-600 uppercase ml-1">👤 Acompañante 2</label>
                       <select name="eventoAcompanante2" defaultValue={editingNovedad?.evento_acompanante2 || ''} className="w-full p-4 bg-pink-50 border border-pink-200 rounded-2xl font-bold text-sm cursor-pointer">
                         <option value="">-- Seleccionar --</option>
-                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                        {getProfilesByTurno().map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-pink-600 uppercase ml-1">👤 Acompañante 3</label>
                       <select name="eventoAcompanante3" defaultValue={editingNovedad?.evento_acompanante3 || ''} className="w-full p-4 bg-pink-50 border border-pink-200 rounded-2xl font-bold text-sm cursor-pointer">
                         <option value="">-- Seleccionar --</option>
-                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                        {getProfilesByTurno().map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
                       </select>
                     </div>
                   </div>
@@ -1270,20 +1325,30 @@ const App = () => {
               <div><h2 className="text-3xl font-black text-slate-800">Personal</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Usuarios del sistema</p></div>
               <button onClick={() => setShowNewUser(true)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo Usuario</button>
             </div>
+            
+            {/* Filtro por turno */}
+            <div className="flex gap-2 mb-4">
+              <button onClick={() => setSelectedUserTurno(0)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === 0 ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>Todos</button>
+              {[1, 2, 3].map(t => (
+                <button key={t} onClick={() => setSelectedUserTurno(t)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === t ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}`}>T{t}</button>
+              ))}
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {profiles.map(p => {
-                const roleColor = p.role === 'admin' ? 'bg-purple-500' : p.role === 'moderator' ? 'bg-blue-500' : 'bg-emerald-500';
-                const roleLabel = p.role === 'admin' ? 'Admin' : p.role === 'moderator' ? 'Moderador' : 'Usuario';
+              {profiles.filter(p => selectedUserTurno === 0 || p.turno === selectedUserTurno).map(p => {
+                const roleInfo = ROLES[p.role] || ROLES.user;
                 return (
                   <div key={p.id} className="bg-white p-5 rounded-3xl shadow-md border border-slate-200 group hover:shadow-lg">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl text-white flex items-center justify-center font-black text-lg ${p.role === 'admin' ? 'bg-purple-600' : p.role === 'moderator' ? 'bg-blue-600' : 'bg-slate-700'}`}>{p.nombre?.charAt(0).toUpperCase()}</div>
+                        <div className={`w-12 h-12 rounded-2xl text-white flex items-center justify-center font-black text-lg ${roleInfo.color}`}>{p.nombre?.charAt(0).toUpperCase()}</div>
                         <div>
                           <div className="font-black text-slate-800">{p.nombre}</div>
                           <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
-                            <span className={`w-1.5 h-1.5 rounded-full ${roleColor}`}></span>
-                            {roleLabel} • {p.email?.split('@')[0]}
+                            <span className={`px-2 py-0.5 rounded ${roleInfo.color} text-white text-[8px]`}>{roleInfo.label}</span>
+                            {!['admin', 'supervisor'].includes(p.role) && (
+                              <span className="px-2 py-0.5 rounded bg-indigo-500 text-white text-[8px]">T{p.turno || 1}</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1403,7 +1468,7 @@ const App = () => {
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Rol</label>
                   {editingProfile.isSelf ? (
                     <div>
-                      <input value={editingProfile.role === 'admin' ? 'Administrador' : editingProfile.role === 'moderator' ? 'Moderador' : 'Usuario'} disabled className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-400" />
+                      <input value={ROLES[editingProfile.role]?.label || 'Usuario'} disabled className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-400" />
                       <p className="text-[9px] text-slate-400 ml-1">No podés cambiar tu propio rol</p>
                     </div>
                   ) : (
@@ -1425,11 +1490,42 @@ const App = () => {
                         e.target.value = editingProfile.role;
                       }
                     }} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer">
-                      <option value="user">Usuario (solo lectura)</option>
-                      <option value="moderator">Moderador (puede completar tareas)</option>
-                      <option value="admin">Administrador (acceso total)</option>
+                      <option value="user">Usuario (solo ver y completar sus tareas)</option>
+                      <option value="moderator">Moderador (gestionar novedades de su turno)</option>
+                      <option value="encargado">Encargado (supervisor de su turno)</option>
+                      <option value="supervisor">Supervisor (acceso a todos los turnos)</option>
+                      <option value="admin">Administrador (acceso total + usuarios)</option>
                     </select>
                   )}
+                </div>
+                {/* Selector de turno - solo para roles que no ven todos los turnos */}
+                {!editingProfile.isSelf && !['admin', 'supervisor'].includes(editingProfile.role) && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Turno Asignado</label>
+                    <select name="turno" defaultValue={editingProfile.turno || 1} onChange={async (e) => {
+                      const newTurno = parseInt(e.target.value);
+                      try {
+                        const { error } = await sb.from('profiles').update({ turno: newTurno }).eq('id', editingProfile.id);
+                        if (error) {
+                          showNotify("Error al cambiar turno: " + error.message, "error");
+                          e.target.value = editingProfile.turno || 1;
+                          return;
+                        }
+                        await addLog('CAMBIO_TURNO', `${editingProfile.nombre} asignado a ${TURNOS[newTurno]}`);
+                        showNotify("Turno actualizado");
+                        setEditingProfile({...editingProfile, turno: newTurno});
+                        loadData();
+                      } catch (err) {
+                        showNotify("Error: " + err.message, "error");
+                        e.target.value = editingProfile.turno || 1;
+                      }
+                    }} className="w-full p-4 bg-indigo-50 border border-indigo-200 rounded-2xl font-bold cursor-pointer text-indigo-700">
+                      <option value="1">1er Turno</option>
+                      <option value="2">2do Turno</option>
+                      <option value="3">3er Turno</option>
+                    </select>
+                  </div>
+                )}
                 </div>
                 {!editingProfile.isSelf && (
                   <div className="space-y-1.5">
@@ -1501,6 +1597,7 @@ const App = () => {
                 const login = e.target.login.value.trim().toLowerCase();
                 const password = e.target.password.value;
                 const role = e.target.role.value;
+                const turno = parseInt(e.target.turno.value) || 1;
                 
                 if (!nombre || !login || !password) {
                   showNotify("Completá todos los campos", "error");
@@ -1530,7 +1627,12 @@ const App = () => {
                     return;
                   }
                   
-                  await addLog('CREAR_USUARIO', `Creó usuario: ${nombre} (${role})`);
+                  // Actualizar turno del usuario
+                  if (newUserId) {
+                    await sb.from('profiles').update({ turno }).eq('id', newUserId);
+                  }
+                  
+                  await addLog('CREAR_USUARIO', `Creó usuario: ${nombre} (${role}) - T${turno}`);
                   showNotify("Usuario creado correctamente");
                   setShowNewUser(false);
                   loadData();
@@ -1555,10 +1657,21 @@ const App = () => {
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Rol</label>
                   <select name="role" defaultValue="user" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer">
-                    <option value="user">Usuario (solo lectura)</option>
-                    <option value="moderator">Moderador (puede completar tareas)</option>
-                    <option value="admin">Administrador (acceso total)</option>
+                    <option value="user">Usuario (solo ver y completar sus tareas)</option>
+                    <option value="moderator">Moderador (gestionar novedades de su turno)</option>
+                    <option value="encargado">Encargado (supervisor de su turno)</option>
+                    <option value="supervisor">Supervisor (acceso a todos los turnos)</option>
+                    <option value="admin">Administrador (acceso total + usuarios)</option>
                   </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-indigo-500 uppercase ml-1">Turno Asignado</label>
+                  <select name="turno" defaultValue="1" className="w-full p-4 bg-indigo-50 border border-indigo-200 rounded-2xl font-bold cursor-pointer text-indigo-700">
+                    <option value="1">1er Turno</option>
+                    <option value="2">2do Turno</option>
+                    <option value="3">3er Turno</option>
+                  </select>
+                  <p className="text-[9px] text-slate-400 ml-1">Admin y Supervisor ven todos los turnos automáticamente</p>
                 </div>
                 <button type="submit" disabled={saving} className="w-full py-5 bg-emerald-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl disabled:opacity-50 flex items-center justify-center gap-2">
                   {saving ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Creando...</> : 'Crear Usuario'}
@@ -1604,7 +1717,7 @@ const App = () => {
                         className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
                       >
                         <option value="todos">Todos los usuarios</option>
-                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                        {getProfilesByTurno().map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1.5">
@@ -1837,14 +1950,14 @@ const App = () => {
         {currentView === 'juicios' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center mb-6">
-              <div><h2 className="text-3xl font-black text-slate-800">⚖️ Juicios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">{userProfile?.role === 'admin' ? 'Todas las citaciones' : 'Tus citaciones'}</p></div>
-              {(userProfile?.role === 'admin' || userProfile?.role === 'moderator') && (
+              <div><h2 className="text-3xl font-black text-slate-800">⚖️ Juicios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">{canSeeAllTurnos() ? 'Todas las citaciones' : 'Citaciones de tu turno'}</p></div>
+              {canManageJuicios() && (
                 <button onClick={() => { setEditingJuicio({}); setSelectedCitados([]); }} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo Juicio</button>
               )}
             </div>
             
             {/* Formulario de nuevo/editar juicio */}
-            {editingJuicio && (userProfile?.role === 'admin' || userProfile?.role === 'moderator') && (
+            {editingJuicio && canManageJuicios() && (
               <div className="bg-white rounded-[2rem] shadow-xl p-8 border border-slate-200 mb-6">
                 <h3 className="text-lg font-black text-slate-800 mb-6">{editingJuicio.id ? 'Editar' : 'Nuevo'} Juicio</h3>
                 <form onSubmit={async (e) => {
@@ -1864,7 +1977,8 @@ const App = () => {
                     descripcion: d.get('desc') || null,
                     fecha_juicio: fechaCorregida,
                     citados: selectedCitados,
-                    creado_por: userProfile.nombre
+                    creado_por: userProfile.nombre,
+                    turno: getUserTurno()
                   };
                   if (!fechaRaw) {
                     showNotify("La fecha es obligatoria", "error");
@@ -1938,7 +2052,7 @@ const App = () => {
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Citados *</label>
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                       <div className="flex flex-wrap gap-2">
-                        {profiles.map(p => {
+                        {getProfilesByTurno().map(p => {
                           const isSelected = selectedCitados.includes(p.nombre);
                           return (
                             <button
@@ -1975,16 +2089,19 @@ const App = () => {
 
             {/* Lista de juicios */}
             {(() => {
-              // Filtrar juicios: admin ve todos, usuario solo donde está citado
-              const juiciosVisibles = userProfile?.role === 'admin' 
+              // Filtrar juicios: admin/supervisor ven todos, otros solo su turno o donde están citados
+              const juiciosPorTurno = filterByTurno(juicios);
+              const juiciosVisibles = canSeeAllTurnos() 
                 ? juicios 
-                : juicios.filter(j => (j.citados || []).includes(userProfile?.nombre));
+                : canManageJuicios() 
+                  ? juiciosPorTurno 
+                  : juiciosPorTurno.filter(j => (j.citados || []).includes(userProfile?.nombre));
               
               if (juiciosVisibles.length === 0) {
                 return (
                   <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-300">
                     <div className="text-5xl mb-4">⚖️</div>
-                    <p className="text-slate-500 font-bold">{userProfile?.role === 'admin' ? 'No hay juicios programados' : 'No tienes citaciones pendientes'}</p>
+                    <p className="text-slate-500 font-bold">{canSeeAllTurnos() ? 'No hay juicios programados' : 'No tienes citaciones pendientes'}</p>
                   </div>
                 );
               }
@@ -2433,7 +2550,7 @@ const App = () => {
                       <label className="text-[10px] font-bold text-slate-500 uppercase">👤 Por Usuario:</label>
                       <select value={licPrintUser} onChange={(e) => setLicPrintUser(e.target.value)} className="w-full mt-1 p-2 text-sm border border-slate-200 rounded-lg">
                         <option value="">-- Seleccionar --</option>
-                        {profiles.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                        {getProfilesByTurno().map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
                       </select>
                     </div>
                     <button onClick={() => {
@@ -2657,9 +2774,9 @@ const App = () => {
                       <div className={selectedCalendarDate !== 'nueva' ? "border-t-2 border-slate-100 pt-4 mt-4" : ""}>
                         <div className="space-y-2">
                           <div className="flex flex-wrap gap-2 items-end">
-                            {userProfile?.role === 'admin' && (
+                            {canManageLicencias() && (
                               <select id="licUsuario" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold flex-1 min-w-[120px]">
-                                {profiles.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                                {getProfilesByTurno().map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                               </select>
                             )}
                             <input id="licFechaDesde" type="date" defaultValue={selectedCalendarDate !== 'nueva' ? selectedCalendarDate : ''} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
@@ -2679,8 +2796,8 @@ const App = () => {
                               const fechaHasta = document.getElementById('licFechaHasta').value || fechaDesde;
                               const tipo = document.getElementById('licTipo').value;
                               const descripcion = document.getElementById('licDescripcion').value;
-                              const targetUserId = userProfile?.role === 'admin' ? document.getElementById('licUsuario').value : session.user.id;
-                              const targetUserNombre = userProfile?.role === 'admin' ? profiles.find(p => p.id === targetUserId)?.nombre : userProfile.nombre;
+                              const targetUserId = canManageLicencias() ? document.getElementById('licUsuario').value : session.user.id;
+                              const targetUserNombre = canManageLicencias() ? profiles.find(p => p.id === targetUserId)?.nombre : userProfile.nombre;
                               
                               if (!fechaDesde) { showNotify("Selecciona una fecha", "error"); return; }
                               
@@ -2693,7 +2810,7 @@ const App = () => {
                               while (current <= fin) {
                                 const fechaStr = current.toISOString().split('T')[0];
                                 const existe = licencias.find(l => l.fecha === fechaStr && l.user_id === targetUserId);
-                                if (!existe) fechas.push({ user_id: targetUserId, user_nombre: targetUserNombre, fecha: fechaStr, tipo, descripcion: descripcion || null });
+                                if (!existe) fechas.push({ user_id: targetUserId, user_nombre: targetUserNombre, fecha: fechaStr, tipo, descripcion: descripcion || null, turno: getUserTurno() });
                                 current.setDate(current.getDate() + 1);
                               }
                               
@@ -2911,7 +3028,7 @@ const App = () => {
             <div className="bg-white rounded-xl shadow-md border border-slate-200 p-3">
               <div className="flex justify-between items-center mb-2">
                 <span className="font-bold text-slate-700 text-sm">{stockItems.filter(i => i.ubicacion === selectedUbicacion).length} items</span>
-                {(userProfile?.role === 'admin' || userProfile?.role === 'moderator') && (<button onClick={() => setEditingItem({ ubicacion: selectedUbicacion })} className="px-3 py-1 bg-emerald-500 text-white rounded-lg font-bold text-xs">+ Nuevo</button>)}
+                {canManageStock() && (<button onClick={() => setEditingItem({ ubicacion: selectedUbicacion })} className="px-3 py-1 bg-emerald-500 text-white rounded-lg font-bold text-xs">+ Nuevo</button>)}
               </div>
               
               {editingItem && (
@@ -2968,7 +3085,7 @@ const App = () => {
                       <div key={item.id} className={`flex items-center justify-between py-1 px-2 rounded ${bgColor} ${highlighted ? 'animate-pulse' : ''}`}>
                         <div className="flex items-center gap-1 flex-1 min-w-0"><span className="font-semibold text-slate-800 text-sm truncate">{item.nombre}</span>{bajo && <span className="text-[8px] bg-red-500 text-white px-1 rounded">!</span>}</div>
                         <div className="flex items-center gap-0.5">
-                          {(userProfile?.role === 'admin' || userProfile?.role === 'moderator') ? (<>
+                          {canManageStock() ? (<>
                             <button onClick={async () => { const c = prompt("Sacar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; if(n>item.cantidad){showNotify("No hay","error");return;} await sb.from('stock_items').update({cantidad:item.cantidad-n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'salida',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre}]); loadData(); }} className="w-6 h-6 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">-</button>
                             <span className={`w-8 text-center text-sm font-black ${bajo?'text-red-600':'text-slate-700'}`}>{item.cantidad}</span>
                             <button onClick={async () => { const c = prompt("Agregar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; await sb.from('stock_items').update({cantidad:item.cantidad+n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'entrada',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre}]); loadData(); }} className="w-6 h-6 bg-emerald-100 text-emerald-600 rounded text-xs font-bold hover:bg-emerald-200">+</button>
@@ -3022,12 +3139,17 @@ const App = () => {
           </div>
         )}
 
-        {/* AUDITORÍA DE USUARIOS (Admin) */}
-        {currentView === 'auditoria' && userProfile?.role === 'admin' && (
+        {/* AUDITORÍA DE USUARIOS (Admin/Supervisor/Encargado) */}
+        {currentView === 'auditoria' && canAudit() && (() => {
+          // Filtrar profiles según el rol del usuario
+          const auditableProfiles = canSeeAllTurnos() ? profiles : profiles.filter(p => p.turno === getUserTurno());
+          return (
           <div className="space-y-6">
             <div className="mb-6">
               <h2 className="text-3xl font-black text-slate-800">🔍 Auditar Usuario</h2>
-              <p className="text-xs text-slate-600 font-bold uppercase mt-1">Ver pendientes por persona</p>
+              <p className="text-xs text-slate-600 font-bold uppercase mt-1">
+                {canSeeAllTurnos() ? 'Ver pendientes por persona (todos los turnos)' : `Ver pendientes por persona (${TURNOS[getUserTurno()]})`}
+              </p>
             </div>
             
             {/* Selector de usuario */}
@@ -3042,7 +3164,7 @@ const App = () => {
                 className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer"
               >
                 <option value="">-- Elegir usuario --</option>
-                {profiles.map(p => <option key={p.id} value={p.id}>{p.nombre} ({p.role})</option>)}
+                {auditableProfiles.map(p => <option key={p.id} value={p.id}>{p.nombre} ({ROLES[p.role]?.label || p.role}) {!canSeeAllTurnos() ? '' : `- T${p.turno || 1}`}</option>)}
               </select>
             </div>
 
@@ -3054,7 +3176,12 @@ const App = () => {
                     <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-2xl font-black">{selectedAuditUser.nombre?.charAt(0).toUpperCase()}</div>
                     <div>
                       <h3 className="text-2xl font-black">{selectedAuditUser.nombre}</h3>
-                      <p className="text-slate-400 text-sm uppercase font-bold">{selectedAuditUser.role}</p>
+                      <p className="text-slate-400 text-sm uppercase font-bold flex items-center gap-2">
+                        {ROLES[selectedAuditUser.role]?.label || selectedAuditUser.role}
+                        {!['admin', 'supervisor'].includes(selectedAuditUser.role) && (
+                          <span className="px-2 py-0.5 bg-indigo-500/30 text-indigo-300 rounded text-[10px]">T{selectedAuditUser.turno || 1}</span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -3308,7 +3435,7 @@ const App = () => {
               </div>
             )}
           </div>
-        )}
+        );})()}
       </main>
 
       {/* MODAL CAMBIAR CONTRASEÑA */}
@@ -3326,7 +3453,7 @@ const App = () => {
       )}
 
       {/* MODAL ESTADÍSTICAS */}
-      {showStats && userProfile.role === 'admin' && (
+      {showStats && canSeeStats() && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); }}>
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-8 bg-slate-900 text-white flex justify-between items-center sticky top-0 z-10">
@@ -3380,9 +3507,11 @@ const App = () => {
               
               {/* Por usuario */}
               <div>
-                <h4 className="text-[10px] font-black text-slate-500 uppercase mb-4">Por Usuario (clic para detalle)</h4>
+                <h4 className="text-[10px] font-black text-slate-500 uppercase mb-4">
+                  Por Usuario {!canSeeAllTurnos() && `(${TURNOS[getUserTurno()]})`} (clic para detalle)
+                </h4>
                 <div className="space-y-3">
-                  {profiles.map(p => {
+                  {(canSeeAllTurnos() ? profiles : profiles.filter(p => p.turno === getUserTurno())).map(p => {
                     const stats = getUserDetailedStats(p, statsYear);
                     const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
                     const isSel = selectedUserStats?.id === p.id;
@@ -3393,7 +3522,12 @@ const App = () => {
                             <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-sm">{p.nombre?.charAt(0).toUpperCase()}</div>
                             <div>
                               <div className="font-black text-slate-800 text-sm">{p.nombre}</div>
-                              <div className="text-[9px] text-slate-500 font-bold uppercase">{p.role}</div>
+                              <div className="text-[9px] text-slate-500 font-bold uppercase flex items-center gap-1">
+                                {ROLES[p.role]?.label || p.role}
+                                {canSeeAllTurnos() && !['admin', 'supervisor'].includes(p.role) && (
+                                  <span className="px-1 bg-indigo-200 text-indigo-700 rounded text-[8px]">T{p.turno || 1}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <div className="text-right">
