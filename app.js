@@ -1526,7 +1526,6 @@ const App = () => {
                     </select>
                   </div>
                 )}
-                </div>
                 {!editingProfile.isSelf && (
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nueva Contraseña</label>
