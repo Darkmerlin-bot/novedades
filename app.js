@@ -1534,28 +1534,35 @@ const App = () => {
                     <label className="text-[10px] font-black text-indigo-500 uppercase ml-1">Turno Asignado</label>
                     <select 
                       name="turno" 
-                      value={editingProfile.turno || 1} 
+                      value={String(editingProfile.turno || 1)} 
                       onChange={async (e) => {
-                        const newTurno = parseInt(e.target.value);
+                        const newTurno = parseInt(e.target.value, 10);
+                        showNotify("Guardando turno...", "success");
                         try {
-                          const { error } = await sb.from('profiles').update({ turno: newTurno }).eq('id', editingProfile.id);
+                          const { data, error } = await sb.from('profiles').update({ turno: newTurno }).eq('id', editingProfile.id).select();
                           if (error) {
-                            showNotify("Error al cambiar turno: " + error.message, "error");
+                            console.error("Error RLS:", error);
+                            showNotify("Error: " + error.message + " - Ejecutá fix_turno_update.sql", "error");
+                            return;
+                          }
+                          if (!data || data.length === 0) {
+                            showNotify("No se pudo actualizar. Verificá permisos RLS", "error");
                             return;
                           }
                           await addLog('CAMBIO_TURNO', `${editingProfile.nombre} asignado a ${TURNOS[newTurno]}`);
-                          showNotify("Turno actualizado");
+                          showNotify("✓ Turno cambiado a " + TURNOS[newTurno]);
                           setEditingProfile({...editingProfile, turno: newTurno});
                           loadData();
                         } catch (err) {
+                          console.error("Error:", err);
                           showNotify("Error: " + err.message, "error");
                         }
                       }} 
                       className="w-full p-4 bg-indigo-50 border border-indigo-200 rounded-2xl font-bold cursor-pointer text-indigo-700"
                     >
-                      <option value={1}>1er Turno</option>
-                      <option value={2}>2do Turno</option>
-                      <option value={3}>3er Turno</option>
+                      <option value="1">1er Turno</option>
+                      <option value="2">2do Turno</option>
+                      <option value="3">3er Turno</option>
                     </select>
                     {['admin', 'supervisor'].includes(editingProfile.role) && (
                       <p className="text-[9px] text-slate-400 ml-1">Admin y Supervisor ven todos los turnos automáticamente</p>
@@ -1632,7 +1639,9 @@ const App = () => {
                 const login = e.target.login.value.trim().toLowerCase();
                 const password = e.target.password.value;
                 const role = e.target.role.value;
-                const turno = parseInt(e.target.turno.value) || 1;
+                const turno = parseInt(e.target.turno.value, 10) || 1;
+                
+                console.log("Creando usuario con turno:", turno, typeof turno);
                 
                 if (!nombre || !login || !password) {
                   showNotify("Completá todos los campos", "error");
@@ -1664,11 +1673,15 @@ const App = () => {
                   
                   // Actualizar turno del usuario
                   if (newUserId) {
-                    const { error: turnoError } = await sb.from('profiles').update({ turno }).eq('id', newUserId);
+                    console.log("Actualizando turno para nuevo usuario:", newUserId, "turno:", turno);
+                    const { data: updateData, error: turnoError } = await sb.from('profiles').update({ turno }).eq('id', newUserId).select();
+                    console.log("Resultado update turno:", updateData, turnoError);
                     if (turnoError) {
                       console.error("Error al asignar turno:", turnoError);
-                      showNotify("Usuario creado pero error al asignar turno. ¿Ejecutaste el SQL?", "error");
+                      showNotify("Usuario creado pero error al asignar turno: " + turnoError.message, "error");
                     }
+                  } else {
+                    console.log("No se obtuvo newUserId del RPC");
                   }
                   
                   await addLog('CREAR_USUARIO', `Creó usuario: ${nombre} (${role}) - T${turno}`);
@@ -1705,10 +1718,10 @@ const App = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-indigo-500 uppercase ml-1">Turno Asignado</label>
-                  <select name="turno" defaultValue={1} className="w-full p-4 bg-indigo-50 border border-indigo-200 rounded-2xl font-bold cursor-pointer text-indigo-700">
-                    <option value={1}>1er Turno</option>
-                    <option value={2}>2do Turno</option>
-                    <option value={3}>3er Turno</option>
+                  <select name="turno" defaultValue="1" className="w-full p-4 bg-indigo-50 border border-indigo-200 rounded-2xl font-bold cursor-pointer text-indigo-700">
+                    <option value="1">1er Turno</option>
+                    <option value="2">2do Turno</option>
+                    <option value="3">3er Turno</option>
                   </select>
                   <p className="text-[9px] text-slate-400 ml-1">Admin y Supervisor ven todos los turnos automáticamente</p>
                 </div>
