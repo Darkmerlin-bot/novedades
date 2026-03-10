@@ -735,24 +735,43 @@ const App = () => {
     // Filtrar novedades por año
     const filteredNovedades = filterYear === 'todos' ? novedades : novedades.filter(n => n.anio?.toString() === filterYear);
     
+    // Set para contar novedades únicas donde participó
+    const novedadesConcurridas = new Set();
+    const novedadesNormales = new Set();
+    const novedadesComisiones = new Set();
+    const novedadesEventos = new Set();
+    
     filteredNovedades.forEach(n => {
-      if ((n.informe_actuacion || n.informeActuacion) === profile.nombre) { stats.informeActuacion.a++; if (isTaskDone(n, { checkKey: 'actuacion_realizada', checkKeyOld: 'actuacionRealizada' })) stats.informeActuacion.c++; }
-      if ((n.informe_criminalistico || n.informeCriminalistico) === profile.nombre) { stats.informeCriminalistico.a++; if (isTaskDone(n, { checkKey: 'criminalistico_realizado', checkKeyOld: 'criminalisticoRealizado' })) stats.informeCriminalistico.c++; }
-      if ((n.informe_pericial || n.informePericial) === profile.nombre) { stats.informePericial.a++; if (isTaskDone(n, { checkKey: 'pericial_realizado', checkKeyOld: 'pericialRealizado' })) stats.informePericial.c++; }
-      if (n.croquis === profile.nombre) { stats.croquis.a++; if (isTaskDone(n, { checkKey: 'croquis_realizado', checkKeyOld: 'croquisRealizado' })) stats.croquis.c++; }
+      const name = profile.nombre;
+      let participaEnEsta = false;
+      
+      // Novedades normales
+      if (!n.es_comision && !n.es_evento_social) {
+        if ((n.informe_actuacion || n.informeActuacion) === name) { stats.informeActuacion.a++; if (isTaskDone(n, { checkKey: 'actuacion_realizada', checkKeyOld: 'actuacionRealizada' })) stats.informeActuacion.c++; participaEnEsta = true; }
+        if ((n.informe_criminalistico || n.informeCriminalistico) === name) { stats.informeCriminalistico.a++; if (isTaskDone(n, { checkKey: 'criminalistico_realizado', checkKeyOld: 'criminalisticoRealizado' })) stats.informeCriminalistico.c++; participaEnEsta = true; }
+        if ((n.informe_pericial || n.informePericial) === name) { stats.informePericial.a++; if (isTaskDone(n, { checkKey: 'pericial_realizado', checkKeyOld: 'pericialRealizado' })) stats.informePericial.c++; participaEnEsta = true; }
+        if (n.croquis === name) { stats.croquis.a++; if (isTaskDone(n, { checkKey: 'croquis_realizado', checkKeyOld: 'croquisRealizado' })) stats.croquis.c++; participaEnEsta = true; }
+        if (participaEnEsta) novedadesNormales.add(n.id);
+      }
+      
       // Comisiones
       if (n.es_comision) {
-        if (n.comision_carga_sgsp === profile.nombre) stats.comisiones.cargaSgsp++;
-        if (n.comision_chofer === profile.nombre) stats.comisiones.chofer++;
-        if (n.comision_acompanante === profile.nombre) stats.comisiones.acompanante++;
+        if (n.comision_carga_sgsp === name) { stats.comisiones.cargaSgsp++; participaEnEsta = true; }
+        if (n.comision_chofer === name) { stats.comisiones.chofer++; participaEnEsta = true; }
+        if (n.comision_acompanante === name) { stats.comisiones.acompanante++; participaEnEsta = true; }
+        if (participaEnEsta) novedadesComisiones.add(n.id);
       }
+      
       // Eventos sociales
       if (n.es_evento_social) {
-        if (n.evento_fotografo === profile.nombre) stats.eventos.fotografo++;
-        if (n.evento_acompanante1 === profile.nombre) stats.eventos.acompanante++;
-        if (n.evento_acompanante2 === profile.nombre) stats.eventos.acompanante++;
-        if (n.evento_acompanante3 === profile.nombre) stats.eventos.acompanante++;
+        if (n.evento_fotografo === name) { stats.eventos.fotografo++; participaEnEsta = true; }
+        if (n.evento_acompanante1 === name) { stats.eventos.acompanante++; participaEnEsta = true; }
+        if (n.evento_acompanante2 === name) { stats.eventos.acompanante++; participaEnEsta = true; }
+        if (n.evento_acompanante3 === name) { stats.eventos.acompanante++; participaEnEsta = true; }
+        if (participaEnEsta) novedadesEventos.add(n.id);
       }
+      
+      if (participaEnEsta) novedadesConcurridas.add(n.id);
     });
     
     // Contar juicios donde el usuario está citado
@@ -769,7 +788,20 @@ const App = () => {
     // Las comisiones y eventos suman al total de tareas y se consideran completadas
     const totalConExtras = total + totalComisiones + totalEventos;
     const doneConExtras = done + totalComisiones + totalEventos;
-    return { ...stats, total: totalConExtras, done: doneConExtras, pending: totalConExtras - doneConExtras, totalComisiones, totalEventos };
+    
+    return { 
+      ...stats, 
+      total: totalConExtras, 
+      done: doneConExtras, 
+      pending: totalConExtras - doneConExtras, 
+      totalComisiones, 
+      totalEventos,
+      // Novedades concurridas (únicas)
+      novedadesConcurridas: novedadesConcurridas.size,
+      novedadesNormales: novedadesNormales.size,
+      novedadesComisiones: novedadesComisiones.size,
+      novedadesEventos: novedadesEventos.size
+    };
   };
   
   // Obtener años disponibles para el filtro
@@ -796,6 +828,7 @@ const App = () => {
       pendientes: filteredNovedades.filter(n => !isNovedadComplete(n)).length,
       completadas: filteredNovedades.filter(n => isNovedadComplete(n)).length,
       comisiones: filteredNovedades.filter(n => n.es_comision).length,
+      eventos: filteredNovedades.filter(n => n.es_evento_social).length,
       totalJuicios: filteredJuicios.length
     };
   };
@@ -3056,11 +3089,35 @@ const App = () => {
 
                   return (
                     <>
-                      {/* Estadísticas */}
+                      {/* Novedades concurridas */}
+                      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-4 shadow-lg text-white">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-3xl font-black">{stats.novedadesConcurridas}</div>
+                            <div className="text-[10px] font-bold uppercase opacity-90">Novedades Concurridas</div>
+                          </div>
+                          <div className="flex gap-3 text-center">
+                            <div className="bg-white/20 rounded-xl px-3 py-2">
+                              <div className="text-lg font-black">{stats.novedadesNormales}</div>
+                              <div className="text-[8px] uppercase">Pericias</div>
+                            </div>
+                            <div className="bg-white/20 rounded-xl px-3 py-2">
+                              <div className="text-lg font-black">{stats.novedadesComisiones}</div>
+                              <div className="text-[8px] uppercase">Comisiones</div>
+                            </div>
+                            <div className="bg-white/20 rounded-xl px-3 py-2">
+                              <div className="text-lg font-black">{stats.novedadesEventos}</div>
+                              <div className="text-[8px] uppercase">Eventos</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Estadísticas de tareas */}
                       <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                         <div className="bg-white p-3 rounded-2xl text-center shadow-md border border-slate-200">
                           <div className="text-2xl font-black text-slate-800">{stats.total}</div>
-                          <div className="text-[8px] text-slate-500 font-bold uppercase">Asignadas</div>
+                          <div className="text-[8px] text-slate-500 font-bold uppercase">Tareas</div>
                         </div>
                         <div className="bg-emerald-50 p-3 rounded-2xl text-center shadow-md border border-emerald-200">
                           <div className="text-2xl font-black text-emerald-700">{stats.done}</div>
@@ -3293,26 +3350,30 @@ const App = () => {
               {/* Resumen general */}
               <div>
                 <h4 className="text-[10px] font-black text-slate-500 uppercase mb-4">Resumen {statsYear !== 'todos' && `(${statsYear})`}</h4>
-                <div className="grid grid-cols-5 gap-3">
-                  <div className="bg-slate-100 p-4 rounded-2xl text-center">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  <div className="bg-slate-100 p-3 rounded-2xl text-center">
                     <div className="text-2xl font-black text-slate-800">{getFilteredStats().totalNovedades}</div>
-                    <div className="text-[8px] uppercase font-black text-slate-500">Novedades</div>
+                    <div className="text-[7px] uppercase font-black text-slate-500">Novedades</div>
                   </div>
-                  <div className="bg-amber-100 p-4 rounded-2xl text-center">
+                  <div className="bg-amber-100 p-3 rounded-2xl text-center">
                     <div className="text-2xl font-black text-amber-700">{getFilteredStats().pendientes}</div>
-                    <div className="text-[8px] uppercase font-black text-amber-600">Pendientes</div>
+                    <div className="text-[7px] uppercase font-black text-amber-600">Pendientes</div>
                   </div>
-                  <div className="bg-emerald-100 p-4 rounded-2xl text-center">
+                  <div className="bg-emerald-100 p-3 rounded-2xl text-center">
                     <div className="text-2xl font-black text-emerald-700">{getFilteredStats().completadas}</div>
-                    <div className="text-[8px] uppercase font-black text-emerald-600">Completadas</div>
+                    <div className="text-[7px] uppercase font-black text-emerald-600">Completadas</div>
                   </div>
-                  <div className="bg-orange-100 p-4 rounded-2xl text-center">
+                  <div className="bg-orange-100 p-3 rounded-2xl text-center">
                     <div className="text-2xl font-black text-orange-700">{getFilteredStats().comisiones}</div>
-                    <div className="text-[8px] uppercase font-black text-orange-600">Comisiones</div>
+                    <div className="text-[7px] uppercase font-black text-orange-600">Comisiones</div>
                   </div>
-                  <div className="bg-blue-100 p-4 rounded-2xl text-center">
+                  <div className="bg-pink-100 p-3 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-pink-700">{getFilteredStats().eventos || 0}</div>
+                    <div className="text-[7px] uppercase font-black text-pink-600">Eventos</div>
+                  </div>
+                  <div className="bg-blue-100 p-3 rounded-2xl text-center">
                     <div className="text-2xl font-black text-blue-700">{getFilteredStats().totalJuicios}</div>
-                    <div className="text-[8px] uppercase font-black text-blue-600">Juicios</div>
+                    <div className="text-[7px] uppercase font-black text-blue-600">Juicios</div>
                   </div>
                 </div>
               </div>
@@ -3336,38 +3397,42 @@ const App = () => {
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-lg font-black text-slate-800">{pct}%</div>
-                            <div className="text-[9px] text-slate-500 font-bold uppercase">Completado</div>
+                            <div className="text-lg font-black text-indigo-600">{stats.novedadesConcurridas}</div>
+                            <div className="text-[9px] text-indigo-500 font-bold uppercase">Concurridas</div>
                           </div>
                         </div>
                         <div className="h-2 bg-slate-300 rounded-full overflow-hidden mb-3">
                           <div className="h-full bg-emerald-500 rounded-full" style={{ width: pct + '%' }}></div>
                         </div>
-                        <div className="grid grid-cols-5 gap-2 text-center">
+                        <div className="grid grid-cols-6 gap-2 text-center">
                           <div className="bg-white p-2 rounded-xl">
                             <div className="text-lg font-black text-slate-700">{stats.total}</div>
-                            <div className="text-[8px] text-slate-500 font-bold uppercase">Tareas</div>
+                            <div className="text-[7px] text-slate-500 font-bold uppercase">Tareas</div>
                           </div>
                           <div className="bg-emerald-100 p-2 rounded-xl">
                             <div className="text-lg font-black text-emerald-700">{stats.done}</div>
-                            <div className="text-[8px] text-emerald-600 font-bold uppercase">Hechas</div>
+                            <div className="text-[7px] text-emerald-600 font-bold uppercase">Hechas</div>
                           </div>
                           <div className="bg-red-100 p-2 rounded-xl">
                             <div className="text-lg font-black text-red-600">{stats.pending}</div>
-                            <div className="text-[8px] text-red-500 font-bold uppercase">Pend.</div>
+                            <div className="text-[7px] text-red-500 font-bold uppercase">Pend.</div>
                           </div>
                           <div className="bg-orange-100 p-2 rounded-xl">
                             <div className="text-lg font-black text-orange-700">{stats.totalComisiones}</div>
-                            <div className="text-[8px] text-orange-600 font-bold uppercase">Comis.</div>
+                            <div className="text-[7px] text-orange-600 font-bold uppercase">Comis.</div>
+                          </div>
+                          <div className="bg-pink-100 p-2 rounded-xl">
+                            <div className="text-lg font-black text-pink-700">{stats.totalEventos || 0}</div>
+                            <div className="text-[7px] text-pink-600 font-bold uppercase">Eventos</div>
                           </div>
                           <div className="bg-blue-100 p-2 rounded-xl">
                             <div className="text-lg font-black text-blue-700">{stats.juicios}</div>
-                            <div className="text-[8px] text-blue-600 font-bold uppercase">Juicios</div>
+                            <div className="text-[7px] text-blue-600 font-bold uppercase">Juicios</div>
                           </div>
                         </div>
                         {isSel && (
                           <div className="mt-4 pt-4 border-t border-slate-300 animate-fadeIn">
-                            <h5 className="text-[9px] font-black text-slate-600 uppercase mb-3">📋 Desglose de tareas:</h5>
+                            <h5 className="text-[9px] font-black text-slate-600 uppercase mb-3">📋 Desglose ({stats.novedadesConcurridas} novedades):</h5>
                             <div className="grid grid-cols-2 gap-2">
                               <div className="bg-white p-3 rounded-xl">
                                 <div className="text-[10px] font-bold text-slate-600 mb-1">Inf. Actuación</div>
