@@ -20,7 +20,7 @@ const Notification = ({ message, type }) => (
 );
 
 // HEADER
-const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount, juiciosCount, recordatoriosCount, stockBajoCount }) => (
+const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount, juiciosCount, recordatoriosCount, stockBajoCount, turnoActivo, setTurnoActivo, TURNOS }) => (
   <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50 print:hidden">
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
@@ -32,6 +32,19 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
           </div>
         </div>
         <div className="flex items-center justify-between md:justify-end gap-3">
+          {/* Selector de turno para admin/supervisor */}
+          {['admin', 'supervisor'].includes(userProfile?.role) && (
+            <select 
+              value={turnoActivo} 
+              onChange={(e) => setTurnoActivo(parseInt(e.target.value))}
+              className="px-3 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs cursor-pointer border-2 border-indigo-400"
+            >
+              <option value="0">👁️ Todos los turnos</option>
+              <option value="1">T1 - 1er Turno</option>
+              <option value="2">T2 - 2do Turno</option>
+              <option value="3">T3 - 3er Turno</option>
+            </select>
+          )}
           <div className="flex flex-col items-end mr-2">
             <span className="text-sm font-bold text-emerald-400">{userProfile?.nombre}</span>
             <div className="flex items-center gap-2">
@@ -241,7 +254,8 @@ const App = () => {
   const [modalShownOnce, setModalShownOnce] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showNewUser, setShowNewUser] = useState(false);
-  const [selectedUserTurno, setSelectedUserTurno] = useState(0); // 0 = todos
+  const [selectedUserTurno, setSelectedUserTurno] = useState(0); // 0 = todos (para filtro de usuarios)
+  const [turnoActivo, setTurnoActivo] = useState(0); // 0 = todos, 1/2/3 = turno específico (para admin/supervisor)
   const [selectedUserStats, setSelectedUserStats] = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [expandedId, setExpandedId] = useState(null);
@@ -584,20 +598,36 @@ const App = () => {
   const canBackup = () => ['admin', 'supervisor'].includes(userProfile?.role);
   const canPrint = () => ['admin', 'supervisor', 'encargado'].includes(userProfile?.role);
   const getUserTurno = () => userProfile?.turno || 1;
+  
+  // Obtener el turno efectivo para filtrar/crear datos
+  const getTurnoEfectivo = () => {
+    if (canSeeAllTurnos()) {
+      return turnoActivo || 0; // 0 = todos
+    }
+    return getUserTurno();
+  };
 
-  // Filtrar datos por turno (admin y supervisor ven todo, otros solo su turno)
+  // Filtrar datos por turno
   const filterByTurno = (items) => {
     if (!items || !Array.isArray(items)) return [];
-    if (canSeeAllTurnos()) return items;
-    const miTurno = getUserTurno();
-    return items.filter(item => item.turno === miTurno || !item.turno);
+    const turnoEfectivo = getTurnoEfectivo();
+    if (turnoEfectivo === 0) return items; // Ver todos
+    return items.filter(item => item.turno === turnoEfectivo || !item.turno);
   };
 
   // Filtrar profiles por turno (para selectores)
   const getProfilesByTurno = () => {
-    if (canSeeAllTurnos()) return profiles;
-    const miTurno = getUserTurno();
-    return profiles.filter(p => p.turno === miTurno);
+    const turnoEfectivo = getTurnoEfectivo();
+    if (turnoEfectivo === 0) return profiles;
+    return profiles.filter(p => p.turno === turnoEfectivo);
+  };
+  
+  // Obtener turno para guardar nuevos registros
+  const getTurnoParaGuardar = () => {
+    if (canSeeAllTurnos() && turnoActivo > 0) {
+      return turnoActivo;
+    }
+    return getUserTurno();
   };
   // ==================== FIN SISTEMA DE TURNOS ====================
   const sortByNumber = (a, b) => extractNumber(a.numero_novedad) - extractNumber(b.numero_novedad);
@@ -1088,7 +1118,7 @@ const App = () => {
   // APP
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={juicios.filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={recordatorios.filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} />
+      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={juicios.filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={recordatorios.filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} turnoActivo={turnoActivo} setTurnoActivo={setTurnoActivo} TURNOS={TURNOS} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
@@ -1201,8 +1231,8 @@ const App = () => {
                   await addLog('EDITAR', 'Editó ' + num); showNotify("Actualizado");
                 } else {
                   const insertPayload = (isComision || isEventoSocial) ? 
-                    { ...payload, turno: getUserTurno(), creado_por: userProfile.nombre, actuacion_realizada: true, criminalistico_realizado: true, pericial_realizado: true, croquis_realizado: true } :
-                    { ...payload, turno: getUserTurno(), creado_por: userProfile.nombre, actuacion_realizada: false, criminalistico_realizado: false, pericial_realizado: false, croquis_realizado: false };
+                    { ...payload, turno: getTurnoParaGuardar(), creado_por: userProfile.nombre, actuacion_realizada: true, criminalistico_realizado: true, pericial_realizado: true, croquis_realizado: true } :
+                    { ...payload, turno: getTurnoParaGuardar(), creado_por: userProfile.nombre, actuacion_realizada: false, criminalistico_realizado: false, pericial_realizado: false, croquis_realizado: false };
                   const { error } = await sb.from('novedades').insert([insertPayload]);
                   if (error) { showNotify("Error al crear: " + error.message, "error"); setSaving(false); return; }
                   await addLog('CREAR', 'Creó ' + num); showNotify("Guardado");
@@ -1498,10 +1528,10 @@ const App = () => {
                     </select>
                   )}
                 </div>
-                {/* Selector de turno - solo para roles que no ven todos los turnos */}
-                {!editingProfile.isSelf && !['admin', 'supervisor'].includes(editingProfile.role) && (
+                {/* Selector de turno - siempre visible para editar otros usuarios */}
+                {!editingProfile.isSelf && (
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Turno Asignado</label>
+                    <label className="text-[10px] font-black text-indigo-500 uppercase ml-1">Turno Asignado</label>
                     <select name="turno" defaultValue={editingProfile.turno || 1} onChange={async (e) => {
                       const newTurno = parseInt(e.target.value);
                       try {
@@ -1524,6 +1554,9 @@ const App = () => {
                       <option value="2">2do Turno</option>
                       <option value="3">3er Turno</option>
                     </select>
+                    {['admin', 'supervisor'].includes(editingProfile.role) && (
+                      <p className="text-[9px] text-slate-400 ml-1">Admin y Supervisor ven todos los turnos automáticamente</p>
+                    )}
                   </div>
                 )}
                 {!editingProfile.isSelf && (
@@ -1977,7 +2010,7 @@ const App = () => {
                     fecha_juicio: fechaCorregida,
                     citados: selectedCitados,
                     creado_por: userProfile.nombre,
-                    turno: getUserTurno()
+                    turno: getTurnoParaGuardar()
                   };
                   if (!fechaRaw) {
                     showNotify("La fecha es obligatoria", "error");
@@ -2347,10 +2380,17 @@ const App = () => {
         )}
 
         {/* ALMANAQUE ANUAL DE LICENCIAS */}
-        {currentView === 'calendario' && (
+        {currentView === 'calendario' && (() => {
+          const licenciasFiltradas = filterByTurno(licencias);
+          return (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-              <div><h2 className="text-3xl font-black text-slate-800">📅 Almanaque de Licencias</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Registro anual de ausencias</p></div>
+              <div>
+                <h2 className="text-3xl font-black text-slate-800">📅 Almanaque de Licencias</h2>
+                <p className="text-xs text-slate-600 font-bold uppercase mt-1">
+                  Registro anual de ausencias {getTurnoEfectivo() > 0 ? `(${TURNOS[getTurnoEfectivo()]})` : '(Todos los turnos)'}
+                </p>
+              </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setSelectedCalendarDate('nueva')} className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-sm hover:bg-emerald-600 shadow-lg">➕ Agregar</button>
                 
@@ -2387,7 +2427,7 @@ const App = () => {
                         const firstDay = new Date(calendarioYear, mesIndex, 1).getDay();
                         const daysInMonth = new Date(calendarioYear, mesIndex + 1, 0).getDate();
                         const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
-                        const mesLicencias = licencias.filter(l => l.fecha?.startsWith(monthStr));
+                        const mesLicencias = licenciasFiltradas.filter(l => l.fecha?.startsWith(monthStr));
                         printWindow.document.write(`<div class="mes"><div class="mes-nombre">${mesNombre}</div><div class="dias-header">${dias.map(d => `<div>${d}</div>`).join('')}</div><div class="dias">`);
                         for (let i = 0; i < firstDay; i++) printWindow.document.write('<div class="dia"></div>');
                         for (let day = 1; day <= daysInMonth; day++) {
@@ -2439,7 +2479,7 @@ const App = () => {
                         const firstDay = new Date(calendarioYear, mesIndex, 1).getDay();
                         const daysInMonth = new Date(calendarioYear, mesIndex + 1, 0).getDate();
                         const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
-                        const mesLicencias = licencias.filter(l => l.fecha?.startsWith(monthStr));
+                        const mesLicencias = licenciasFiltradas.filter(l => l.fecha?.startsWith(monthStr));
                         printWindow.document.write(`<div class="mes"><div class="mes-nombre">${mesNombre}</div><div class="dias-header">${dias.map(d => `<div>${d}</div>`).join('')}</div><div class="dias">`);
                         for (let i = 0; i < firstDay; i++) printWindow.document.write('<div class="dia"></div>');
                         for (let day = 1; day <= daysInMonth; day++) {
@@ -2453,7 +2493,7 @@ const App = () => {
                         printWindow.document.write('</div></div>');
                       });
                       printWindow.document.write('</div><div class="leyenda"><span><div class="leyenda-color" style="background:#bfdbfe"></div> Licencia</span><span><div class="leyenda-color" style="background:#ef4444"></div> Enfermedad</span><span><div class="leyenda-color" style="background:#a855f7"></div> Estudio</span><span><div class="leyenda-color" style="background:#f59e0b"></div> Descanso</span></div>');
-                      const licenciasYear = licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString()));
+                      const licenciasYear = licenciasFiltradas.filter(l => l.fecha?.startsWith(calendarioYear.toString()));
                       if (licenciasYear.length > 0) {
                         printWindow.document.write('<div class="detalle"><h2>📋 Detalle de Licencias</h2>');
                         meses.forEach((mesNombre, mesIndex) => {
@@ -2475,7 +2515,7 @@ const App = () => {
                     <button onClick={() => {
                       document.getElementById('printLicMenu').classList.add('hidden');
                       const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-                      const licenciasYear = licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && ['enfermedad', 'estudio', 'descanso'].includes(l.tipo));
+                      const licenciasYear = licenciasFiltradas.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && ['enfermedad', 'estudio', 'descanso'].includes(l.tipo));
                       if (licenciasYear.length === 0) { showNotify("No hay registros de enfermedad/estudio/descanso", "error"); return; }
                       const printWindow = window.open('', '_blank');
                       printWindow.document.write(`<html><head><title>Enf/Est/Desc ${calendarioYear}</title><style>
@@ -2516,7 +2556,7 @@ const App = () => {
                     <button onClick={() => {
                       document.getElementById('printLicMenu').classList.add('hidden');
                       const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-                      const licenciasYear = licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.tipo === 'licencia');
+                      const licenciasYear = licenciasFiltradas.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.tipo === 'licencia');
                       if (licenciasYear.length === 0) { showNotify("No hay licencias registradas", "error"); return; }
                       const printWindow = window.open('', '_blank');
                       printWindow.document.write(`<html><head><title>Licencias ${calendarioYear}</title><style>
@@ -2556,7 +2596,7 @@ const App = () => {
                       if (!licPrintUser) { showNotify("Seleccioná un usuario", "error"); return; }
                       document.getElementById('printLicMenu').classList.add('hidden');
                       const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-                      const userLics = licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.user_nombre === licPrintUser);
+                      const userLics = licenciasFiltradas.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.user_nombre === licPrintUser);
                       if (userLics.length === 0) { showNotify(`${licPrintUser} no tiene registros en ${calendarioYear}`, "error"); return; }
                       const printWindow = window.open('', '_blank');
                       printWindow.document.write(`<html><head><title>${licPrintUser} - ${calendarioYear}</title><style>
@@ -2613,7 +2653,7 @@ const App = () => {
             
             {/* Leyenda de usuarios y tipos */}
             {(() => {
-              const usuariosConLicencias = [...new Set(licencias.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.tipo === 'licencia').map(l => l.user_nombre))].filter(Boolean);
+              const usuariosConLicencias = [...new Set(licenciasFiltradas.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.tipo === 'licencia').map(l => l.user_nombre))].filter(Boolean);
               return (
                 <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm">
                   <div className="flex flex-wrap gap-4">
@@ -2651,7 +2691,7 @@ const App = () => {
                 const firstDay = new Date(calendarioYear, mesIndex, 1).getDay();
                 const daysInMonth = new Date(calendarioYear, mesIndex + 1, 0).getDate();
                 const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
-                const mesLicencias = licencias.filter(l => l.fecha?.startsWith(monthStr));
+                const mesLicencias = licenciasFiltradas.filter(l => l.fecha?.startsWith(monthStr));
                 const isCurrentMonth = new Date().getFullYear() === calendarioYear && new Date().getMonth() === mesIndex;
                 
                 return (
@@ -2727,7 +2767,7 @@ const App = () => {
                 </div>
                 
                 {(() => {
-                  const dayLicencias = selectedCalendarDate !== 'nueva' ? licencias.filter(l => l.fecha === selectedCalendarDate) : [];
+                  const dayLicencias = selectedCalendarDate !== 'nueva' ? licenciasFiltradas.filter(l => l.fecha === selectedCalendarDate) : [];
                   const myLicencia = dayLicencias.find(l => l.user_id === session?.user?.id);
                   
                   return (
@@ -2809,7 +2849,7 @@ const App = () => {
                               while (current <= fin) {
                                 const fechaStr = current.toISOString().split('T')[0];
                                 const existe = licencias.find(l => l.fecha === fechaStr && l.user_id === targetUserId);
-                                if (!existe) fechas.push({ user_id: targetUserId, user_nombre: targetUserNombre, fecha: fechaStr, tipo, descripcion: descripcion || null, turno: getUserTurno() });
+                                if (!existe) fechas.push({ user_id: targetUserId, user_nombre: targetUserNombre, fecha: fechaStr, tipo, descripcion: descripcion || null, turno: getTurnoParaGuardar() });
                                 current.setDate(current.getDate() + 1);
                               }
                               
@@ -2878,7 +2918,7 @@ const App = () => {
                   </thead>
                   <tbody>
                     {(() => {
-                      const yearLicencias = licencias.filter(l => l.fecha?.startsWith(String(calendarioYear)));
+                      const yearLicencias = licenciasFiltradas.filter(l => l.fecha?.startsWith(String(calendarioYear)));
                       const porUsuario = {};
                       
                       yearLicencias.forEach(l => {
@@ -2925,14 +2965,19 @@ const App = () => {
               </div>
             </div>
           </div>
-        )}
+        );})()}
 
 
         {/* STOCK / INVENTARIO */}
-        {currentView === 'stock' && (
+        {currentView === 'stock' && (() => {
+          const stockFiltrado = filterByTurno(stockItems);
+          return (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-              <h2 className="text-2xl font-black text-slate-800">📦 Stock</h2>
+              <div>
+                <h2 className="text-2xl font-black text-slate-800">📦 Stock</h2>
+                <p className="text-xs text-slate-500 font-bold">{getTurnoEfectivo() > 0 ? TURNOS[getTurnoEfectivo()] : 'Todos los turnos'}</p>
+              </div>
               <div className="flex gap-2 items-center">
                 <div className="relative flex-1 sm:w-48">
                   <input value={stockSearch} onChange={(e) => setStockSearch(e.target.value)} placeholder="🔍 Buscar..." className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold" />
@@ -2947,7 +2992,7 @@ const App = () => {
                     <button onClick={() => {
                       document.getElementById('printStockMenu').classList.add('hidden');
                       const ubNombres = { valija_perbio: '🧳 Valija Per-Bio', biologica: '🧬 Biológica', pericial_grande: '📦 Pericial Grande', pericial_chica: '📋 Pericial Chica', lockers: '🔐 Lockers' };
-                      const items = stockItems.filter(i => i.ubicacion === selectedUbicacion);
+                      const items = stockFiltrado.filter(i => i.ubicacion === selectedUbicacion);
                       const consumibles = items.filter(i => i.tipo !== 'fijo');
                       const fijos = items.filter(i => i.tipo === 'fijo');
                       const printWindow = window.open('', '_blank');
@@ -2967,7 +3012,7 @@ const App = () => {
                       printWindow.document.write(`<html><head><title>Stock Completo</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{font-size:18px;border-bottom:2px solid #333;padding-bottom:10px}h2{font-size:14px;margin-top:20px;background:#f0f0f0;padding:8px}h3{font-size:12px;color:#666;margin:10px 0 5px}.item{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #eee;font-size:11px}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:10px;color:#999;margin-top:20px}.page-break{page-break-after:always}</style></head><body>`);
                       printWindow.document.write('<h1>📦 INVENTARIO COMPLETO</h1>');
                       ubicaciones.forEach(ub => {
-                        const items = stockItems.filter(i => i.ubicacion === ub);
+                        const items = stockFiltrado.filter(i => i.ubicacion === ub);
                         const consumibles = items.filter(i => i.tipo !== 'fijo');
                         const fijos = items.filter(i => i.tipo === 'fijo');
                         printWindow.document.write(`<h2>${ubNombres[ub]}</h2>`);
@@ -2980,7 +3025,7 @@ const App = () => {
                     }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 border-t">📦 Imprimir TODO</button>
                     <button onClick={() => {
                       document.getElementById('printStockMenu').classList.add('hidden');
-                      const bajos = stockItems.filter(i => i.cantidad <= i.cantidad_minima);
+                      const bajos = stockFiltrado.filter(i => i.cantidad <= i.cantidad_minima);
                       if (bajos.length === 0) { showNotify("No hay items bajos", "error"); return; }
                       const ubNombres = { valija_perbio: 'Per-Bio', biologica: 'Biológica', pericial_grande: 'Grande', pericial_chica: 'Chica', lockers: 'Lockers' };
                       const printWindow = window.open('', '_blank');
@@ -3000,7 +3045,7 @@ const App = () => {
               <div className="bg-amber-50 rounded-xl border-2 border-amber-200 p-3">
                 <p className="text-xs font-bold text-amber-700 mb-2">Resultados en todas las ubicaciones:</p>
                 {(() => {
-                  const resultados = stockItems.filter(i => i.nombre.toLowerCase().includes(stockSearch.toLowerCase()));
+                  const resultados = stockFiltrado.filter(i => i.nombre.toLowerCase().includes(stockSearch.toLowerCase()));
                   if (resultados.length === 0) return <p className="text-amber-600 text-sm">No encontrado</p>;
                   const ubNombres = { valija_perbio: 'Per-Bio', biologica: 'Biologica', pericial_grande: 'Grande', pericial_chica: 'Chica', lockers: 'Lockers' };
                   return (<div className="space-y-1">{resultados.map(item => (
@@ -3019,14 +3064,14 @@ const App = () => {
             
             <div className="flex flex-wrap gap-1">
               {[{id:'valija_perbio',n:'🧳 Per-Bio'},{id:'biologica',n:'🧬 Biologica'},{id:'pericial_grande',n:'📦 Grande'},{id:'pericial_chica',n:'📋 Chica'},{id:'lockers',n:'🔐 Lockers'}].map(ub => {
-                const alertas = stockItems.filter(i => i.ubicacion === ub.id && i.cantidad <= i.cantidad_minima).length;
+                const alertas = stockFiltrado.filter(i => i.ubicacion === ub.id && i.cantidad <= i.cantidad_minima).length;
                 return (<button key={ub.id} onClick={() => { setSelectedUbicacion(ub.id); setStockSearch(''); }} className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 ${selectedUbicacion === ub.id ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{ub.n}{alertas > 0 && <span className="bg-red-500 text-white text-[8px] px-1 rounded-full">{alertas}</span>}</button>);
               })}
             </div>
             
             <div className="bg-white rounded-xl shadow-md border border-slate-200 p-3">
               <div className="flex justify-between items-center mb-2">
-                <span className="font-bold text-slate-700 text-sm">{stockItems.filter(i => i.ubicacion === selectedUbicacion).length} items</span>
+                <span className="font-bold text-slate-700 text-sm">{stockFiltrado.filter(i => i.ubicacion === selectedUbicacion).length} items</span>
                 {canManageStock() && (<button onClick={() => setEditingItem({ ubicacion: selectedUbicacion })} className="px-3 py-1 bg-emerald-500 text-white rounded-lg font-bold text-xs">+ Nuevo</button>)}
               </div>
               
@@ -3053,12 +3098,12 @@ const App = () => {
                       const replicar = document.getElementById('itemReplicar')?.checked;
                       if (replicar) {
                         const ubicaciones = ['valija_perbio', 'biologica', 'pericial_grande', 'pericial_chica', 'lockers'];
-                        const items = ubicaciones.map(ub => ({ nombre, tipo, ubicacion: ub, cantidad: ub === selectedUbicacion ? cantidad : 0, cantidad_minima }));
+                        const items = ubicaciones.map(ub => ({ nombre, tipo, ubicacion: ub, cantidad: ub === selectedUbicacion ? cantidad : 0, cantidad_minima, turno: getTurnoParaGuardar() }));
                         const { error } = await sb.from('stock_items').insert(items);
                         if (error) { showNotify("Error: " + error.message, "error"); return; }
                         showNotify("Creado en 5 ubicaciones");
                       } else {
-                        await sb.from('stock_items').insert([{ nombre, tipo, ubicacion: selectedUbicacion, cantidad, cantidad_minima }]);
+                        await sb.from('stock_items').insert([{ nombre, tipo, ubicacion: selectedUbicacion, cantidad, cantidad_minima, turno: getTurnoParaGuardar() }]);
                         showNotify("Creado");
                       }
                     }
@@ -3070,7 +3115,7 @@ const App = () => {
               
               <div className="max-h-[50vh] overflow-y-auto">
                 {(() => {
-                  const items = stockItems.filter(i => i.ubicacion === selectedUbicacion);
+                  const items = stockFiltrado.filter(i => i.ubicacion === selectedUbicacion);
                   if (items.length === 0) return <p className="text-slate-400 text-center py-4 text-xs">Sin items</p>;
                   
                   const consumibles = items.filter(i => i.tipo !== 'fijo');
@@ -3136,7 +3181,7 @@ const App = () => {
               </div></details>
             </div>
           </div>
-        )}
+        );})()}
 
         {/* AUDITORÍA DE USUARIOS (Admin/Supervisor/Encargado) */}
         {currentView === 'auditoria' && canAudit() && (() => {
