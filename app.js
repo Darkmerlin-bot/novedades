@@ -19,16 +19,27 @@ const Notification = ({ message, type }) => (
   </div>
 );
 
+// LOGO - Escudo Policía Científica
+const LOGO_URL = 'https://raw.githubusercontent.com/Darkmerlin-bot/novedades/main/Logo%20para%20programa.png';
+
 // HEADER
 const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount, juiciosCount, recordatoriosCount, stockBajoCount, turnoActivo, setTurnoActivo, TURNOS }) => (
   <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50 print:hidden">
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-3">
-          <div className="bg-emerald-500 p-2 rounded-lg text-xl shadow-lg shadow-emerald-500/20">📋</div>
+          {LOGO_URL ? (
+            <img 
+              src={LOGO_URL} 
+              alt="Escudo" 
+              className="w-12 h-12 rounded-lg shadow-lg object-contain bg-white p-1"
+            />
+          ) : (
+            <div className="bg-emerald-500 p-2 rounded-lg text-xl shadow-lg shadow-emerald-500/20">🔬</div>
+          )}
           <div>
-            <h1 className="text-xl font-bold tracking-tight">Sistema Novedades</h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">🔒 Versión Segura</p>
+            <h1 className="text-xl font-bold tracking-tight">Policía Científica</h1>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Sistema de Gestión</p>
           </div>
         </div>
         <div className="flex items-center justify-between md:justify-end gap-3">
@@ -927,10 +938,14 @@ const App = () => {
       <div className="flex items-center justify-center min-h-screen bg-slate-800 p-4 font-sans">
         <div className="w-full max-w-md bg-white rounded-[2.5rem] p-10 shadow-2xl animate-slideUp">
           <div className="text-center mb-8">
-            <div className="inline-block p-5 bg-emerald-50 rounded-full text-5xl mb-4">📋</div>
-            <h2 className="text-3xl font-black text-slate-800">Acceso Seguro</h2>
-            <p className="text-slate-400 text-sm mt-2">Sistema de Novedades</p>
-            <div className="mt-2 inline-block bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full">🔒 Autenticación Segura</div>
+            {LOGO_URL ? (
+              <img src={LOGO_URL} alt="Escudo Policía Científica" className="w-24 h-24 mx-auto mb-4 object-contain" />
+            ) : (
+              <div className="inline-block p-5 bg-emerald-50 rounded-full text-5xl mb-4">🔬</div>
+            )}
+            <h2 className="text-3xl font-black text-slate-800">Policía Científica</h2>
+            <p className="text-slate-400 text-sm mt-2">Sistema de Gestión</p>
+            <div className="mt-2 inline-block bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full">🔒 Acceso Seguro</div>
           </div>
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-1.5">
@@ -3016,7 +3031,7 @@ const App = () => {
                       const consumibles = items.filter(i => i.tipo !== 'fijo');
                       const fijos = items.filter(i => i.tipo === 'fijo');
                       const printWindow = window.open('', '_blank');
-                      printWindow.document.write(`<html><head><title>Stock - ${ubNombres[selectedUbicacion]}</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{font-size:18px;border-bottom:2px solid #333;padding-bottom:10px}h2{font-size:14px;margin-top:20px;color:#666}.item{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #eee;font-size:12px}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:10px;color:#999;margin-top:20px}</style></head><body>`);
+                      printWindow.document.write(`<html><head><title>Stock - ${ubNombres[selectedUbicacion]}</title><style>body{font-family:Arial,sans-serif;padding:15px;font-size:10px}h1{font-size:16px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:10px}h2{font-size:12px;margin-top:15px;color:#666;margin-bottom:5px}.item{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #999;font-size:10px;line-height:1.2}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:9px;color:#999;margin-top:15px}</style></head><body>`);
                       printWindow.document.write(`<h1>${ubNombres[selectedUbicacion]}</h1>`);
                       if(consumibles.length > 0) { printWindow.document.write('<h2>📦 CONSUMIBLES</h2>'); consumibles.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
                       if(fijos.length > 0) { printWindow.document.write('<h2>🔧 ELEMENTOS FIJOS</h2>'); fijos.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
@@ -3029,7 +3044,7 @@ const App = () => {
                       const ubNombres = { valija_perbio: '🧳 Valija Per-Bio', biologica: '🧬 Biológica', pericial_grande: '📦 Pericial Grande', pericial_chica: '📋 Pericial Chica', lockers: '🔐 Lockers' };
                       const ubicaciones = ['valija_perbio', 'biologica', 'pericial_grande', 'pericial_chica', 'lockers'];
                       const printWindow = window.open('', '_blank');
-                      printWindow.document.write(`<html><head><title>Stock Completo</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{font-size:18px;border-bottom:2px solid #333;padding-bottom:10px}h2{font-size:14px;margin-top:20px;background:#f0f0f0;padding:8px}h3{font-size:12px;color:#666;margin:10px 0 5px}.item{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #eee;font-size:11px}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:10px;color:#999;margin-top:20px}.page-break{page-break-after:always}</style></head><body>`);
+                      printWindow.document.write(`<html><head><title>Stock Completo</title><style>body{font-family:Arial,sans-serif;padding:15px;font-size:10px}h1{font-size:16px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:10px}h2{font-size:11px;margin-top:12px;background:#e0e0e0;padding:4px 8px;margin-bottom:5px}h3{font-size:10px;color:#666;margin:8px 0 3px}.item{display:flex;justify-content:space-between;padding:1px 0;border-bottom:1px solid #999;font-size:9px;line-height:1.2}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:8px;color:#999;margin-top:15px}.page-break{page-break-after:always}</style></head><body>`);
                       printWindow.document.write('<h1>📦 INVENTARIO COMPLETO</h1>');
                       ubicaciones.forEach(ub => {
                         const items = stockFiltrado.filter(i => i.ubicacion === ub);
@@ -3049,7 +3064,7 @@ const App = () => {
                       if (bajos.length === 0) { showNotify("No hay items bajos", "error"); return; }
                       const ubNombres = { valija_perbio: 'Per-Bio', biologica: 'Biológica', pericial_grande: 'Grande', pericial_chica: 'Chica', lockers: 'Lockers' };
                       const printWindow = window.open('', '_blank');
-                      printWindow.document.write(`<html><head><title>Stock Bajo</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{font-size:18px;border-bottom:2px solid red;padding-bottom:10px;color:red}.item{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;font-size:12px}.ub{color:#666;font-size:10px}.fecha{text-align:right;font-size:10px;color:#999;margin-top:20px}</style></head><body>`);
+                      printWindow.document.write(`<html><head><title>Stock Bajo</title><style>body{font-family:Arial,sans-serif;padding:15px;font-size:10px}h1{font-size:16px;border-bottom:2px solid red;padding-bottom:8px;color:red;margin-bottom:10px}.item{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #999;font-size:10px;line-height:1.2}.ub{color:#666;font-size:9px}.fecha{text-align:right;font-size:8px;color:#999;margin-top:15px}</style></head><body>`);
                       printWindow.document.write('<h1>⚠️ ITEMS CON STOCK BAJO</h1>');
                       bajos.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre} <span class="ub">(${ubNombres[i.ubicacion]})</span></span><span style="color:red;font-weight:bold">${i.cantidad} / min:${i.cantidad_minima}</span></div>`));
                       printWindow.document.write(`<p class="fecha">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
@@ -3104,7 +3119,7 @@ const App = () => {
                   </select>
                   <input id="itemCantidad" type="number" placeholder="Cant" defaultValue={editingItem.cantidad || 0} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
                   <input id="itemMinimo" type="number" placeholder="Min" defaultValue={editingItem.cantidad_minima || 5} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
-                  {!editingItem.id && <label className="flex items-center gap-1 text-[10px] bg-blue-100 px-2 py-1 rounded"><input type="checkbox" id="itemReplicar" defaultChecked className="w-3 h-3" /><span>Todas</span></label>}
+                  {!editingItem.id && <label className="flex items-center gap-1 text-[10px] bg-blue-100 px-2 py-1 rounded"><input type="checkbox" id="itemReplicar" className="w-3 h-3" /><span>Todas</span></label>}
                   <button onClick={async () => {
                     const nombre = document.getElementById('itemNombre').value.trim();
                     const tipo = document.getElementById('itemTipo').value;
