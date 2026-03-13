@@ -307,6 +307,8 @@ const App = () => {
   const [stockMovimientos, setStockMovimientos] = useState([]);
   const [selectedUbicacion, setSelectedUbicacion] = useState('todas');
   const [editingItem, setEditingItem] = useState(null);
+  const [itemNombreInput, setItemNombreInput] = useState('');
+  const [itemSugerencias, setItemSugerencias] = useState([]);
   const [highlightedItem, setHighlightedItem] = useState(null);
   const [stockSearch, setStockSearch] = useState('');
   
@@ -3113,34 +3115,75 @@ const App = () => {
             <div className="bg-white rounded-xl shadow-md border border-slate-200 p-3">
               <div className="flex justify-between items-center mb-2">
                 <span className="font-bold text-slate-700 text-sm">{stockFiltrado.filter(i => i.ubicacion === selectedUbicacion).length} items</span>
-                {canManageStock() && (<button onClick={() => setEditingItem({ ubicacion: selectedUbicacion })} className="px-3 py-1 bg-emerald-500 text-white rounded-lg font-bold text-xs">+ Nuevo</button>)}
+                {canManageStock() && (<button onClick={() => { setEditingItem({ ubicacion: selectedUbicacion }); setItemNombreInput(''); setItemSugerencias([]); }} className="px-3 py-1 bg-emerald-500 text-white rounded-lg font-bold text-xs">+ Nuevo</button>)}
               </div>
               
               {editingItem && (
-                <div className="bg-slate-50 rounded-lg p-2 mb-2 flex flex-wrap gap-1 items-center">
-                  <input id="itemNombre" placeholder="Nombre" defaultValue={editingItem.nombre || ''} className="flex-1 min-w-[100px] px-2 py-1 border rounded text-xs font-bold" />
-                  <select id="itemTipo" defaultValue={editingItem.tipo || 'consumible'} className="px-2 py-1 border rounded text-xs font-bold bg-white">
-                    <option value="consumible">📦 Consumible</option>
-                    <option value="fijo">🔧 Fijo</option>
-                  </select>
-                  <input id="itemCantidad" type="number" placeholder="Cant" defaultValue={editingItem.cantidad || 0} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
-                  <input id="itemMinimo" type="number" placeholder="Min" defaultValue={editingItem.cantidad_minima || 5} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
-                  {!editingItem.id && <label className="flex items-center gap-1 text-[10px] bg-blue-100 px-2 py-1 rounded"><input type="checkbox" id="itemReplicar" className="w-3 h-3" /><span>Todas</span></label>}
-                  <button onClick={async () => {
-                    const nombre = document.getElementById('itemNombre').value.trim();
-                    const tipo = document.getElementById('itemTipo').value;
-                    const cantidad = parseInt(document.getElementById('itemCantidad').value) || 0;
-                    const cantidad_minima = parseInt(document.getElementById('itemMinimo').value) || 5;
-                    if (!nombre) { showNotify("Nombre requerido", "error"); return; }
-                    if (editingItem.id) { 
-                      await sb.from('stock_items').update({ nombre, tipo, cantidad, cantidad_minima }).eq('id', editingItem.id); 
-                      showNotify("Actualizado");
-                    } else {
-                      const replicar = document.getElementById('itemReplicar')?.checked;
-                      if (replicar) {
-                        const ubicaciones = ['valija_perbio', 'biologica', 'pericial_grande', 'pericial_chica', 'lockers'];
-                        const items = ubicaciones.map(ub => ({ nombre, tipo, ubicacion: ub, cantidad: ub === selectedUbicacion ? cantidad : 0, cantidad_minima, turno: getTurnoParaGuardar() }));
-                        const { error } = await sb.from('stock_items').insert(items);
+                <div className="bg-slate-50 rounded-lg p-2 mb-2">
+                  <div className="flex flex-wrap gap-1 items-center">
+                    <div className="relative flex-1 min-w-[150px]">
+                      <input 
+                        id="itemNombre" 
+                        placeholder="Nombre del item" 
+                        value={itemNombreInput}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setItemNombreInput(val);
+                          if (val.length >= 2) {
+                            const nombresUnicos = [...new Set(stockItems.map(i => i.nombre))];
+                            const sugs = nombresUnicos.filter(n => n.toLowerCase().includes(val.toLowerCase())).slice(0, 6);
+                            setItemSugerencias(sugs);
+                          } else {
+                            setItemSugerencias([]);
+                          }
+                        }}
+                        onFocus={() => {
+                          if (itemNombreInput.length >= 2) {
+                            const nombresUnicos = [...new Set(stockItems.map(i => i.nombre))];
+                            const sugs = nombresUnicos.filter(n => n.toLowerCase().includes(itemNombreInput.toLowerCase())).slice(0, 6);
+                            setItemSugerencias(sugs);
+                          }
+                        }}
+                        className="w-full px-2 py-1 border rounded text-xs font-bold" 
+                        autoComplete="off"
+                      />
+                      {itemSugerencias.length > 0 && (
+                        <div className="absolute z-50 w-full bg-white border border-slate-300 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
+                          {itemSugerencias.map((sug, idx) => (
+                            <button 
+                              key={idx}
+                              type="button"
+                              onClick={() => { setItemNombreInput(sug); setItemSugerencias([]); }}
+                              className="w-full text-left px-3 py-2 text-xs font-bold hover:bg-emerald-50 border-b last:border-b-0"
+                            >
+                              {sug}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <select id="itemTipo" defaultValue={editingItem.tipo || 'consumible'} className="px-2 py-1 border rounded text-xs font-bold bg-white">
+                      <option value="consumible">📦 Consumible</option>
+                      <option value="fijo">🔧 Fijo</option>
+                    </select>
+                    <input id="itemCantidad" type="number" placeholder="Cant" defaultValue={editingItem.cantidad || 0} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
+                    <input id="itemMinimo" type="number" placeholder="Min" defaultValue={editingItem.cantidad_minima || 5} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
+                    {!editingItem.id && <label className="flex items-center gap-1 text-[10px] bg-blue-100 px-2 py-1 rounded"><input type="checkbox" id="itemReplicar" className="w-3 h-3" /><span>Todas</span></label>}
+                    <button onClick={async () => {
+                      const nombre = itemNombreInput.trim();
+                      const tipo = document.getElementById('itemTipo').value;
+                      const cantidad = parseInt(document.getElementById('itemCantidad').value) || 0;
+                      const cantidad_minima = parseInt(document.getElementById('itemMinimo').value) || 5;
+                      if (!nombre) { showNotify("Nombre requerido", "error"); return; }
+                      if (editingItem.id) { 
+                        await sb.from('stock_items').update({ nombre, tipo, cantidad, cantidad_minima }).eq('id', editingItem.id); 
+                        showNotify("Actualizado");
+                      } else {
+                        const replicar = document.getElementById('itemReplicar')?.checked;
+                        if (replicar) {
+                          const ubicaciones = ['valija_perbio', 'biologica', 'pericial_grande', 'pericial_chica', 'lockers'];
+                          const items = ubicaciones.map(ub => ({ nombre, tipo, ubicacion: ub, cantidad: ub === selectedUbicacion ? cantidad : 0, cantidad_minima, turno: getTurnoParaGuardar() }));
+                          const { error } = await sb.from('stock_items').insert(items);
                         if (error) { showNotify("Error: " + error.message, "error"); return; }
                         showNotify("Creado en 5 ubicaciones");
                       } else {
@@ -3148,9 +3191,10 @@ const App = () => {
                         showNotify("Creado");
                       }
                     }
-                    setEditingItem(null); loadData();
+                    setEditingItem(null); setItemNombreInput(''); setItemSugerencias([]); loadData();
                   }} className="px-2 py-1 bg-emerald-500 text-white rounded text-xs font-bold">OK</button>
-                  <button onClick={() => setEditingItem(null)} className="px-2 py-1 bg-slate-300 rounded text-xs">X</button>
+                  <button onClick={() => { setEditingItem(null); setItemNombreInput(''); setItemSugerencias([]); }} className="px-2 py-1 bg-slate-300 rounded text-xs">X</button>
+                  </div>
                 </div>
               )}
               
@@ -3175,7 +3219,7 @@ const App = () => {
                             <button onClick={async () => { const c = prompt("Sacar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; if(n>item.cantidad){showNotify("No hay","error");return;} await sb.from('stock_items').update({cantidad:item.cantidad-n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'salida',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre}]); loadData(); }} className="w-6 h-6 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">-</button>
                             <span className={`w-8 text-center text-sm font-black ${bajo?'text-red-600':'text-slate-700'}`}>{item.cantidad}</span>
                             <button onClick={async () => { const c = prompt("Agregar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; await sb.from('stock_items').update({cantidad:item.cantidad+n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'entrada',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre}]); loadData(); }} className="w-6 h-6 bg-emerald-100 text-emerald-600 rounded text-xs font-bold hover:bg-emerald-200">+</button>
-                            <button onClick={()=>setEditingItem(item)} className="w-6 h-6 text-slate-400 hover:bg-slate-100 rounded text-[10px]">✏</button>
+                            <button onClick={()=>{setEditingItem(item); setItemNombreInput(item.nombre || ''); setItemSugerencias([]);}} className="w-6 h-6 text-slate-400 hover:bg-slate-100 rounded text-[10px]">✏</button>
                             <button onClick={async()=>{if(!confirm('Eliminar?'))return;await sb.from('stock_items').delete().eq('id',item.id);loadData();}} className="w-6 h-6 text-red-400 hover:bg-red-50 rounded text-[10px]">🗑</button>
                           </>) : esConsumible ? (<>
                             <button onClick={async () => { const c = prompt("Sacar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; if(n>item.cantidad){showNotify("No hay suficiente","error");return;} await sb.from('stock_items').update({cantidad:item.cantidad-n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'salida',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre}]); showNotify(`Retirado: ${n} ${item.nombre}`); loadData(); }} className="w-6 h-6 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">-</button>
