@@ -59,8 +59,8 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
           <div className="flex flex-col items-end mr-2">
             <span className="text-sm font-bold text-emerald-400">{userProfile?.nombre}</span>
             <div className="flex items-center gap-2">
-              <span className={`text-[9px] px-2 py-0.5 rounded font-black uppercase ${userProfile?.role === 'admin' ? 'bg-red-500/20 text-red-400' : userProfile?.role === 'supervisor' ? 'bg-purple-500/20 text-purple-400' : userProfile?.role === 'encargado' ? 'bg-blue-500/20 text-blue-400' : userProfile?.role === 'moderator' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-500/20 text-slate-400'}`}>
-                {userProfile?.role === 'admin' ? 'Admin' : userProfile?.role === 'supervisor' ? 'Supervisor' : userProfile?.role === 'encargado' ? 'Encargado' : userProfile?.role === 'moderator' ? 'Moderador' : 'Usuario'}
+              <span className={`text-[9px] px-2 py-0.5 rounded font-black uppercase ${userProfile?.role === 'admin' ? 'bg-red-500/20 text-red-400' : userProfile?.role === 'supervisor' ? 'bg-purple-500/20 text-purple-400' : userProfile?.role === 'encargado' ? 'bg-blue-500/20 text-blue-400' : userProfile?.role === 'moderadorplus' ? 'bg-teal-500/20 text-teal-400' : userProfile?.role === 'moderator' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-500/20 text-slate-400'}`}>
+                {userProfile?.role === 'admin' ? 'Admin' : userProfile?.role === 'supervisor' ? 'Supervisor' : userProfile?.role === 'encargado' ? 'Encargado' : userProfile?.role === 'moderadorplus' ? 'Mod+' : userProfile?.role === 'moderator' ? 'Moderador' : 'Usuario'}
               </span>
               {!['admin', 'supervisor'].includes(userProfile?.role) && (
                 <span className="text-[9px] px-2 py-0.5 rounded font-black uppercase bg-indigo-500/20 text-indigo-400">T{userProfile?.turno || 1}</span>
@@ -592,6 +592,7 @@ const App = () => {
     admin: { label: 'Administrador', color: 'bg-red-500' },
     supervisor: { label: 'Supervisor', color: 'bg-purple-500' },
     encargado: { label: 'Encargado', color: 'bg-blue-500' },
+    moderadorplus: { label: 'Moderador+', color: 'bg-teal-500' },
     moderator: { label: 'Moderador', color: 'bg-amber-500' },
     user: { label: 'Usuario', color: 'bg-slate-500' }
   };
@@ -600,10 +601,13 @@ const App = () => {
   const canSeeAllTurnos = () => ['admin', 'supervisor'].includes(userProfile?.role);
   const canManageUsers = () => userProfile?.role === 'admin';
   const canSeeLogs = () => userProfile?.role === 'admin';
-  const canManageNovedades = () => ['admin', 'supervisor', 'encargado', 'moderator'].includes(userProfile?.role);
-  const canManageJuicios = () => ['admin', 'supervisor', 'encargado', 'moderator'].includes(userProfile?.role);
-  const canManageLicencias = () => ['admin', 'supervisor', 'encargado', 'moderator'].includes(userProfile?.role);
-  const canManageStock = () => ['admin', 'supervisor', 'encargado', 'moderator'].includes(userProfile?.role);
+  const canManageNovedades = () => ['admin', 'supervisor', 'encargado', 'moderadorplus', 'moderator'].includes(userProfile?.role);
+  const canManageJuicios = () => ['admin', 'supervisor', 'encargado', 'moderadorplus', 'moderator'].includes(userProfile?.role);
+  const canManageLicencias = () => ['admin', 'supervisor', 'encargado', 'moderadorplus', 'moderator'].includes(userProfile?.role);
+  // Stock: solo estos pueden agregar, editar y eliminar items
+  const canManageStock = () => ['admin', 'supervisor', 'encargado', 'moderadorplus'].includes(userProfile?.role);
+  // Todos pueden retirar consumibles del stock
+  const canWithdrawStock = () => true;
   const canSeeStats = () => ['admin', 'supervisor', 'encargado'].includes(userProfile?.role);
   const canAudit = () => ['admin', 'supervisor', 'encargado'].includes(userProfile?.role);
   const canBackup = () => ['admin', 'supervisor'].includes(userProfile?.role);
@@ -1537,6 +1541,7 @@ const App = () => {
                     }} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer">
                       <option value="user">Usuario (solo ver y completar sus tareas)</option>
                       <option value="moderator">Moderador (gestionar novedades de su turno)</option>
+                      <option value="moderadorplus">Moderador+ (moderador + gestión de stock)</option>
                       <option value="encargado">Encargado (supervisor de su turno)</option>
                       <option value="supervisor">Supervisor (acceso a todos los turnos)</option>
                       <option value="admin">Administrador (acceso total + usuarios)</option>
@@ -1726,6 +1731,7 @@ const App = () => {
                   <select name="role" defaultValue="user" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer">
                     <option value="user">Usuario (solo ver y completar sus tareas)</option>
                     <option value="moderator">Moderador (gestionar novedades de su turno)</option>
+                    <option value="moderadorplus">Moderador+ (moderador + gestión de stock)</option>
                     <option value="encargado">Encargado (supervisor de su turno)</option>
                     <option value="supervisor">Supervisor (acceso a todos los turnos)</option>
                     <option value="admin">Administrador (acceso total + usuarios)</option>
@@ -3160,6 +3166,7 @@ const App = () => {
                     const bajo = item.cantidad <= item.cantidad_minima;
                     const highlighted = highlightedItem === item.id;
                     const bgColor = highlighted ? 'bg-yellow-200 ring-2 ring-yellow-400' : bajo ? 'bg-red-50' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-100';
+                    const esConsumible = item.tipo !== 'fijo';
                     return (
                       <div key={item.id} className={`flex items-center justify-between py-1 px-2 rounded ${bgColor} ${highlighted ? 'animate-pulse' : ''}`}>
                         <div className="flex items-center gap-1 flex-1 min-w-0"><span className="font-semibold text-slate-800 text-sm truncate">{item.nombre}</span>{bajo && <span className="text-[8px] bg-red-500 text-white px-1 rounded">!</span>}</div>
@@ -3170,6 +3177,9 @@ const App = () => {
                             <button onClick={async () => { const c = prompt("Agregar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; await sb.from('stock_items').update({cantidad:item.cantidad+n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'entrada',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre}]); loadData(); }} className="w-6 h-6 bg-emerald-100 text-emerald-600 rounded text-xs font-bold hover:bg-emerald-200">+</button>
                             <button onClick={()=>setEditingItem(item)} className="w-6 h-6 text-slate-400 hover:bg-slate-100 rounded text-[10px]">✏</button>
                             <button onClick={async()=>{if(!confirm('Eliminar?'))return;await sb.from('stock_items').delete().eq('id',item.id);loadData();}} className="w-6 h-6 text-red-400 hover:bg-red-50 rounded text-[10px]">🗑</button>
+                          </>) : esConsumible ? (<>
+                            <button onClick={async () => { const c = prompt("Sacar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; if(n>item.cantidad){showNotify("No hay suficiente","error");return;} await sb.from('stock_items').update({cantidad:item.cantidad-n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'salida',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre}]); showNotify(`Retirado: ${n} ${item.nombre}`); loadData(); }} className="w-6 h-6 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">-</button>
+                            <span className={`w-8 text-center text-sm font-black ${bajo?'text-red-600':'text-slate-700'}`}>{item.cantidad}</span>
                           </>) : (<span className={`text-sm font-black ${bajo?'text-red-600':'text-slate-700'}`}>{item.cantidad}</span>)}
                         </div>
                       </div>
