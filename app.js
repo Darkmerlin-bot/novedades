@@ -3120,25 +3120,61 @@ const App = () => {
               
               {editingItem && (
                 <div className="bg-slate-50 rounded-lg p-2 mb-2">
-                  <div className="flex flex-wrap gap-1 items-center mb-2">
-                    <input 
-                      id="itemNombre" 
-                      placeholder="Escribí para buscar..."
-                      value={itemNombreInput}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setItemNombreInput(val);
-                        const todosLosItems = stockItems || [];
-                        const nombresUnicos = [...new Set(todosLosItems.map(i => i.nombre).filter(Boolean))].sort();
-                        if (val.length >= 2) {
-                          setItemSugerencias(nombresUnicos.filter(n => n.toLowerCase().includes(val.toLowerCase())).slice(0, 10));
-                        } else {
-                          setItemSugerencias([]);
-                        }
-                      }}
-                      className="flex-1 min-w-[150px] px-2 py-1 border-2 border-slate-300 rounded text-xs font-bold focus:border-emerald-500" 
-                      autoComplete="off"
-                    />
+                  <div className="flex flex-wrap gap-1 items-center">
+                    <div className="relative flex-1 min-w-[150px]">
+                      <input 
+                        id="itemNombre" 
+                        placeholder="Escribí para buscar..."
+                        value={itemNombreInput}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setItemNombreInput(val);
+                          const todosLosItems = stockItems || [];
+                          const nombresUnicos = [...new Set(todosLosItems.map(i => i.nombre).filter(Boolean))].sort();
+                          if (val.length >= 2) {
+                            setItemSugerencias(nombresUnicos.filter(n => n.toLowerCase().includes(val.toLowerCase())).slice(0, 10));
+                          } else {
+                            setItemSugerencias([]);
+                          }
+                        }}
+                        onFocus={(e) => {
+                          const rect = e.target.getBoundingClientRect();
+                          window._suggestionPos = { top: rect.bottom + 2, left: rect.left, width: rect.width };
+                          const todosLosItems = stockItems || [];
+                          const nombresUnicos = [...new Set(todosLosItems.map(i => i.nombre).filter(Boolean))].sort();
+                          if (itemNombreInput.length >= 2) {
+                            setItemSugerencias(nombresUnicos.filter(n => n.toLowerCase().includes(itemNombreInput.toLowerCase())).slice(0, 10));
+                          }
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => setItemSugerencias([]), 200);
+                        }}
+                        className="w-full px-2 py-1 border-2 border-slate-300 rounded text-xs font-bold focus:border-emerald-500" 
+                        autoComplete="off"
+                      />
+                      {itemSugerencias.length > 0 && window._suggestionPos && (
+                        <div 
+                          style={{
+                            position: 'fixed',
+                            top: window._suggestionPos.top,
+                            left: window._suggestionPos.left,
+                            width: window._suggestionPos.width,
+                            zIndex: 99999
+                          }}
+                          className="bg-white border-2 border-emerald-500 rounded-lg shadow-2xl max-h-60 overflow-y-auto"
+                        >
+                          {itemSugerencias.map((sug, idx) => (
+                            <div 
+                              key={idx}
+                              onMouseDown={(e) => { e.preventDefault(); setItemNombreInput(sug); setItemSugerencias([]); }}
+                              className="px-3 py-2 text-sm font-bold hover:bg-emerald-100 cursor-pointer border-b border-slate-100 last:border-b-0"
+                            >
+                              {sug}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <select id="itemTipo" defaultValue={editingItem.tipo || 'consumible'} className="px-2 py-1 border rounded text-xs font-bold bg-white">
                       <option value="consumible">📦 Consumible</option>
                       <option value="fijo">🔧 Fijo</option>
@@ -3172,24 +3208,6 @@ const App = () => {
                   }} className="px-2 py-1 bg-emerald-500 text-white rounded text-xs font-bold">OK</button>
                   <button onClick={() => { setEditingItem(null); setItemNombreInput(''); setItemSugerencias([]); }} className="px-2 py-1 bg-slate-300 rounded text-xs">X</button>
                   </div>
-                  {/* Sugerencias debajo del formulario */}
-                  {itemSugerencias.length > 0 && (
-                    <div className="mt-2 bg-white border-2 border-emerald-400 rounded-lg p-1 max-h-32 overflow-y-auto">
-                      <p className="text-[10px] text-emerald-600 font-bold px-2 mb-1">💡 Sugerencias ({itemSugerencias.length}):</p>
-                      <div className="flex flex-wrap gap-1">
-                        {itemSugerencias.map((sug, idx) => (
-                          <button 
-                            key={idx}
-                            type="button"
-                            onClick={() => { setItemNombreInput(sug); setItemSugerencias([]); }}
-                            className="px-2 py-1 bg-emerald-50 hover:bg-emerald-200 text-emerald-800 rounded text-xs font-bold border border-emerald-300"
-                          >
-                            {sug}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
               
