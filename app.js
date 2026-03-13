@@ -3119,45 +3119,58 @@ const App = () => {
               </div>
               
               {editingItem && (
-                <div className="bg-slate-50 rounded-lg p-2 mb-2">
-                  <div className="flex flex-wrap gap-1 items-center">
-                    <div className="relative flex-1 min-w-[150px]">
+                <div className="bg-slate-50 rounded-lg p-2 mb-2 relative" style={{overflow: 'visible'}}>
+                  <div className="flex flex-wrap gap-1 items-start">
+                    <div className="relative flex-1 min-w-[150px]" style={{zIndex: 100}}>
                       <input 
                         id="itemNombre" 
-                        placeholder="Nombre del item" 
+                        placeholder={`Nombre (${stockItems.length} items cargados)`}
                         value={itemNombreInput}
                         onChange={(e) => {
                           const val = e.target.value;
                           setItemNombreInput(val);
+                          const todosLosItems = stockItems || [];
+                          const nombresUnicos = [...new Set(todosLosItems.map(i => i.nombre).filter(Boolean))].sort();
                           if (val.length >= 2) {
-                            const nombresUnicos = [...new Set(stockItems.map(i => i.nombre))];
-                            const sugs = nombresUnicos.filter(n => n.toLowerCase().includes(val.toLowerCase())).slice(0, 6);
+                            const sugs = nombresUnicos.filter(n => n.toLowerCase().includes(val.toLowerCase())).slice(0, 10);
                             setItemSugerencias(sugs);
+                          } else if (val.length === 1) {
+                            setItemSugerencias(nombresUnicos.slice(0, 10));
                           } else {
                             setItemSugerencias([]);
                           }
                         }}
                         onFocus={() => {
+                          const todosLosItems = stockItems || [];
+                          const nombresUnicos = [...new Set(todosLosItems.map(i => i.nombre).filter(Boolean))].sort();
                           if (itemNombreInput.length >= 2) {
-                            const nombresUnicos = [...new Set(stockItems.map(i => i.nombre))];
-                            const sugs = nombresUnicos.filter(n => n.toLowerCase().includes(itemNombreInput.toLowerCase())).slice(0, 6);
-                            setItemSugerencias(sugs);
+                            setItemSugerencias(nombresUnicos.filter(n => n.toLowerCase().includes(itemNombreInput.toLowerCase())).slice(0, 10));
+                          } else {
+                            setItemSugerencias(nombresUnicos.slice(0, 10));
                           }
                         }}
-                        className="w-full px-2 py-1 border rounded text-xs font-bold" 
+                        onBlur={() => {
+                          setTimeout(() => setItemSugerencias([]), 250);
+                        }}
+                        className="w-full px-2 py-1 border-2 border-slate-300 rounded text-xs font-bold focus:border-emerald-500" 
                         autoComplete="off"
                       />
                       {itemSugerencias.length > 0 && (
-                        <div className="absolute z-50 w-full bg-white border border-slate-300 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
+                        <div 
+                          className="absolute left-0 right-0 bg-white border-2 border-emerald-500 rounded-lg shadow-2xl mt-1 max-h-60 overflow-y-auto"
+                          style={{zIndex: 9999, top: '100%'}}
+                        >
+                          <div className="px-2 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold border-b">
+                            {itemSugerencias.length} sugerencias
+                          </div>
                           {itemSugerencias.map((sug, idx) => (
-                            <button 
+                            <div 
                               key={idx}
-                              type="button"
-                              onClick={() => { setItemNombreInput(sug); setItemSugerencias([]); }}
-                              className="w-full text-left px-3 py-2 text-xs font-bold hover:bg-emerald-50 border-b last:border-b-0"
+                              onMouseDown={(e) => { e.preventDefault(); setItemNombreInput(sug); setItemSugerencias([]); }}
+                              className="px-3 py-2 text-sm font-bold hover:bg-emerald-100 cursor-pointer border-b border-slate-100 last:border-b-0"
                             >
                               {sug}
-                            </button>
+                            </div>
                           ))}
                         </div>
                       )}
