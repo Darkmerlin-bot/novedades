@@ -7,6 +7,17 @@ const SUPABASE_URL = 'https://whfrenunfcrcrljithex.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJlbnVuZmNyY3Jsaml0aGV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2Njk5ODUsImV4cCI6MjA4NTI0NTk4NX0.MMbKQxmSL_7UPNcEh_F1NofVPa13Trz3sedDALvgvPs';
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Función de escape HTML para prevenir XSS en impresiones
+const escapeHtml = (str) => {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
+
 const currentYear = new Date().getFullYear();
 const availableYears = [];
 for (let y = currentYear + 1; y >= 2020; y--) availableYears.push(y);
