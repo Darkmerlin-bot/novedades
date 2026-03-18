@@ -319,7 +319,6 @@ const App = () => {
   const [stockItems, setStockItems] = useState([]);
   const [stockUbicaciones, setStockUbicaciones] = useState([]);
   const [stockMovimientos, setStockMovimientos] = useState([]);
-  const [editingUbicacion, setEditingUbicacion] = useState(null);
   const [selectedUbicacion, setSelectedUbicacion] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [itemNombreInput, setItemNombreInput] = useState('');
