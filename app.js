@@ -272,6 +272,8 @@ const App = () => {
   const [notification, setNotification] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [showPassModal, setShowPassModal] = useState(false);
+  const [showUbicacionesModal, setShowUbicacionesModal] = useState(false);
+  const [editingUbicacion, setEditingUbicacion] = useState(null);
   const [showPendingModal, setShowPendingModal] = useState(false);
   const [modalShownOnce, setModalShownOnce] = useState(false);
   const [showReport, setShowReport] = useState(false);
@@ -315,8 +317,10 @@ const App = () => {
   
   // Estados para Stock
   const [stockItems, setStockItems] = useState([]);
+  const [stockUbicaciones, setStockUbicaciones] = useState([]);
   const [stockMovimientos, setStockMovimientos] = useState([]);
-  const [selectedUbicacion, setSelectedUbicacion] = useState('todas');
+  const [editingUbicacion, setEditingUbicacion] = useState(null);
+  const [selectedUbicacion, setSelectedUbicacion] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [itemNombreInput, setItemNombreInput] = useState('');
   const [itemSugerencias, setItemSugerencias] = useState([]);
@@ -476,6 +480,10 @@ const App = () => {
     // Cargar stock
     const { data: stockData } = await sb.from('stock_items').select('*').order('nombre', { ascending: true });
     setStockItems(stockData || []);
+    
+    // Cargar ubicaciones de stock
+    const { data: ubicacionesData } = await sb.from('stock_ubicaciones').select('*').order('orden', { ascending: true });
+    setStockUbicaciones(ubicacionesData || []);
     
     const { data: movData } = await sb.from('stock_movimientos').select('*').order('created_at', { ascending: false }).limit(100);
     setStockMovimientos(movData || []);
@@ -639,8 +647,9 @@ const App = () => {
   const filterByTurno = (items) => {
     if (!items || !Array.isArray(items)) return [];
     const turnoEfectivo = getTurnoEfectivo();
-    if (turnoEfectivo === 0) return items; // Ver todos
-    return items.filter(item => item.turno === turnoEfectivo || !item.turno);
+    if (turnoEfectivo === 0) return items; // Ver todos (admin/supervisor)
+    // Solo mostrar items del turno del usuario (no items sin turno)
+    return items.filter(item => item.turno === turnoEfectivo);
   };
 
   // Filtrar profiles por turno (para selectores)
@@ -788,8 +797,10 @@ const App = () => {
 
   const pendingNovedades = sortNovedades(filterNovedades(novedades.filter(n => !isNovedadComplete(n))), userProfile);
   const completedNovedades = filterNovedades(novedades.filter(n => isNovedadComplete(n))).sort(sortByNumber);
-  const totalPending = novedades.filter(n => !isNovedadComplete(n)).length;
-  const totalCompleted = novedades.filter(n => isNovedadComplete(n)).length;
+  // Contadores filtrados por turno (para pestañas)
+  const novedadesFiltradas = filterByTurno(novedades);
+  const totalPending = novedadesFiltradas.filter(n => !isNovedadComplete(n)).length;
+  const totalCompleted = novedadesFiltradas.filter(n => isNovedadComplete(n)).length;
 
   const checkDuplicate = checkDuplicateServer;
 
@@ -1150,7 +1161,7 @@ const App = () => {
   // APP
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={juicios.filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={recordatorios.filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} turnoActivo={turnoActivo} setTurnoActivo={setTurnoActivo} TURNOS={TURNOS} />
+      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={filterByTurno(juicios).filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={filterByTurno(recordatorios).filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} turnoActivo={turnoActivo} setTurnoActivo={setTurnoActivo} TURNOS={TURNOS} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
@@ -3024,13 +3035,22 @@ const App = () => {
 
         {/* STOCK / INVENTARIO */}
         {currentView === 'stock' && (() => {
+          // Filtrar stock y ubicaciones por turno
           const stockFiltrado = filterByTurno(stockItems);
+          const turnoEfectivo = getTurnoEfectivo();
+          const ubicacionesFiltradas = turnoEfectivo === 0 
+            ? stockUbicaciones 
+            : stockUbicaciones.filter(u => u.turno === turnoEfectivo);
+          // Seleccionar primera ubicación del turno si no hay ninguna seleccionada o la actual no está en el turno
+          if (ubicacionesFiltradas.length > 0 && (!selectedUbicacion || !ubicacionesFiltradas.find(u => u.id === selectedUbicacion))) {
+            setTimeout(() => setSelectedUbicacion(ubicacionesFiltradas[0].id), 0);
+          }
           return (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
               <div>
                 <h2 className="text-2xl font-black text-slate-800">📦 Stock</h2>
-                <p className="text-xs text-slate-500 font-bold">{getTurnoEfectivo() > 0 ? TURNOS[getTurnoEfectivo()] : 'Todos los turnos'}</p>
+                <p className="text-xs text-slate-500 font-bold">{turnoEfectivo > 0 ? TURNOS[turnoEfectivo] : 'Todos los turnos'}</p>
               </div>
               <div className="flex gap-2 items-center">
                 <div className="relative flex-1 sm:w-48">
@@ -3045,33 +3065,32 @@ const App = () => {
                   <div id="printStockMenu" className="hidden absolute right-0 top-10 bg-white border border-slate-200 rounded-lg shadow-xl z-50 min-w-[180px]">
                     <button onClick={() => {
                       document.getElementById('printStockMenu').classList.add('hidden');
-                      const ubNombres = { valija_perbio: '🧳 Valija Per-Bio', biologica: '🧬 Biológica', pericial_grande: '📦 Pericial Grande', pericial_chica: '📋 Pericial Chica', lockers: '🔐 Lockers' };
+                      const getUbNombre = (id) => stockUbicaciones.find(u => u.id === id)?.nombre || id;
                       const items = stockFiltrado.filter(i => i.ubicacion === selectedUbicacion);
                       const consumibles = items.filter(i => i.tipo !== 'fijo');
                       const fijos = items.filter(i => i.tipo === 'fijo');
                       const printWindow = window.open('', '_blank');
-                      printWindow.document.write(`<html><head><title>Stock - ${ubNombres[selectedUbicacion]}</title><style>body{font-family:Arial,sans-serif;padding:15px;font-size:10px}h1{font-size:16px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:10px}h2{font-size:12px;margin-top:15px;color:#666;margin-bottom:5px}.item{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #999;font-size:10px;line-height:1.2}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:9px;color:#999;margin-top:15px}</style></head><body>`);
-                      printWindow.document.write(`<h1>${ubNombres[selectedUbicacion]}</h1>`);
-                      if(consumibles.length > 0) { printWindow.document.write('<h2>📦 CONSUMIBLES</h2>'); consumibles.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
-                      if(fijos.length > 0) { printWindow.document.write('<h2>🔧 ELEMENTOS FIJOS</h2>'); fijos.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
+                      printWindow.document.write(`<html><head><title>Stock - ${getUbNombre(selectedUbicacion)}</title><style>body{font-family:Arial,sans-serif;padding:15px;font-size:10px}h1{font-size:16px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:10px}h2{font-size:12px;margin-top:15px;color:#666;margin-bottom:5px}.item{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #999;font-size:10px;line-height:1.2}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:9px;color:#999;margin-top:15px}</style></head><body>`);
+                      printWindow.document.write(`<h1>${getUbNombre(selectedUbicacion)}</h1>`);
+                      if(consumibles.length > 0) { printWindow.document.write('<h2>📦 CONSUMIBLES</h2>'); consumibles.forEach(i => printWindow.document.write(`<div class="item"><span>${escapeHtml(i.nombre)}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
+                      if(fijos.length > 0) { printWindow.document.write('<h2>🔧 ELEMENTOS FIJOS</h2>'); fijos.forEach(i => printWindow.document.write(`<div class="item"><span>${escapeHtml(i.nombre)}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
                       printWindow.document.write(`<p class="fecha">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
                       printWindow.document.close();
                       printWindow.print();
                     }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-100">📋 Imprimir actual</button>
                     <button onClick={() => {
                       document.getElementById('printStockMenu').classList.add('hidden');
-                      const ubNombres = { valija_perbio: '🧳 Valija Per-Bio', biologica: '🧬 Biológica', pericial_grande: '📦 Pericial Grande', pericial_chica: '📋 Pericial Chica', lockers: '🔐 Lockers' };
-                      const ubicaciones = ['valija_perbio', 'biologica', 'pericial_grande', 'pericial_chica', 'lockers'];
+                      const getUbNombre = (id) => stockUbicaciones.find(u => u.id === id)?.nombre || id;
                       const printWindow = window.open('', '_blank');
                       printWindow.document.write(`<html><head><title>Stock Completo</title><style>body{font-family:Arial,sans-serif;padding:15px;font-size:10px}h1{font-size:16px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:10px}h2{font-size:11px;margin-top:12px;background:#e0e0e0;padding:4px 8px;margin-bottom:5px}h3{font-size:10px;color:#666;margin:8px 0 3px}.item{display:flex;justify-content:space-between;padding:1px 0;border-bottom:1px solid #999;font-size:9px;line-height:1.2}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:8px;color:#999;margin-top:15px}.page-break{page-break-after:always}</style></head><body>`);
                       printWindow.document.write('<h1>📦 INVENTARIO COMPLETO</h1>');
-                      ubicaciones.forEach(ub => {
-                        const items = stockFiltrado.filter(i => i.ubicacion === ub);
+                      ubicacionesFiltradas.forEach(ub => {
+                        const items = stockFiltrado.filter(i => i.ubicacion === ub.id);
                         const consumibles = items.filter(i => i.tipo !== 'fijo');
                         const fijos = items.filter(i => i.tipo === 'fijo');
-                        printWindow.document.write(`<h2>${ubNombres[ub]}</h2>`);
-                        if(consumibles.length > 0) { printWindow.document.write('<h3>Consumibles</h3>'); consumibles.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
-                        if(fijos.length > 0) { printWindow.document.write('<h3>Elementos Fijos</h3>'); fijos.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
+                        printWindow.document.write(`<h2>${escapeHtml(ub.nombre)}</h2>`);
+                        if(consumibles.length > 0) { printWindow.document.write('<h3>Consumibles</h3>'); consumibles.forEach(i => printWindow.document.write(`<div class="item"><span>${escapeHtml(i.nombre)}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
+                        if(fijos.length > 0) { printWindow.document.write('<h3>Elementos Fijos</h3>'); fijos.forEach(i => printWindow.document.write(`<div class="item"><span>${escapeHtml(i.nombre)}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
                       });
                       printWindow.document.write(`<p class="fecha">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
                       printWindow.document.close();
@@ -3081,11 +3100,11 @@ const App = () => {
                       document.getElementById('printStockMenu').classList.add('hidden');
                       const bajos = stockFiltrado.filter(i => i.cantidad <= i.cantidad_minima);
                       if (bajos.length === 0) { showNotify("No hay items bajos", "error"); return; }
-                      const ubNombres = { valija_perbio: 'Per-Bio', biologica: 'Biológica', pericial_grande: 'Grande', pericial_chica: 'Chica', lockers: 'Lockers' };
+                      const getUbNombre = (id) => stockUbicaciones.find(u => u.id === id)?.nombre || id;
                       const printWindow = window.open('', '_blank');
                       printWindow.document.write(`<html><head><title>Stock Bajo</title><style>body{font-family:Arial,sans-serif;padding:15px;font-size:10px}h1{font-size:16px;border-bottom:2px solid red;padding-bottom:8px;color:red;margin-bottom:10px}.item{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #999;font-size:10px;line-height:1.2}.ub{color:#666;font-size:9px}.fecha{text-align:right;font-size:8px;color:#999;margin-top:15px}</style></head><body>`);
                       printWindow.document.write('<h1>⚠️ ITEMS CON STOCK BAJO</h1>');
-                      bajos.forEach(i => printWindow.document.write(`<div class="item"><span>${i.nombre} <span class="ub">(${ubNombres[i.ubicacion]})</span></span><span style="color:red;font-weight:bold">${i.cantidad} / min:${i.cantidad_minima}</span></div>`));
+                      bajos.forEach(i => printWindow.document.write(`<div class="item"><span>${escapeHtml(i.nombre)} <span class="ub">(${escapeHtml(getUbNombre(i.ubicacion))})</span></span><span style="color:red;font-weight:bold">${i.cantidad} / min:${i.cantidad_minima}</span></div>`));
                       printWindow.document.write(`<p class="fecha">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
                       printWindow.document.close();
                       printWindow.print();
@@ -3101,12 +3120,12 @@ const App = () => {
                 {(() => {
                   const resultados = stockFiltrado.filter(i => i.nombre.toLowerCase().includes(stockSearch.toLowerCase()));
                   if (resultados.length === 0) return <p className="text-amber-600 text-sm">No encontrado</p>;
-                  const ubNombres = { valija_perbio: 'Per-Bio', biologica: 'Biologica', pericial_grande: 'Grande', pericial_chica: 'Chica', lockers: 'Lockers' };
+                  const getUbNombre = (id) => stockUbicaciones.find(u => u.id === id)?.nombre || id;
                   return (<div className="space-y-1">{resultados.map(item => (
                     <div key={item.id} onClick={() => { setSelectedUbicacion(item.ubicacion); setStockSearch(''); setHighlightedItem(item.id); setTimeout(() => setHighlightedItem(null), 6000); }} className={`flex items-center justify-between p-2 rounded-lg text-sm cursor-pointer hover:ring-2 hover:ring-amber-400 ${item.cantidad <= item.cantidad_minima ? 'bg-red-100' : 'bg-white'}`}>
                       <span className="font-bold">{item.nombre}</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-500">{ubNombres[item.ubicacion]}</span>
+                        <span className="text-xs text-slate-500">{getUbNombre(item.ubicacion)}</span>
                         <span className={`text-[9px] px-1 rounded ${item.tipo === 'fijo' ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-700'}`}>{item.tipo === 'fijo' ? '🔧' : '📦'}</span>
                         <span className={`font-black ${item.cantidad <= item.cantidad_minima ? 'text-red-600' : 'text-slate-800'}`}>{item.cantidad}</span>
                       </div>
@@ -3116,11 +3135,14 @@ const App = () => {
               </div>
             )}
             
-            <div className="flex flex-wrap gap-1">
-              {[{id:'valija_perbio',n:'🧳 Per-Bio'},{id:'biologica',n:'🧬 Biologica'},{id:'pericial_grande',n:'📦 Grande'},{id:'pericial_chica',n:'📋 Chica'},{id:'lockers',n:'🔐 Lockers'}].map(ub => {
+            <div className="flex flex-wrap gap-1 items-center">
+              {ubicacionesFiltradas.map(ub => {
                 const alertas = stockFiltrado.filter(i => i.ubicacion === ub.id && i.cantidad <= i.cantidad_minima).length;
-                return (<button key={ub.id} onClick={() => { setSelectedUbicacion(ub.id); setStockSearch(''); }} className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 ${selectedUbicacion === ub.id ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{ub.n}{alertas > 0 && <span className="bg-red-500 text-white text-[8px] px-1 rounded-full">{alertas}</span>}</button>);
+                return (<button key={ub.id} onClick={() => { setSelectedUbicacion(ub.id); setStockSearch(''); }} className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 ${selectedUbicacion === ub.id ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{ub.nombre}{alertas > 0 && <span className="bg-red-500 text-white text-[8px] px-1 rounded-full">{alertas}</span>}</button>);
               })}
+              {canManageStock() && (
+                <button onClick={() => setShowUbicacionesModal(true)} className="px-2 py-1.5 rounded-lg font-bold text-xs bg-teal-100 text-teal-700 hover:bg-teal-200">⚙️</button>
+              )}
             </div>
             
             <div className="bg-white rounded-xl shadow-md border border-slate-200 p-3">
@@ -3205,11 +3227,11 @@ const App = () => {
                       } else {
                         const replicar = document.getElementById('itemReplicar')?.checked;
                         if (replicar) {
-                          const ubicaciones = ['valija_perbio', 'biologica', 'pericial_grande', 'pericial_chica', 'lockers'];
+                          const ubicaciones = ubicacionesFiltradas.map(u => u.id);
                           const items = ubicaciones.map(ub => ({ nombre, tipo, ubicacion: ub, cantidad: ub === selectedUbicacion ? cantidad : 0, cantidad_minima, turno: getTurnoParaGuardar() }));
                           const { error } = await sb.from('stock_items').insert(items);
                         if (error) { showNotify("Error: " + error.message, "error"); return; }
-                        showNotify("Creado en 5 ubicaciones");
+                        showNotify(`Creado en ${ubicaciones.length} ubicaciones`);
                       } else {
                         await sb.from('stock_items').insert([{ nombre, tipo, ubicacion: selectedUbicacion, cantidad, cantidad_minima, turno: getTurnoParaGuardar() }]);
                         showNotify("Creado");
@@ -3605,6 +3627,120 @@ const App = () => {
               <input name="pass" type="password" placeholder="Nueva contraseña..." required className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-bold" />
               <button className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl">Actualizar</button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL UBICACIONES DE STOCK */}
+      {showUbicacionesModal && canManageStock() && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => { setShowUbicacionesModal(false); setEditingUbicacion(null); }}>
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-6 bg-teal-600 text-white flex justify-between items-center sticky top-0 z-10">
+              <h3 className="font-black uppercase text-sm">⚙️ Gestionar Ubicaciones</h3>
+              <button onClick={() => { setShowUbicacionesModal(false); setEditingUbicacion(null); }} className="text-teal-200 hover:text-white">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              {/* Formulario nueva/editar ubicación */}
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const id = e.target.ubId.value.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+                const nombre = e.target.ubNombre.value.trim();
+                if (!id || !nombre) { showNotify("Completar ID y nombre", "error"); return; }
+                
+                if (editingUbicacion) {
+                  // Actualizar nombre
+                  const { error } = await sb.from('stock_ubicaciones').update({ nombre }).eq('id', editingUbicacion.id);
+                  if (error) { showNotify("Error: " + error.message, "error"); return; }
+                  showNotify("Ubicación actualizada");
+                  setEditingUbicacion(null);
+                } else {
+                  // Crear nueva con turno
+                  const turnoParaUbicacion = getTurnoParaGuardar();
+                  const ubicacionesDelTurno = stockUbicaciones.filter(u => u.turno === turnoParaUbicacion);
+                  const maxOrden = Math.max(0, ...ubicacionesDelTurno.map(u => u.orden || 0));
+                  const { error } = await sb.from('stock_ubicaciones').insert([{ id, nombre, orden: maxOrden + 1, turno: turnoParaUbicacion, created_by: session.user.id }]);
+                  if (error) { 
+                    if (error.code === '23505') showNotify("Ya existe una ubicación con ese ID", "error");
+                    else showNotify("Error: " + error.message, "error"); 
+                    return; 
+                  }
+                  showNotify("Ubicación creada");
+                }
+                e.target.reset();
+                loadData();
+              }} className="bg-slate-50 p-4 rounded-xl space-y-3">
+                <p className="text-[10px] font-black text-slate-500 uppercase">{editingUbicacion ? '✏️ Editar ubicación' : '➕ Nueva ubicación'}</p>
+                <div className="flex gap-2">
+                  <input 
+                    name="ubId" 
+                    placeholder="ID (ej: valija_nueva)" 
+                    defaultValue={editingUbicacion?.id || ''}
+                    disabled={!!editingUbicacion}
+                    className={`flex-1 px-3 py-2 border rounded-lg text-sm font-bold ${editingUbicacion ? 'bg-slate-200 text-slate-500' : ''}`} 
+                  />
+                  <input 
+                    name="ubNombre" 
+                    placeholder="Nombre visible" 
+                    defaultValue={editingUbicacion?.nombre || ''}
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm font-bold" 
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button type="submit" className="flex-1 py-2 bg-teal-600 text-white rounded-lg font-bold text-xs">
+                    {editingUbicacion ? 'Guardar' : 'Crear'}
+                  </button>
+                  {editingUbicacion && (
+                    <button type="button" onClick={() => setEditingUbicacion(null)} className="px-4 py-2 bg-slate-300 rounded-lg font-bold text-xs">
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </form>
+
+              {/* Lista de ubicaciones */}
+              <div className="space-y-2">
+                {(() => {
+                  const turnoActual = getTurnoParaGuardar();
+                  const ubicacionesDelTurno = stockUbicaciones.filter(u => u.turno === turnoActual);
+                  return (<>
+                    <p className="text-[10px] font-black text-slate-500 uppercase">Ubicaciones del {TURNOS[turnoActual]} ({ubicacionesDelTurno.length})</p>
+                    {ubicacionesDelTurno.map((ub, idx) => {
+                      const itemCount = stockItems.filter(i => i.ubicacion === ub.id).length;
+                      return (
+                        <div key={ub.id} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-400 text-xs font-bold">{idx + 1}.</span>
+                            <span className="font-bold text-sm">{ub.nombre}</span>
+                            <span className="text-[10px] text-slate-400">({ub.id})</span>
+                            <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded">{itemCount} items</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => setEditingUbicacion(ub)} 
+                              className="w-7 h-7 bg-amber-100 text-amber-700 rounded text-xs hover:bg-amber-200"
+                            >✏️</button>
+                            {itemCount === 0 && (
+                              <button 
+                                onClick={async () => {
+                                  if (!confirm(`¿Eliminar "${ub.nombre}"?`)) return;
+                                  const { error } = await sb.from('stock_ubicaciones').delete().eq('id', ub.id);
+                                  if (error) { showNotify("Error: " + error.message, "error"); return; }
+                                  showNotify("Ubicación eliminada");
+                                  loadData();
+                                }} 
+                                className="w-7 h-7 bg-red-100 text-red-700 rounded text-xs hover:bg-red-200"
+                              >🗑️</button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>);
+                })()}
+              </div>
+
+              <p className="text-[10px] text-slate-400 text-center">Solo se pueden eliminar ubicaciones sin items</p>
+            </div>
           </div>
         </div>
       )}
