@@ -375,6 +375,8 @@ const App = () => {
         timeoutRef.current = setTimeout(async () => {
           await sb.auth.signOut();
           setShowTimeoutWarning(false);
+          setLoginUsername('');
+          setLoginPassword('');
           showNotify("Sesión cerrada por inactividad", "error");
         }, 2 * 60 * 1000);
       }, SESSION_TIMEOUT - 2 * 60 * 1000);
@@ -409,7 +411,12 @@ const App = () => {
     const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) loadUserProfile(session.user.id);
-      else setUserProfile(null);
+      else {
+        setUserProfile(null);
+        // Limpiar campos de login cuando la sesión expira
+        setLoginUsername('');
+        setLoginPassword('');
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
