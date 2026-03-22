@@ -1,10 +1,13 @@
 
-const { useState, useEffect } = React;
+const { useState, useEffect, useMemo } = React;
 const { createClient } = supabase;
 
 // CONFIGURACIÓN
+// ⚠️ SEGURIDAD: No subir este archivo a repositorios públicos (GitHub, etc.)
+// Si se rota la key en Supabase, actualizarla aquí y en el servidor.
+// La anon key es pública por diseño pero no debe exponerse en repos.
 const SUPABASE_URL = 'https://whfrenunfcrcrljithex.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnJlbnVuZmNyY3Jsaml0aGV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2Njk5ODUsImV4cCI6MjA4NTI0NTk4NX0.MMbKQxmSL_7UPNcEh_F1NofVPa13Trz3sedDALvgvPs';
+const SUPABASE_ANON_KEY = 'sb_publishable_FEJnmZ7CIE_haY1gz4PRxQ_Omz7dpX3';
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Función de escape HTML para prevenir XSS en impresiones
@@ -341,6 +344,8 @@ const App = () => {
   const [printDateTo, setPrintDateTo] = useState('');
   const [printReady, setPrintReady] = useState(false);
   const [printUser, setPrintUser] = useState('todos');
+  const [showPrintLicMenu, setShowPrintLicMenu] = useState(false);
+  const [showPrintStockMenu, setShowPrintStockMenu] = useState(false);
   
   // Estados para filtros de auditoría
   const [logsFilterUser, setLogsFilterUser] = useState('todos');
@@ -813,12 +818,27 @@ const App = () => {
     return sortByNumber(a, b);
   });
 
-  const pendingNovedades = sortNovedades(filterNovedades(novedades.filter(n => !isNovedadComplete(n))), userProfile);
-  const completedNovedades = filterNovedades(novedades.filter(n => isNovedadComplete(n))).sort(sortByNumber);
+  const pendingNovedades = useMemo(
+    () => sortNovedades(filterNovedades(novedades.filter(n => !isNovedadComplete(n))), userProfile),
+    [novedades, userProfile, searchTerm, selectedYear, turnoActivo]
+  );
+  const completedNovedades = useMemo(
+    () => filterNovedades(novedades.filter(n => isNovedadComplete(n))).sort(sortByNumber),
+    [novedades, searchTerm, selectedYear, turnoActivo]
+  );
   // Contadores filtrados por turno (para pestañas)
-  const novedadesFiltradas = filterByTurno(novedades);
-  const totalPending = novedadesFiltradas.filter(n => !isNovedadComplete(n)).length;
-  const totalCompleted = novedadesFiltradas.filter(n => isNovedadComplete(n)).length;
+  const novedadesFiltradas = useMemo(
+    () => filterByTurno(novedades),
+    [novedades, turnoActivo]
+  );
+  const totalPending = useMemo(
+    () => novedadesFiltradas.filter(n => !isNovedadComplete(n)).length,
+    [novedadesFiltradas]
+  );
+  const totalCompleted = useMemo(
+    () => novedadesFiltradas.filter(n => isNovedadComplete(n)).length,
+    [novedadesFiltradas]
+  );
 
   const checkDuplicate = checkDuplicateServer;
 
@@ -2497,11 +2517,11 @@ const App = () => {
                 
                 {/* Menú desplegable de impresión */}
                 <div className="relative">
-                  <button onClick={() => document.getElementById('printLicMenu').classList.toggle('hidden')} className="px-4 py-2 bg-blue-500 text-white rounded-xl font-bold text-sm hover:bg-blue-600 flex items-center gap-2">🖨️ Imprimir ▼</button>
-                  <div id="printLicMenu" className="hidden absolute right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 min-w-[220px]">
+                  <button onClick={() => setShowPrintLicMenu(v => !v)} className="px-4 py-2 bg-blue-500 text-white rounded-xl font-bold text-sm hover:bg-blue-600 flex items-center gap-2">🖨️ Imprimir ▼</button>
+                  <div className={`${showPrintLicMenu ? '' : 'hidden'} absolute right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 min-w-[220px]`}>
                     {/* Solo Calendario */}
                     <button onClick={() => {
-                      document.getElementById('printLicMenu').classList.add('hidden');
+                      setShowPrintLicMenu(false);
                       const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
                       const dias = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
                       const printWindow = window.open('', '_blank');
@@ -2548,7 +2568,7 @@ const App = () => {
                     
                     {/* Calendario + Detalle completo */}
                     <button onClick={() => {
-                      document.getElementById('printLicMenu').classList.add('hidden');
+                      setShowPrintLicMenu(false);
                       const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
                       const dias = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
                       const printWindow = window.open('', '_blank');
@@ -2614,7 +2634,7 @@ const App = () => {
                     
                     {/* Solo Enfermedad/Estudio/Descanso */}
                     <button onClick={() => {
-                      document.getElementById('printLicMenu').classList.add('hidden');
+                      setShowPrintLicMenu(false);
                       const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
                       const licenciasYear = licenciasFiltradas.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && ['enfermedad', 'estudio', 'descanso'].includes(l.tipo));
                       if (licenciasYear.length === 0) { showNotify("No hay registros de enfermedad/estudio/descanso", "error"); return; }
@@ -2655,7 +2675,7 @@ const App = () => {
                     
                     {/* Solo Licencias */}
                     <button onClick={() => {
-                      document.getElementById('printLicMenu').classList.add('hidden');
+                      setShowPrintLicMenu(false);
                       const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
                       const licenciasYear = licenciasFiltradas.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.tipo === 'licencia');
                       if (licenciasYear.length === 0) { showNotify("No hay licencias registradas", "error"); return; }
@@ -2695,7 +2715,7 @@ const App = () => {
                     </div>
                     <button onClick={() => {
                       if (!licPrintUser) { showNotify("Seleccioná un usuario", "error"); return; }
-                      document.getElementById('printLicMenu').classList.add('hidden');
+                      setShowPrintLicMenu(false);
                       const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
                       const userLics = licenciasFiltradas.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.user_nombre === licPrintUser);
                       if (userLics.length === 0) { showNotify(`${licPrintUser} no tiene registros en ${calendarioYear}`, "error"); return; }
@@ -3095,12 +3115,11 @@ const App = () => {
                 </div>
                 <div className="relative">
                   <button onClick={() => {
-                    const menu = document.getElementById('printStockMenu');
-                    menu.classList.toggle('hidden');
+                    setShowPrintStockMenu(v => !v);
                   }} className="px-3 py-2 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600">🖨️</button>
-                  <div id="printStockMenu" className="hidden absolute right-0 top-10 bg-white border border-slate-200 rounded-lg shadow-xl z-50 min-w-[180px]">
+                  <div className={`${showPrintStockMenu ? '' : 'hidden'} absolute right-0 top-10 bg-white border border-slate-200 rounded-lg shadow-xl z-50 min-w-[180px]`}>
                     <button onClick={() => {
-                      document.getElementById('printStockMenu').classList.add('hidden');
+                      setShowPrintStockMenu(false);
                       const getUbNombre = (id) => stockUbicaciones.find(u => u.id === id)?.nombre || id;
                       const items = stockFiltrado.filter(i => i.ubicacion === selectedUbicacion);
                       const consumibles = items.filter(i => i.tipo !== 'fijo');
@@ -3115,7 +3134,7 @@ const App = () => {
                       printWindow.print();
                     }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-100">📋 Imprimir actual</button>
                     <button onClick={() => {
-                      document.getElementById('printStockMenu').classList.add('hidden');
+                      setShowPrintStockMenu(false);
                       const getUbNombre = (id) => stockUbicaciones.find(u => u.id === id)?.nombre || id;
                       const printWindow = window.open('', '_blank');
                       printWindow.document.write(`<html><head><title>Stock Completo</title><style>body{font-family:Arial,sans-serif;padding:15px;font-size:10px}h1{font-size:16px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:10px}h2{font-size:11px;margin-top:12px;background:#e0e0e0;padding:4px 8px;margin-bottom:5px}h3{font-size:10px;color:#666;margin:8px 0 3px}.item{display:flex;justify-content:space-between;padding:1px 0;border-bottom:1px solid #999;font-size:9px;line-height:1.2}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:8px;color:#999;margin-top:15px}.page-break{page-break-after:always}</style></head><body>`);
@@ -3133,7 +3152,7 @@ const App = () => {
                       printWindow.print();
                     }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 border-t">📦 Imprimir TODO</button>
                     <button onClick={() => {
-                      document.getElementById('printStockMenu').classList.add('hidden');
+                      setShowPrintStockMenu(false);
                       const bajos = stockFiltrado.filter(i => i.cantidad <= i.cantidad_minima);
                       if (bajos.length === 0) { showNotify("No hay items bajos", "error"); return; }
                       const getUbNombre = (id) => stockUbicaciones.find(u => u.id === id)?.nombre || id;
