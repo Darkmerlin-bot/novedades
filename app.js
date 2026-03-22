@@ -373,10 +373,14 @@ const App = () => {
         setShowTimeoutWarning(true);
         // Cerrar sesión después de 2 minutos más si no hay actividad
         timeoutRef.current = setTimeout(async () => {
-          await sb.auth.signOut();
+          await sb.auth.signOut({ scope: 'local' });
+          // Limpiar cualquier token residual
+          localStorage.removeItem('sb-whfrenunfcrcrljithex-auth-token');
           setShowTimeoutWarning(false);
           setLoginUsername('');
           setLoginPassword('');
+          setSession(null);
+          setUserProfile(null);
           showNotify("Sesión cerrada por inactividad", "error");
         }, 2 * 60 * 1000);
       }, SESSION_TIMEOUT - 2 * 60 * 1000);
@@ -413,9 +417,10 @@ const App = () => {
       if (session) loadUserProfile(session.user.id);
       else {
         setUserProfile(null);
-        // Limpiar campos de login cuando la sesión expira
+        // Limpiar campos de login y localStorage cuando la sesión expira
         setLoginUsername('');
         setLoginPassword('');
+        localStorage.removeItem('sb-whfrenunfcrcrljithex-auth-token');
       }
     });
     return () => subscription.unsubscribe();
@@ -453,10 +458,14 @@ const App = () => {
 
   const handleLogout = async () => {
     await addLog('LOGOUT', 'Cierre de sesión');
-    await sb.auth.signOut();
+    await sb.auth.signOut({ scope: 'local' });
+    // Limpiar cualquier token residual
+    localStorage.removeItem('sb-whfrenunfcrcrljithex-auth-token');
     // Limpiar campos de login por seguridad
     setLoginUsername('');
     setLoginPassword('');
+    setSession(null);
+    setUserProfile(null);
   };
 
   // DATOS
@@ -889,7 +898,7 @@ const App = () => {
       
       // Comisiones
       if (n.es_comision) {
-        if (n.comision_carga_sgsp === name) { stats.comisiones.cargaSgsp++; participaEnEsta = true; }
+        if (n.comision_carga_sgsp === name) { stats.comisiones.cargaSgsp++; } // Solo registro, no genera concurrencia
         if (n.comision_chofer === name) { stats.comisiones.chofer++; participaEnEsta = true; }
         if (n.comision_acompanante === name) { stats.comisiones.acompanante++; participaEnEsta = true; }
         if (participaEnEsta) novedadesComisiones.add(n.id);
@@ -987,11 +996,29 @@ const App = () => {
           <form onSubmit={handleLogin} className="space-y-5" autoComplete="off">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Usuario</label>
-              <input type="text" value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} placeholder="Tu nombre de usuario" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700" required autoComplete="off" />
+              <input 
+                type="text" 
+                name={"user_" + Date.now()}
+                value={loginUsername} 
+                onChange={(e) => setLoginUsername(e.target.value)} 
+                placeholder="Tu nombre de usuario" 
+                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700" 
+                required 
+                autoComplete="off" 
+              />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Contraseña</label>
-              <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="••••••••" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700" required autoComplete="new-password" />
+              <input 
+                type="password" 
+                name={"pass_" + Date.now()}
+                value={loginPassword} 
+                onChange={(e) => setLoginPassword(e.target.value)} 
+                placeholder="••••••••" 
+                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700" 
+                required 
+                autoComplete="new-password" 
+              />
             </div>
             <button type="submit" disabled={loginLoading} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black shadow-xl hover:bg-slate-800 mt-4 uppercase text-sm disabled:opacity-50">
               {loginLoading ? 'Verificando...' : 'Entrar'}
