@@ -207,6 +207,7 @@ const Notification = ({ message, type }) => (
 
 // LOGO - Escudo Policía Científica
 const LOGO_URL = 'https://raw.githubusercontent.com/Darkmerlin-bot/novedades/main/Logo%20para%20programa.png';
+const LOGO_URL_LARGE = 'https://raw.githubusercontent.com/Darkmerlin-bot/novedades/main/Escudo%203d%20sin%20fondo.png';
 
 // HEADER
 const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount, juiciosCount, recordatoriosCount, stockBajoCount, turnoActivo, setTurnoActivo, TURNOS, darkMode, toggleDarkMode }) => (
@@ -1310,8 +1311,8 @@ const App = () => {
       <div className="flex items-center justify-center min-h-screen p-4 font-sans" style={{ background: 'var(--bg-header)' }}>
         <div className="w-full max-w-md glass-strong rounded-[2.5rem] p-10 shadow-2xl animate-slideUp border border-white/20">
           <div className="text-center mb-8">
-            {LOGO_URL ? (
-              <img src={LOGO_URL} alt="Escudo Policía Científica" className="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-lg" />
+            {LOGO_URL_LARGE ? (
+              <img src={LOGO_URL_LARGE} alt="Escudo Policía Científica" className="w-28 h-28 mx-auto mb-4 object-contain drop-shadow-2xl" />
             ) : (
               <div className="inline-block p-5 bg-emerald-50 rounded-full text-5xl mb-4">🔬</div>
             )}
