@@ -1,6 +1,173 @@
 
-const { useState, useEffect, useMemo } = React;
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
 const { createClient } = supabase;
+
+// ==================== INYECCIÓN DE ESTILOS Y FUENTE ====================
+(() => {
+  // Fuente Inter
+  if (!document.querySelector('link[href*="fonts.googleapis.com/css2?family=Inter"]')) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap';
+    document.head.appendChild(link);
+  }
+  // Estilos custom
+  const style = document.createElement('style');
+  style.textContent = `
+    :root {
+      --bg-primary: #f1f5f9;
+      --bg-card: #ffffff;
+      --bg-card-hover: #ffffff;
+      --bg-header: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+      --bg-modal-overlay: rgba(15, 23, 42, 0.6);
+      --bg-glass: rgba(255, 255, 255, 0.85);
+      --text-primary: #1e293b;
+      --text-secondary: #64748b;
+      --border-color: #e2e8f0;
+      --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-card-hover: 0 20px 40px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.06);
+      --shadow-modal: 0 25px 60px rgba(0,0,0,0.15), 0 10px 20px rgba(0,0,0,0.1);
+    }
+    [data-theme="dark"] {
+      --bg-primary: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #334155;
+      --bg-header: linear-gradient(135deg, #020617 0%, #1e1b4b 50%, #020617 100%);
+      --bg-modal-overlay: rgba(0, 0, 0, 0.7);
+      --bg-glass: rgba(30, 41, 59, 0.85);
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --border-color: #334155;
+      --shadow-card: 0 1px 3px rgba(0,0,0,0.2);
+      --shadow-card-hover: 0 20px 40px rgba(0,0,0,0.3);
+      --shadow-modal: 0 25px 60px rgba(0,0,0,0.4);
+    }
+    * { font-family: 'Inter', system-ui, -apple-system, sans-serif !important; }
+    body { background: var(--bg-primary); transition: background 0.3s ease; }
+    
+    /* Glassmorphism */
+    .glass { background: var(--bg-glass); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); }
+    .glass-strong { background: rgba(255,255,255,0.92); backdrop-filter: blur(40px) saturate(200%); -webkit-backdrop-filter: blur(40px) saturate(200%); }
+    [data-theme="dark"] .glass { background: rgba(30,41,59,0.85); }
+    [data-theme="dark"] .glass-strong { background: rgba(30,41,59,0.92); }
+    
+    /* Animaciones mejoradas */
+    @keyframes slideUp { from { opacity: 0; transform: translateY(24px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes slideInRight { from { opacity: 0; transform: translateX(100px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes expandDown { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 2000px; } }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-6px); } }
+    @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); } 50% { box-shadow: 0 0 20px 4px rgba(16,185,129,0.15); } }
+    @keyframes tabSlide { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    .animate-slideUp { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+    .animate-slideInRight { animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+    .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+    .animate-expandDown { animation: expandDown 0.35s cubic-bezier(0.16, 1, 0.3, 1); overflow: hidden; }
+    .animate-float { animation: float 3s ease-in-out infinite; }
+    .animate-pulseGlow { animation: pulseGlow 2s ease-in-out infinite; }
+    
+    /* Skeleton loader */
+    .skeleton { background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 12px; }
+    [data-theme="dark"] .skeleton { background: linear-gradient(90deg, #334155 25%, #475569 50%, #334155 75%); background-size: 200% 100%; }
+    
+    /* Card hover lift */
+    .card-lift { transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+    .card-lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); }
+    
+    /* Nav tab active indicator */
+    .nav-tab-active { position: relative; }
+    .nav-tab-active::after { content: ''; position: absolute; bottom: -2px; left: 20%; right: 20%; height: 2px; background: #10b981; border-radius: 2px; animation: tabSlide 0.3s cubic-bezier(0.16, 1, 0.3, 1); transform-origin: center; }
+    
+    /* Floating label */
+    .float-label-group { position: relative; }
+    .float-label-group input:focus + label,
+    .float-label-group input:not(:placeholder-shown) + label {
+      transform: translateY(-28px) scale(0.75);
+      color: #10b981;
+      background: var(--bg-card);
+      padding: 0 6px;
+    }
+    .float-label-group label {
+      position: absolute; left: 16px; top: 16px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none; transform-origin: left;
+      font-weight: 700; font-size: 13px; color: #94a3b8;
+    }
+    
+    /* Dark mode overrides */
+    [data-theme="dark"] .bg-white { background: var(--bg-card) !important; }
+    [data-theme="dark"] .bg-slate-50, [data-theme="dark"] .bg-slate-100 { background: #1e293b !important; }
+    [data-theme="dark"] .bg-slate-300 { background: var(--bg-primary) !important; }
+    [data-theme="dark"] .text-slate-800, [data-theme="dark"] .text-slate-700 { color: #f1f5f9 !important; }
+    [data-theme="dark"] .text-slate-600, [data-theme="dark"] .text-slate-500 { color: #94a3b8 !important; }
+    [data-theme="dark"] .border-slate-200, [data-theme="dark"] .border-slate-100 { border-color: #334155 !important; }
+    [data-theme="dark"] .shadow-md, [data-theme="dark"] .shadow-sm { box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important; }
+    [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea { background: #1e293b !important; color: #f1f5f9 !important; border-color: #475569 !important; }
+    
+    /* Print */
+    @media print { .print\\:hidden { display: none !important; } body { background: white !important; } [data-theme] { --bg-primary: white; } }
+  `;
+  document.head.appendChild(style);
+})();
+
+// ==================== SISTEMA DE ÍCONOS SVG ====================
+const Icon = ({ name, size = 18, className = '' }) => {
+  const icons = {
+    folder: <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>,
+    check: <><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></>,
+    scale: <path d="M12 3v17.25m0-17.25c-1.33 0-6.47 1.48-8.5 3.25L12 3zm0 0c1.33 0 6.47 1.48 8.5 3.25L12 3zM4.75 15.5l2-4.5h2.5l2-4.5M14.75 6.5l2 4.5h2.5l2 4.5"/>,
+    bell: <><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></>,
+    calendar: <><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
+    package: <><path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></>,
+    plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+    search: <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
+    users: <><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></>,
+    log: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></>,
+    chart: <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
+    printer: <><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></>,
+    save: <><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></>,
+    key: <><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></>,
+    logout: <><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
+    edit: <><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></>,
+    trash: <><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></>,
+    sun: <><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></>,
+    moon: <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>,
+    lock: <><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></>,
+    alert: <><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
+    clock: <><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></>,
+    chevronDown: <polyline points="6,9 12,15 18,9"/>,
+    x: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+    camera: <><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></>,
+    car: <><path d="M14 16H9m10 0h3v-3.15a1 1 0 00-.84-.99L16 11l-2.7-3.6a1 1 0 00-.8-.4H5.24a1 1 0 00-.9.55l-2.2 4.4A1 1 0 002 12.3V16h3"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></>,
+    party: <><path d="M5.8 11.3L2 22l10.7-3.79M4 3h.01M22 8h.01M15 2h.01M22 20h.01M22 2l-2.24.75a1 1 0 00-.64.64L18.38 5.6a1 1 0 01-.64.64L15.5 7l2.24-.75a1 1 0 01.64.64l.75 2.24"/></>,
+  };
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      {icons[name] || null}
+    </svg>
+  );
+};
+
+// Skeleton Loader Component
+const Skeleton = ({ rows = 4, className = '' }) => (
+  <div className={`space-y-4 animate-fadeIn ${className}`}>
+    {Array.from({ length: rows }).map((_, i) => (
+      <div key={i} className="skeleton h-20 w-full" style={{ animationDelay: `${i * 0.1}s` }}></div>
+    ))}
+  </div>
+);
+
+// Empty State Component
+const EmptyState = ({ icon = 'folder', title, subtitle, isSearch = false }) => (
+  <div className="text-center py-20 bg-white rounded-[2rem] border-2 border-dashed border-slate-200 animate-fadeIn">
+    <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-slate-100 mb-5 animate-float">
+      <Icon name={isSearch ? 'search' : icon} size={32} className="text-slate-400" />
+    </div>
+    <p className="text-slate-500 font-bold text-lg">{title}</p>
+    {subtitle && <p className="text-slate-400 text-sm mt-2">{subtitle}</p>}
+  </div>
+);
 
 // CONFIGURACIÓN
 // ⚠️ SEGURIDAD: No subir este archivo a repositorios públicos (GitHub, etc.)
@@ -27,9 +194,11 @@ for (let y = currentYear + 1; y >= 2020; y--) availableYears.push(y);
 
 // NOTIFICACIÓN
 const Notification = ({ message, type }) => (
-  <div className={`fixed top-6 right-6 z-[200] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-slideInRight border-l-4 ${type === 'success' ? 'bg-white border-emerald-500 text-slate-800' : 'bg-red-500 border-red-700 text-white'}`}>
-    <span className="text-xl">{type === 'success' ? '✅' : '⚠️'}</span>
-    <span className="font-bold text-sm">{message}</span>
+  <div className={`fixed top-6 right-6 z-[200] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-slideInRight glass-strong border ${type === 'success' ? 'border-emerald-200 text-slate-800' : 'border-red-300 bg-red-500/90 text-white'}`}>
+    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${type === 'success' ? 'bg-emerald-100' : 'bg-white/20'}`}>
+      <Icon name={type === 'success' ? 'check' : 'alert'} size={16} className={type === 'success' ? 'text-emerald-600' : 'text-white'} />
+    </div>
+    <span className="font-semibold text-sm">{message}</span>
   </div>
 );
 
@@ -37,8 +206,8 @@ const Notification = ({ message, type }) => (
 const LOGO_URL = 'https://raw.githubusercontent.com/Darkmerlin-bot/novedades/main/Logo%20para%20programa.png';
 
 // HEADER
-const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount, juiciosCount, recordatoriosCount, stockBajoCount, turnoActivo, setTurnoActivo, TURNOS }) => (
-  <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50 print:hidden">
+const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onShowPass, onShowReport, onBackup, pendingCount, completedCount, juiciosCount, recordatoriosCount, stockBajoCount, turnoActivo, setTurnoActivo, TURNOS, darkMode, toggleDarkMode }) => (
+  <header className="text-white shadow-lg sticky top-0 z-50 print:hidden" style={{ background: 'var(--bg-header)' }}>
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-3">
@@ -46,14 +215,14 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
             <img 
               src={LOGO_URL} 
               alt="Escudo" 
-              className="w-12 h-12 rounded-lg shadow-lg object-contain bg-white p-1"
+              className="w-12 h-12 rounded-xl shadow-lg object-contain bg-white/90 p-1 ring-2 ring-white/20"
             />
           ) : (
-            <div className="bg-emerald-500 p-2 rounded-lg text-xl shadow-lg shadow-emerald-500/20">🔬</div>
+            <div className="bg-emerald-500 p-2.5 rounded-xl text-xl shadow-lg shadow-emerald-500/30">🔬</div>
           )}
           <div>
-            <h1 className="text-xl font-bold tracking-tight">Policía Científica</h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Sistema de Gestión</p>
+            <h1 className="text-xl font-extrabold tracking-tight">Policía Científica</h1>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Sistema de Gestión</p>
           </div>
         </div>
         <div className="flex items-center justify-between md:justify-end gap-3">
@@ -62,9 +231,9 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
             <select 
               value={turnoActivo} 
               onChange={(e) => setTurnoActivo(parseInt(e.target.value))}
-              className="px-3 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs cursor-pointer border-2 border-indigo-400"
+              className="px-3 py-2 bg-white/10 text-white rounded-xl font-bold text-xs cursor-pointer border border-white/20 backdrop-blur-sm hover:bg-white/15 transition-all"
             >
-              <option value="0">👁️ Todos los turnos</option>
+              <option value="0">Todos los turnos</option>
               <option value="1">T1 - 1er Turno</option>
               <option value="2">T2 - 2do Turno</option>
               <option value="3">T3 - 3er Turno</option>
@@ -73,58 +242,73 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
           <div className="flex flex-col items-end mr-2">
             <span className="text-sm font-bold text-emerald-400">{userProfile?.nombre}</span>
             <div className="flex items-center gap-2">
-              <span className={`text-[9px] px-2 py-0.5 rounded font-black uppercase ${userProfile?.role === 'admin' ? 'bg-red-500/20 text-red-400' : userProfile?.role === 'supervisor' ? 'bg-purple-500/20 text-purple-400' : userProfile?.role === 'encargado' ? 'bg-blue-500/20 text-blue-400' : userProfile?.role === 'moderadorplus' ? 'bg-teal-500/20 text-teal-400' : userProfile?.role === 'moderator' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-500/20 text-slate-400'}`}>
+              <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase border ${userProfile?.role === 'admin' ? 'border-red-400/30 bg-red-500/10 text-red-400' : userProfile?.role === 'supervisor' ? 'border-purple-400/30 bg-purple-500/10 text-purple-400' : userProfile?.role === 'encargado' ? 'border-blue-400/30 bg-blue-500/10 text-blue-400' : userProfile?.role === 'moderadorplus' ? 'border-teal-400/30 bg-teal-500/10 text-teal-400' : userProfile?.role === 'moderator' ? 'border-amber-400/30 bg-amber-500/10 text-amber-400' : 'border-slate-400/30 bg-slate-500/10 text-slate-400'}`}>
                 {userProfile?.role === 'admin' ? 'Admin' : userProfile?.role === 'supervisor' ? 'Supervisor' : userProfile?.role === 'encargado' ? 'Encargado' : userProfile?.role === 'moderadorplus' ? 'Mod+' : userProfile?.role === 'moderator' ? 'Moderador' : 'Usuario'}
               </span>
               {!['admin', 'supervisor'].includes(userProfile?.role) && (
-                <span className="text-[9px] px-2 py-0.5 rounded font-black uppercase bg-indigo-500/20 text-indigo-400">T{userProfile?.turno || 1}</span>
+                <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase border border-indigo-400/30 bg-indigo-500/10 text-indigo-400">T{userProfile?.turno || 1}</span>
               )}
             </div>
           </div>
           <div className="flex gap-1.5">
-            <button onClick={onShowPass} className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all" title="Cambiar Contraseña">🔑</button>
+            <button onClick={toggleDarkMode} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all border border-white/10" title={darkMode ? 'Modo Claro' : 'Modo Oscuro'}>
+              <Icon name={darkMode ? 'sun' : 'moon'} size={16} />
+            </button>
+            <button onClick={onShowPass} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all border border-white/10" title="Cambiar Contraseña">
+              <Icon name="key" size={16} />
+            </button>
             {['admin', 'supervisor', 'encargado'].includes(userProfile?.role) && (
               <>
-                <button onClick={onShowStats} className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all" title="Estadísticas">📊</button>
-                <button onClick={onShowReport} className="p-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl transition-all" title="Imprimir Reporte">🖨️</button>
+                <button onClick={onShowStats} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all border border-white/10" title="Estadísticas">
+                  <Icon name="chart" size={16} />
+                </button>
+                <button onClick={onShowReport} className="p-2.5 bg-indigo-500/40 hover:bg-indigo-500/60 rounded-xl transition-all border border-indigo-400/30" title="Imprimir Reporte">
+                  <Icon name="printer" size={16} />
+                </button>
               </>
             )}
             {['admin', 'supervisor'].includes(userProfile?.role) && (
-              <button onClick={onBackup} className="p-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all" title="Descargar Respaldo">💾</button>
+              <button onClick={onBackup} className="p-2.5 bg-emerald-500/30 hover:bg-emerald-500/50 rounded-xl transition-all border border-emerald-400/30" title="Descargar Respaldo">
+                <Icon name="save" size={16} />
+              </button>
             )}
-            <button onClick={onLogout} className="px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all font-bold text-sm flex items-center gap-2 shadow-lg">🚪 Salir</button>
+            <button onClick={onLogout} className="px-4 py-2.5 bg-red-500/80 hover:bg-red-500 text-white rounded-xl transition-all font-bold text-sm flex items-center gap-2 shadow-lg backdrop-blur-sm">
+              <Icon name="logout" size={15} /> Salir
+            </button>
           </div>
         </div>
       </div>
-      <nav className="flex flex-wrap gap-1 pb-1 border-t border-slate-800 pt-3">
-        <button onClick={() => setView('list')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${currentView === 'list' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-          📁 Pend. {pendingCount > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black">{pendingCount}</span>}
-        </button>
-        <button onClick={() => setView('completed')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${currentView === 'completed' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-          ✅ Compl. {completedCount > 0 && <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black">{completedCount}</span>}
-        </button>
-        <button onClick={() => setView('juicios')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${currentView === 'juicios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-          ⚖️ Juicios {juiciosCount > 0 && <span className="bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black">{juiciosCount}</span>}
-        </button>
-        <button onClick={() => setView('recordatorios')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${currentView === 'recordatorios' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-          🔔 Recor. {recordatoriosCount > 0 && <span className="bg-purple-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black">{recordatoriosCount}</span>}
-        </button>
-        <button onClick={() => setView('calendario')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${currentView === 'calendario' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-          📅 Licencias
-        </button>
-        <button onClick={() => setView('stock')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${currentView === 'stock' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-          📦 Stock {stockBajoCount > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse">{stockBajoCount}</span>}
-        </button>
+      <nav className="flex flex-wrap gap-1.5 pb-1 border-t border-white/10 pt-3">
+        {[
+          { key: 'list', icon: 'folder', label: 'Pend.', count: pendingCount, countColor: 'bg-red-500' },
+          { key: 'completed', icon: 'check', label: 'Compl.', count: completedCount, countColor: 'bg-emerald-500' },
+          { key: 'juicios', icon: 'scale', label: 'Juicios', count: juiciosCount, countColor: 'bg-amber-500' },
+          { key: 'recordatorios', icon: 'bell', label: 'Recor.', count: recordatoriosCount, countColor: 'bg-purple-500' },
+          { key: 'calendario', icon: 'calendar', label: 'Licencias' },
+          { key: 'stock', icon: 'package', label: 'Stock', count: stockBajoCount, countColor: 'bg-red-500', pulse: true },
+        ].map(tab => (
+          <button key={tab.key} onClick={() => setView(tab.key)} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${currentView === tab.key ? 'bg-emerald-500/90 text-white shadow-lg shadow-emerald-500/20 nav-tab-active' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+            <Icon name={tab.icon} size={14} /> {tab.label} {tab.count > 0 && <span className={`${tab.countColor} text-white text-[9px] px-1.5 py-0.5 rounded-full font-black ${tab.pulse ? 'animate-pulse' : ''}`}>{tab.count}</span>}
+          </button>
+        ))}
         {['admin', 'supervisor', 'encargado', 'moderator'].includes(userProfile?.role) && (
-          <button onClick={() => setView('form')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'form' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>➕ Nueva</button>
+          <button onClick={() => setView('form')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${currentView === 'form' ? 'bg-emerald-500/90 text-white shadow-lg nav-tab-active' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+            <Icon name="plus" size={14} /> Nueva
+          </button>
         )}
         {['admin', 'supervisor', 'encargado'].includes(userProfile?.role) && (
-          <button onClick={() => setView('auditoria')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'auditoria' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>🔍 Auditar</button>
+          <button onClick={() => setView('auditoria')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${currentView === 'auditoria' ? 'bg-emerald-500/90 text-white shadow-lg nav-tab-active' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+            <Icon name="search" size={14} /> Auditar
+          </button>
         )}
         {userProfile?.role === 'admin' && (
           <>
-            <button onClick={() => setView('users')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'users' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>👥 Personal</button>
-            <button onClick={() => setView('logs')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${currentView === 'logs' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>📜 Logs</button>
+            <button onClick={() => setView('users')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${currentView === 'users' ? 'bg-emerald-500/90 text-white shadow-lg nav-tab-active' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              <Icon name="users" size={14} /> Personal
+            </button>
+            <button onClick={() => setView('logs')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${currentView === 'logs' ? 'bg-emerald-500/90 text-white shadow-lg nav-tab-active' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              <Icon name="log" size={14} /> Logs
+            </button>
           </>
         )}
       </nav>
@@ -134,8 +318,8 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
 
 // MODAL PENDIENTES Y JUICIOS
 const PendingModal = ({ count, juiciosProximos, recordatoriosProximos, onClose, userName }) => (
-  <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[150] flex items-center justify-center p-4">
-    <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto">
+  <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" style={{ background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(12px)' }}>
+    <div className="bg-white w-full max-w-md rounded-[2.5rem] overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" style={{ boxShadow: 'var(--shadow-modal)' }}>
       <div className="p-8 bg-red-500 text-white text-center">
         <div className="text-6xl mb-4">⚠️</div>
         <h3 className="font-black uppercase tracking-widest text-lg">Atención</h3>
@@ -247,13 +431,13 @@ const PendingModal = ({ count, juiciosProximos, recordatoriosProximos, onClose, 
 
 // BÚSQUEDA
 const SearchAndFilter = ({ searchTerm, onSearchChange, selectedYear, onYearChange }) => (
-  <div className="flex flex-col sm:flex-row gap-4 mb-6">
+  <div className="flex flex-col sm:flex-row gap-3 mb-6">
     <div className="relative flex-1">
-      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none"><span className="text-slate-400">🔍</span></div>
-      <input type="text" value={searchTerm} onChange={(e) => onSearchChange(e.target.value)} placeholder="Buscar por N° Novedad, SGSP o Título..." className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold text-slate-700 placeholder-slate-400 shadow-sm" />
-      {searchTerm && <button onClick={() => onSearchChange('')} className="absolute inset-y-0 right-4 flex items-center text-slate-400 hover:text-slate-600">✕</button>}
+      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none"><Icon name="search" size={16} className="text-slate-400" /></div>
+      <input type="text" value={searchTerm} onChange={(e) => onSearchChange(e.target.value)} placeholder="Buscar por N° Novedad, SGSP o Título..." className="w-full pl-11 pr-10 py-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all font-semibold text-slate-700 placeholder-slate-400" style={{ boxShadow: 'var(--shadow-card)' }} />
+      {searchTerm && <button onClick={() => onSearchChange('')} className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"><Icon name="x" size={16} /></button>}
     </div>
-    <select value={selectedYear} onChange={(e) => onYearChange(e.target.value)} className="appearance-none w-full sm:w-40 px-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold text-slate-700 cursor-pointer shadow-sm">
+    <select value={selectedYear} onChange={(e) => onYearChange(e.target.value)} className="appearance-none w-full sm:w-40 px-4 py-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all font-semibold text-slate-700 cursor-pointer" style={{ boxShadow: 'var(--shadow-card)' }}>
       <option value="">Todos los años</option>
       {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
     </select>
@@ -265,6 +449,7 @@ const App = () => {
   const [session, setSession] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
   const [novedades, setNovedades] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [logs, setLogs] = useState([]);
@@ -274,6 +459,22 @@ const App = () => {
   const [isEventoSocial, setIsEventoSocial] = useState(false);
   const [notification, setNotification] = useState(null);
   const [showStats, setShowStats] = useState(false);
+  
+  // Dark mode
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return localStorage.getItem('theme') === 'dark'; } catch { return false; }
+  });
+  const toggleDarkMode = () => {
+    setDarkMode(prev => {
+      const next = !prev;
+      document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
+      try { localStorage.setItem('theme', next ? 'dark' : 'light'); } catch {}
+      return next;
+    });
+  };
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+  }, []);
   const [showPassModal, setShowPassModal] = useState(false);
   const [showUbicacionesModal, setShowUbicacionesModal] = useState(false);
   const [editingUbicacion, setEditingUbicacion] = useState(null);
@@ -503,6 +704,7 @@ const App = () => {
 
   const loadData = async () => {
     if (!session) return;
+    setDataLoading(true);
     
     let loadErrors = [];
     
@@ -553,6 +755,7 @@ const App = () => {
       console.error('Error cargando tablas:', loadErrors);
       showNotify('Error cargando: ' + loadErrors.join(', '), 'error');
     }
+    setDataLoading(false);
   };
 
   // Calcular juicios próximos (5 días) - mostrar a todos
@@ -1060,52 +1263,59 @@ const App = () => {
   };
 
   // PANTALLA CARGA
-  if (authLoading) return <div className="flex items-center justify-center min-h-screen bg-slate-800"><div className="text-white text-xl font-bold animate-pulse">🔒 Verificando sesión...</div></div>;
+  if (authLoading) return <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--bg-header)' }}><div className="flex flex-col items-center gap-4"><div className="w-12 h-12 border-3 border-emerald-400 border-t-transparent rounded-full animate-spin"></div><div className="text-white text-sm font-semibold animate-pulse">Verificando sesión...</div></div></div>;
 
   // PANTALLA LOGIN
   if (!session) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-800 p-4 font-sans">
-        <div className="w-full max-w-md bg-white rounded-[2.5rem] p-10 shadow-2xl animate-slideUp">
+      <div className="flex items-center justify-center min-h-screen p-4 font-sans" style={{ background: 'var(--bg-header)' }}>
+        <div className="w-full max-w-md glass-strong rounded-[2.5rem] p-10 shadow-2xl animate-slideUp border border-white/20">
           <div className="text-center mb-8">
             {LOGO_URL ? (
-              <img src={LOGO_URL} alt="Escudo Policía Científica" className="w-24 h-24 mx-auto mb-4 object-contain" />
+              <img src={LOGO_URL} alt="Escudo Policía Científica" className="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-lg" />
             ) : (
               <div className="inline-block p-5 bg-emerald-50 rounded-full text-5xl mb-4">🔬</div>
             )}
             <h2 className="text-3xl font-black text-slate-800">Policía Científica</h2>
-            <p className="text-slate-400 text-sm mt-2">Sistema de Gestión</p>
-            <div className="mt-2 inline-block bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full">🔒 Acceso Seguro</div>
+            <p className="text-slate-400 text-sm mt-2 font-medium">Sistema de Gestión</p>
+            <div className="mt-3 inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold px-4 py-1.5 rounded-full border border-emerald-200">
+              <Icon name="lock" size={12} /> Acceso Seguro
+            </div>
           </div>
-          <form onSubmit={handleLogin} className="space-y-5" autoComplete="off">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Usuario</label>
+          <form onSubmit={handleLogin} className="space-y-6" autoComplete="off">
+            <div className="float-label-group">
               <input 
                 type="text" 
                 name={"user_" + Date.now()}
                 value={loginUsername} 
                 onChange={(e) => setLoginUsername(e.target.value)} 
-                placeholder="Tu nombre de usuario" 
-                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700" 
+                placeholder=" " 
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-semibold text-slate-700 transition-all" 
                 required 
                 autoComplete="off" 
               />
+              <label>Usuario</label>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Contraseña</label>
+            <div className="float-label-group">
               <input 
                 type="password" 
                 name={"pass_" + Date.now()}
                 value={loginPassword} 
                 onChange={(e) => setLoginPassword(e.target.value)} 
-                placeholder="••••••••" 
-                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700" 
+                placeholder=" " 
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-semibold text-slate-700 transition-all" 
                 required 
                 autoComplete="new-password" 
               />
+              <label>Contraseña</label>
             </div>
-            <button type="submit" disabled={loginLoading} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black shadow-xl hover:bg-slate-800 mt-4 uppercase text-sm disabled:opacity-50">
-              {loginLoading ? 'Verificando...' : 'Entrar'}
+            {loginLockedUntil && Date.now() < loginLockedUntil && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-xs font-bold">
+                <Icon name="clock" size={14} /> Demasiados intentos. Esperá unos segundos.
+              </div>
+            )}
+            <button type="submit" disabled={loginLoading || (loginLockedUntil && Date.now() < loginLockedUntil)} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black shadow-xl hover:bg-slate-800 hover:shadow-2xl mt-2 uppercase text-sm disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+              {loginLoading ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Verificando...</> : <><Icon name="lock" size={16} /> Entrar</>}
             </button>
           </form>
           {notification && <Notification {...notification} />}
@@ -1114,7 +1324,7 @@ const App = () => {
     );
   }
 
-  if (!userProfile) return <div className="flex items-center justify-center min-h-screen bg-slate-800"><div className="text-white text-xl font-bold animate-pulse">Cargando perfil...</div></div>;
+  if (!userProfile) return <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--bg-header)' }}><div className="flex flex-col items-center gap-4"><div className="w-12 h-12 border-3 border-emerald-400 border-t-transparent rounded-full animate-spin"></div><div className="text-white text-sm font-semibold animate-pulse">Cargando perfil...</div></div></div>;
 
   // TARJETA NOVEDAD
   const NovedadCard = ({ n, isCompletedView }) => {
@@ -1126,32 +1336,32 @@ const App = () => {
     
     let border = 'border-slate-200', bg = 'bg-white', left = '';
     if (!isCompletedView && isAssigned) {
-      if (userDone) { border = 'border-emerald-300'; bg = 'bg-emerald-50'; left = 'border-l-4 border-l-emerald-500'; }
-      else { border = 'border-red-300'; bg = 'bg-red-50'; left = 'border-l-4 border-l-red-500'; }
+      if (userDone) { border = 'border-emerald-200'; bg = 'bg-emerald-50/50'; left = 'border-l-4 border-l-emerald-500'; }
+      else { border = 'border-red-200'; bg = 'bg-red-50/50'; left = 'border-l-4 border-l-red-500'; }
     }
-    if (isCompletedView) { border = 'border-emerald-300'; bg = 'bg-emerald-50'; left = 'border-l-4 border-l-emerald-500'; }
+    if (isCompletedView) { border = 'border-emerald-200'; bg = 'bg-emerald-50/50'; left = 'border-l-4 border-l-emerald-500'; }
 
     return (
-      <div className={`${bg} rounded-3xl shadow-md border ${border} ${left} overflow-hidden transition-all hover:shadow-xl`}>
-        <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setExpandedId(isEx ? null : n.id)}>
+      <div className={`${bg} rounded-2xl border ${border} ${left} overflow-hidden card-lift`} style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="p-5 flex items-center justify-between cursor-pointer select-none" onClick={() => setExpandedId(isEx ? null : n.id)}>
           <div className="flex items-center gap-5">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${n.es_comision ? 'bg-orange-500 text-white' : n.es_evento_social ? 'bg-pink-500 text-white' : completed === total && total > 0 ? 'bg-emerald-500 text-white' : total === 0 ? 'bg-slate-300 text-slate-500' : 'bg-amber-400 text-white'}`}>{total > 0 ? `${completed}/${total}` : 'N/A'}</div>
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm ${n.es_comision ? 'bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-500/20' : n.es_evento_social ? 'bg-gradient-to-br from-pink-400 to-pink-600 text-white shadow-lg shadow-pink-500/20' : completed === total && total > 0 ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-lg shadow-emerald-500/20' : total === 0 ? 'bg-slate-200 text-slate-500' : 'bg-gradient-to-br from-amber-400 to-amber-500 text-white shadow-lg shadow-amber-500/20'}`}>{total > 0 ? `${completed}/${total}` : 'N/A'}</div>
             <div>
-              <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <span className="font-black text-slate-800 text-lg">{n.numero_novedad}</span>
-                {n.anio && <span className="text-[10px] font-black text-slate-500 bg-slate-200 px-2 py-1 rounded-full">{n.anio}</span>}
-                {n.es_comision && <span className="text-[10px] font-black text-amber-800 bg-amber-200 px-2 py-1 rounded-full">🚗 COMISIÓN</span>}
-                {n.es_evento_social && <span className="text-[10px] font-black text-pink-800 bg-pink-200 px-2 py-1 rounded-full">🎉 EVENTO SOCIAL</span>}
-                {n.titulo && <span className="text-sm font-bold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">{n.titulo}</span>}
-                {!isCompletedView && isAssigned && <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full ${userDone ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>{userDone ? '✓ Listo' : '⚠ Pendiente'}</span>}
+                {n.anio && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">{n.anio}</span>}
+                {n.es_comision && <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1"><Icon name="car" size={11} /> COMISIÓN</span>}
+                {n.es_evento_social && <span className="text-[10px] font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded-md border border-pink-200 flex items-center gap-1"><Icon name="party" size={11} /> EVENTO</span>}
+                {n.titulo && <span className="text-sm font-semibold text-emerald-700 bg-emerald-50 px-3 py-0.5 rounded-md border border-emerald-200">{n.titulo}</span>}
+                {!isCompletedView && isAssigned && <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md flex items-center gap-1 ${userDone ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white animate-pulse'}`}>{userDone ? <><Icon name="check" size={10} /> Listo</> : <><Icon name="alert" size={10} /> Pendiente</>}</span>}
               </div>
-              <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">SGSP: {n.numero_sgsp}</div>
+              <div className="text-[10px] text-slate-500 font-semibold uppercase mt-1.5">SGSP: {n.numero_sgsp}</div>
             </div>
           </div>
-          <span className={`text-slate-400 text-xs transition-transform ${isEx ? 'rotate-180' : ''}`}>▼</span>
+          <span className={`text-slate-400 transition-transform duration-300 ${isEx ? 'rotate-180' : ''}`}><Icon name="chevronDown" size={18} /></span>
         </div>
         {isEx && (
-          <div className="px-6 pb-6 border-t border-slate-100 animate-fadeIn bg-white/50">
+          <div className="px-6 pb-6 border-t border-slate-100 animate-expandDown bg-white/50">
             {n.titulo && <div className="py-4 border-b border-slate-100"><span className="text-[10px] font-black text-slate-400 uppercase">Título:</span><p className="text-slate-700 font-bold mt-1">{n.titulo}</p></div>}
             {!isCompletedView && isAssigned && (
               <div className="py-4 border-b border-slate-200 bg-slate-100 -mx-6 px-6 my-4">
@@ -1267,8 +1477,8 @@ const App = () => {
               </div>
               {userProfile.role === 'admin' && (
                 <div className="flex gap-2">
-                  <button onClick={() => { setEditingNovedad(n); setOriginalUpdatedAt(n.updated_at); setIsComision(n.es_comision || false); setIsEventoSocial(n.es_evento_social || false); setCurrentView('form'); }} className="text-[10px] bg-slate-200 px-4 py-2 rounded-xl font-black text-slate-700 hover:bg-slate-300 uppercase">Editar</button>
-                  <button onClick={async () => { if(confirm("¿Eliminar?")){ await sb.from('novedades').delete().eq('id', n.id); await addLog('BORRAR', 'Eliminó ' + n.numero_novedad); loadData(); showNotify("Eliminado"); } }} className="text-[10px] bg-red-100 px-4 py-2 rounded-xl font-black text-red-600 hover:bg-red-200 uppercase">Eliminar</button>
+                  <button onClick={() => { setEditingNovedad(n); setOriginalUpdatedAt(n.updated_at); setIsComision(n.es_comision || false); setIsEventoSocial(n.es_evento_social || false); setCurrentView('form'); }} className="text-[10px] bg-slate-100 px-3 py-2 rounded-lg font-bold text-slate-600 hover:bg-slate-200 transition-all flex items-center gap-1.5 border border-slate-200"><Icon name="edit" size={12} /> Editar</button>
+                  <button onClick={async () => { if(confirm("¿Eliminar?")){ await sb.from('novedades').delete().eq('id', n.id); await addLog('BORRAR', 'Eliminó ' + n.numero_novedad); loadData(); showNotify("Eliminado"); } }} className="text-[10px] bg-red-50 px-3 py-2 rounded-lg font-bold text-red-600 hover:bg-red-100 transition-all flex items-center gap-1.5 border border-red-200"><Icon name="trash" size={12} /> Eliminar</button>
                 </div>
               )}
             </div>
@@ -1281,7 +1491,7 @@ const App = () => {
   // APP
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={filterByTurno(juicios).filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={filterByTurno(recordatorios).filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} turnoActivo={turnoActivo} setTurnoActivo={setTurnoActivo} TURNOS={TURNOS} />
+      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={filterByTurno(juicios).filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={filterByTurno(recordatorios).filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} turnoActivo={turnoActivo} setTurnoActivo={setTurnoActivo} TURNOS={TURNOS} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
@@ -1289,15 +1499,15 @@ const App = () => {
           <div className="space-y-4">
             <div className="flex justify-between items-center mb-6">
               <div><h2 className="text-3xl font-black text-slate-800">Pendientes</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tus tareas primero</p></div>
-              {canManageNovedades() && <button onClick={() => setCurrentView('form')} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo</button>}
+              {canManageNovedades() && <button onClick={() => setCurrentView('form')} className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2"><Icon name="plus" size={16} /> Nuevo</button>}
             </div>
             <SearchAndFilter searchTerm={searchTerm} onSearchChange={setSearchTerm} selectedYear={selectedYear} onYearChange={setSelectedYear} />
-            <div className="flex flex-wrap gap-4 mb-6 p-4 bg-white rounded-2xl border border-slate-200">
-              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-red-500"></div><span className="text-xs font-bold text-slate-600">Pendiente tuyo</span></div>
-              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-emerald-500"></div><span className="text-xs font-bold text-slate-600">Tu tarea lista</span></div>
-              <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-slate-300"></div><span className="text-xs font-bold text-slate-600">No asignado</span></div>
+            <div className="flex flex-wrap gap-3 mb-6 p-3 bg-white/80 rounded-xl border border-slate-100">
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500 ring-2 ring-red-200"></div><span className="text-xs font-medium text-slate-500">Pendiente tuyo</span></div>
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-emerald-200"></div><span className="text-xs font-medium text-slate-500">Tu tarea lista</span></div>
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-300 ring-2 ring-slate-100"></div><span className="text-xs font-medium text-slate-500">No asignado</span></div>
             </div>
-            {pendingNovedades.length === 0 ? <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-300"><div className="text-5xl mb-4">{searchTerm || selectedYear ? '🔍' : '🎉'}</div><p className="text-slate-500 font-bold">{searchTerm || selectedYear ? 'Sin resultados' : '¡No hay pendientes!'}</p></div> : <div className="grid gap-4">{pendingNovedades.map(n => <NovedadCard key={n.id} n={n} isCompletedView={false} />)}</div>}
+            {dataLoading ? <Skeleton rows={4} /> : pendingNovedades.length === 0 ? <EmptyState icon="check" title={searchTerm || selectedYear ? 'Sin resultados' : '¡No hay pendientes!'} subtitle={searchTerm || selectedYear ? 'Probá con otros filtros' : 'Todo al día'} isSearch={!!(searchTerm || selectedYear)} /> : <div className="grid gap-3">{pendingNovedades.map(n => <NovedadCard key={n.id} n={n} isCompletedView={false} />)}</div>}
           </div>
         )}
 
@@ -1306,7 +1516,7 @@ const App = () => {
           <div className="space-y-4">
             <div className="mb-6"><h2 className="text-3xl font-black text-slate-800">Completados</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tareas finalizadas</p></div>
             <SearchAndFilter searchTerm={searchTerm} onSearchChange={setSearchTerm} selectedYear={selectedYear} onYearChange={setSelectedYear} />
-            {completedNovedades.length === 0 ? <div className="text-center py-24 bg-white rounded-[2rem] border-2 border-dashed border-slate-300"><div className="text-5xl mb-4">📂</div><p className="text-slate-500 font-bold">Sin completados</p></div> : <div className="grid gap-4">{completedNovedades.map(n => <NovedadCard key={n.id} n={n} isCompletedView={true} />)}</div>}
+            {dataLoading ? <Skeleton rows={4} /> : completedNovedades.length === 0 ? <EmptyState icon="folder" title="Sin completados" subtitle="Las novedades finalizadas aparecerán aquí" /> : <div className="grid gap-3">{completedNovedades.map(n => <NovedadCard key={n.id} n={n} isCompletedView={true} />)}</div>}
           </div>
         )}
 
@@ -1516,7 +1726,7 @@ const App = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-end mb-8">
               <div><h2 className="text-3xl font-black text-slate-800">Personal</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Usuarios del sistema</p></div>
-              <button onClick={() => setShowNewUser(true)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo Usuario</button>
+              <button onClick={() => setShowNewUser(true)} className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2"><Icon name="plus" size={16} /> Nuevo Usuario</button>
             </div>
             
             {/* Filtro por turno */}
@@ -1531,7 +1741,7 @@ const App = () => {
               {profiles.filter(p => selectedUserTurno === 0 || p.turno === selectedUserTurno).map(p => {
                 const roleInfo = ROLES[p.role] || ROLES.user;
                 return (
-                  <div key={p.id} className="bg-white p-5 rounded-3xl shadow-md border border-slate-200 group hover:shadow-lg">
+                  <div key={p.id} className="bg-white p-5 rounded-2xl border border-slate-200 card-lift" style={{ boxShadow: 'var(--shadow-card)' }}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className={`w-12 h-12 rounded-2xl text-white flex items-center justify-center font-black text-lg ${roleInfo.color}`}>{p.nombre?.charAt(0).toUpperCase()}</div>
@@ -1548,7 +1758,7 @@ const App = () => {
                       <div className="flex gap-2">
                         {p.id !== userProfile.id && (
                           <>
-                            <button onClick={() => setEditingProfile(p)} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Editar</button>
+                            <button onClick={() => setEditingProfile(p)} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200"><span style={{display:'inline-flex',alignItems:'center',gap:'4px'}}>Editar</span></button>
                             <button onClick={async () => {
                               if (!confirm(`¿Eliminar usuario "${p.nombre}"?\n\nEsta acción no se puede deshacer.`)) return;
                               try {
@@ -1563,7 +1773,7 @@ const App = () => {
                               } catch (err) {
                                 showNotify("Error: " + err.message, "error");
                               }
-                            }} className="text-[10px] bg-red-100 px-3 py-2 rounded-xl font-bold text-red-600 hover:bg-red-200">🗑️</button>
+                            }} className="text-[10px] bg-red-100 px-3 py-2 rounded-xl font-bold text-red-600 hover:bg-red-200">Eliminar</button>
                           </>
                         )}
                         {p.id === userProfile.id && (
@@ -1580,7 +1790,7 @@ const App = () => {
 
         {/* MODAL EDITAR USUARIO */}
         {editingProfile && (
-          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setEditingProfile(null)}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => setEditingProfile(null)}>
             <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp" onClick={e => e.stopPropagation()}>
               <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
                 <h3 className="font-black uppercase text-sm">✏️ Editar Usuario</h3>
@@ -1788,7 +1998,7 @@ const App = () => {
 
         {/* MODAL NUEVO USUARIO */}
         {showNewUser && (
-          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setShowNewUser(false)}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => setShowNewUser(false)}>
             <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp" onClick={e => e.stopPropagation()}>
               <div className="p-8 bg-emerald-600 text-white flex justify-between items-center">
                 <h3 className="font-black uppercase text-sm">➕ Nuevo Usuario</h3>
@@ -2163,7 +2373,7 @@ const App = () => {
             <div className="flex justify-between items-center mb-6">
               <div><h2 className="text-3xl font-black text-slate-800">⚖️ Juicios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">{canSeeAllTurnos() ? 'Todas las citaciones' : 'Citaciones de tu turno'}</p></div>
               {canManageJuicios() && (
-                <button onClick={() => { setEditingJuicio({}); setSelectedCitados([]); }} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo Juicio</button>
+                <button onClick={() => { setEditingJuicio({}); setSelectedCitados([]); }} className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2"><Icon name="plus" size={16} /> Nuevo Juicio</button>
               )}
             </div>
             
@@ -2400,7 +2610,7 @@ const App = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-center mb-6">
               <div><h2 className="text-3xl font-black text-slate-800">🔔 Recordatorios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tareas y eventos pendientes</p></div>
-              <button onClick={() => setEditingRecordatorio({})} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl uppercase">+ Nuevo</button>
+              <button onClick={() => setEditingRecordatorio({})} className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2"><Icon name="plus" size={16} /> Nuevo</button>
             </div>
             
             {/* Formulario de nuevo/editar recordatorio */}
@@ -2545,7 +2755,7 @@ const App = () => {
                                 await addLog('ELIMINAR_RECORDATORIO', 'Eliminó: ' + r.titulo);
                                 showNotify("Recordatorio eliminado");
                                 loadData();
-                              }} className="p-3 bg-red-100 text-red-600 rounded-xl hover:bg-red-200" title="Eliminar">🗑️</button>
+                              }} className="p-3 bg-red-100 text-red-600 rounded-xl hover:bg-red-200" title="Eliminar">Eliminar</button>
                             </>
                           )}
                         </div>
@@ -2977,7 +3187,7 @@ const App = () => {
                                     await addLog('ELIMINAR_LICENCIA', `Eliminó licencia de ${l.user_nombre} el ${selectedCalendarDate}`);
                                     showNotify("Licencia eliminada");
                                     loadData();
-                                  }} className="p-3 bg-white rounded-xl hover:bg-red-50 text-red-500 font-bold">🗑️</button>
+                                  }} className="p-3 bg-white rounded-xl hover:bg-red-50 text-red-500 font-bold">Eliminar</button>
                                 )}
                               </div>
                             );
@@ -3735,7 +3945,7 @@ const App = () => {
 
       {/* MODAL CAMBIAR CONTRASEÑA */}
       {showPassModal && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }}>
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
             <div className="p-8 bg-slate-900 text-white flex justify-between items-center"><h3 className="font-black uppercase text-sm">Cambiar Contraseña</h3><button onClick={() => setShowPassModal(false)} className="text-slate-500 hover:text-white">✕</button></div>
             <form className="p-8 space-y-5" onSubmit={async (e) => { e.preventDefault(); const pass = e.target.pass.value; if(pass.length < 6) return alert("Mínimo 6 caracteres"); const { error } = await sb.auth.updateUser({ password: pass }); if(error) showNotify("Error: " + error.message, "error"); else { await addLog('CAMBIO_PASS', 'Actualizó contraseña'); showNotify("Contraseña actualizada"); setShowPassModal(false); } }}>
@@ -3749,7 +3959,7 @@ const App = () => {
 
       {/* MODAL UBICACIONES DE STOCK */}
       {showUbicacionesModal && canManageStock() && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => { setShowUbicacionesModal(false); setEditingUbicacion(null); }}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => { setShowUbicacionesModal(false); setEditingUbicacion(null); }}>
           <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6 bg-teal-600 text-white flex justify-between items-center sticky top-0 z-10">
               <h3 className="font-black uppercase text-sm">⚙️ Gestionar Ubicaciones</h3>
@@ -3845,7 +4055,7 @@ const App = () => {
                                   loadData();
                                 }} 
                                 className="w-7 h-7 bg-red-100 text-red-700 rounded text-xs hover:bg-red-200"
-                              >🗑️</button>
+                              >Eliminar</button>
                             )}
                           </div>
                         </div>
@@ -3863,7 +4073,7 @@ const App = () => {
 
       {/* MODAL ESTADÍSTICAS */}
       {showStats && canSeeStats() && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); }}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); }}>
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-8 bg-slate-900 text-white flex justify-between items-center sticky top-0 z-10">
               <h3 className="font-black uppercase text-sm">📊 Estadísticas</h3>
@@ -4040,7 +4250,7 @@ const App = () => {
 
       {/* MODAL REPORTE */}
       {showReport && userProfile.role === 'admin' && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4 no-print" onClick={() => { setShowReport(false); setPrintReady(false); setPrintUser('todos'); }}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 no-print" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => { setShowReport(false); setPrintReady(false); setPrintUser('todos'); }}>
           <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center sticky top-0 z-10 print:hidden no-print">
               <h3 className="font-black uppercase text-sm">🖨️ Imprimir Reporte</h3>
@@ -4360,10 +4570,12 @@ const App = () => {
       
       {/* Modal de advertencia de timeout */}
       {showTimeoutWarning && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
-            <div className="p-8 bg-amber-500 text-white text-center">
-              <div className="text-6xl mb-4">⏰</div>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }}>
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden animate-slideUp" style={{ boxShadow: 'var(--shadow-modal)' }}>
+            <div className="p-8 bg-gradient-to-br from-amber-400 to-amber-600 text-white text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/20 mb-4">
+                <Icon name="clock" size={32} />
+              </div>
               <h3 className="font-black uppercase tracking-widest text-lg">Sesión por expirar</h3>
             </div>
             <div className="p-8 text-center">
@@ -4371,7 +4583,7 @@ const App = () => {
               <p className="text-slate-500 text-sm mb-6">Por seguridad, la sesión se cierra automáticamente después de 30 minutos de inactividad.</p>
               <button 
                 onClick={() => { resetSessionTimeout(); }} 
-                className="w-full py-5 bg-emerald-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl"
+                className="w-full py-5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs shadow-xl transition-all"
               >
                 Continuar trabajando
               </button>
