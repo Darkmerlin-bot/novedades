@@ -291,14 +291,9 @@ const App = () => {
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [loginAttempts, setLoginAttempts] = useState(0);
+  const [loginLockedUntil, setLoginLockedUntil] = useState(null);
   const [editingProfile, setEditingProfile] = useState(null);
-  const [newUserData, setNewUserData] = useState({ nombre: '', password: '' });
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [totalCountPending, setTotalCountPending] = useState(0);
-  const [totalCountCompleted, setTotalCountCompleted] = useState(0);
-  const PAGE_SIZE = 50;
   
   // Estados para Juicios
   const [juicios, setJuicios] = useState([]);
@@ -396,7 +391,14 @@ const App = () => {
     if (!session) return;
     
     const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
-    const handleActivity = () => resetSessionTimeout();
+    let lastActivity = 0;
+    const handleActivity = () => {
+      const now = Date.now();
+      if (now - lastActivity > 30000) { // Solo resetear cada 30 segundos
+        lastActivity = now;
+        resetSessionTimeout();
+      }
+    };
     
     events.forEach(event => window.addEventListener(event, handleActivity));
     resetSessionTimeout();
@@ -438,13 +440,33 @@ const App = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    
+    // Throttling: bloquear si hay lockout activo
+    if (loginLockedUntil && Date.now() < loginLockedUntil) {
+      const secsLeft = Math.ceil((loginLockedUntil - Date.now()) / 1000);
+      showNotify(`Demasiados intentos. Esperá ${secsLeft}s`, "error");
+      return;
+    }
+    
     setLoginLoading(true);
     const email = loginUsername.toLowerCase().trim() + '@local.com';
     const { data, error } = await sb.auth.signInWithPassword({ email, password: loginPassword });
     if (error) {
-      await sb.from('logs').insert([{ action: 'LOGIN_FALLIDO', details: 'Usuario: ' + loginUsername + ' | Contraseña: ' + loginPassword }]);
+      const newAttempts = loginAttempts + 1;
+      setLoginAttempts(newAttempts);
+      // Bloqueo progresivo: 5s tras 3 intentos, 15s tras 5, 60s tras 8+
+      if (newAttempts >= 8) {
+        setLoginLockedUntil(Date.now() + 60000);
+      } else if (newAttempts >= 5) {
+        setLoginLockedUntil(Date.now() + 15000);
+      } else if (newAttempts >= 3) {
+        setLoginLockedUntil(Date.now() + 5000);
+      }
+      await sb.from('logs').insert([{ action: 'LOGIN_FALLIDO', details: 'Usuario: ' + loginUsername + ' | Intento fallido (#' + newAttempts + ')' }]);
       showNotify("Usuario o contraseña incorrectos", "error");
     } else {
+      setLoginAttempts(0);
+      setLoginLockedUntil(null);
       // Registrar login exitoso
       const { data: profileData } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
       if (profileData) {
@@ -482,38 +504,54 @@ const App = () => {
   const loadData = async () => {
     if (!session) return;
     
-    const { data: novData } = await sb.from('novedades').select('*').order('created_at', { ascending: false });
+    let loadErrors = [];
+    
+    const { data: novData, error: novErr } = await sb.from('novedades').select('*').order('created_at', { ascending: false });
+    if (novErr) loadErrors.push('novedades'); 
     setNovedades(novData || []);
     
-    const { data: profilesData } = await sb.from('profiles').select('*').order('nombre');
+    const { data: profilesData, error: profErr } = await sb.from('profiles').select('*').order('nombre');
+    if (profErr) loadErrors.push('profiles');
     setProfiles(profilesData || []);
     
     // Cargar juicios
-    const { data: juiciosData } = await sb.from('juicios').select('*').order('fecha_juicio', { ascending: true });
+    const { data: juiciosData, error: juicErr } = await sb.from('juicios').select('*').order('fecha_juicio', { ascending: true });
+    if (juicErr) loadErrors.push('juicios');
     setJuicios(juiciosData || []);
     
     // Cargar recordatorios
-    const { data: recordatoriosData } = await sb.from('recordatorios').select('*').eq('completado', false).order('fecha_hora', { ascending: true });
+    const { data: recordatoriosData, error: recErr } = await sb.from('recordatorios').select('*').eq('completado', false).order('fecha_hora', { ascending: true });
+    if (recErr) loadErrors.push('recordatorios');
     setRecordatorios(recordatoriosData || []);
     
     // Cargar licencias
-    const { data: licenciasData } = await sb.from('licencias').select('*').order('fecha', { ascending: true });
+    const { data: licenciasData, error: licErr } = await sb.from('licencias').select('*').order('fecha', { ascending: true });
+    if (licErr) loadErrors.push('licencias');
     setLicencias(licenciasData || []);
     
     // Cargar stock
-    const { data: stockData } = await sb.from('stock_items').select('*').order('nombre', { ascending: true });
+    const { data: stockData, error: stockErr } = await sb.from('stock_items').select('*').order('nombre', { ascending: true });
+    if (stockErr) loadErrors.push('stock_items');
     setStockItems(stockData || []);
     
     // Cargar ubicaciones de stock
-    const { data: ubicacionesData } = await sb.from('stock_ubicaciones').select('*').order('orden', { ascending: true });
+    const { data: ubicacionesData, error: ubErr } = await sb.from('stock_ubicaciones').select('*').order('orden', { ascending: true });
+    if (ubErr) loadErrors.push('stock_ubicaciones');
     setStockUbicaciones(ubicacionesData || []);
     
-    const { data: movData } = await sb.from('stock_movimientos').select('*').order('created_at', { ascending: false }).limit(100);
+    const { data: movData, error: movErr } = await sb.from('stock_movimientos').select('*').order('created_at', { ascending: false }).limit(100);
+    if (movErr) loadErrors.push('stock_movimientos');
     setStockMovimientos(movData || []);
     
     if (userProfile?.role === 'admin') {
-      const { data: logData } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(500);
+      const { data: logData, error: logErr } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(500);
+      if (logErr) loadErrors.push('logs');
       setLogs(logData || []);
+    }
+    
+    if (loadErrors.length > 0) {
+      console.error('Error cargando tablas:', loadErrors);
+      showNotify('Error cargando: ' + loadErrors.join(', '), 'error');
     }
   };
 
@@ -647,6 +685,13 @@ const App = () => {
   const canSeeLogs = () => userProfile?.role === 'admin';
   const canManageNovedades = () => ['admin', 'supervisor', 'encargado', 'moderadorplus', 'moderator'].includes(userProfile?.role);
   const canManageJuicios = () => ['admin', 'supervisor', 'encargado', 'moderadorplus', 'moderator'].includes(userProfile?.role);
+  // Permisos de edición de juicio individual: admin/supervisor/encargado siempre, moderadorplus/moderator solo los que creó
+  const canEditJuicio = (juicio) => {
+    const role = userProfile?.role;
+    if (['admin', 'supervisor', 'encargado'].includes(role)) return true;
+    if (['moderadorplus', 'moderator'].includes(role)) return juicio.creado_por === userProfile?.nombre;
+    return false;
+  };
   const canManageLicencias = () => ['admin', 'supervisor', 'encargado', 'moderadorplus', 'moderator'].includes(userProfile?.role);
   // Stock: solo estos pueden agregar, editar y eliminar items
   const canManageStock = () => ['admin', 'supervisor', 'encargado', 'moderadorplus'].includes(userProfile?.role);
@@ -675,12 +720,13 @@ const App = () => {
     return items.filter(item => item.turno === turnoEfectivo);
   };
 
-  // Filtrar profiles por turno (para selectores)
-  const getProfilesByTurno = () => {
+  // Filtrar profiles por turno (para selectores) - memoizado
+  const profilesByTurno = useMemo(() => {
     const turnoEfectivo = getTurnoEfectivo();
     if (turnoEfectivo === 0) return profiles;
     return profiles.filter(p => p.turno === turnoEfectivo);
-  };
+  }, [profiles, turnoActivo, userProfile]);
+  const getProfilesByTurno = () => profilesByTurno;
   
   // Obtener turno para guardar nuevos registros
   const getTurnoParaGuardar = () => {
@@ -882,7 +928,25 @@ const App = () => {
     const { data: allNov } = await sb.from('novedades').select('*');
     const { data: allProf } = await sb.from('profiles').select('*');
     const { data: allLogs } = await sb.from('logs').select('*').limit(500);
-    const backup = { fecha: new Date().toISOString(), generado_por: userProfile?.nombre, novedades: allNov, profiles: allProf, logs: allLogs };
+    const { data: allJuicios } = await sb.from('juicios').select('*');
+    const { data: allRecordatorios } = await sb.from('recordatorios').select('*');
+    const { data: allLicencias } = await sb.from('licencias').select('*');
+    const { data: allStockItems } = await sb.from('stock_items').select('*');
+    const { data: allStockUbicaciones } = await sb.from('stock_ubicaciones').select('*');
+    const { data: allStockMovimientos } = await sb.from('stock_movimientos').select('*');
+    const backup = { 
+      fecha: new Date().toISOString(), 
+      generado_por: userProfile?.nombre, 
+      novedades: allNov, 
+      profiles: allProf, 
+      logs: allLogs,
+      juicios: allJuicios,
+      recordatorios: allRecordatorios,
+      licencias: allLicencias,
+      stock_items: allStockItems,
+      stock_ubicaciones: allStockUbicaciones,
+      stock_movimientos: allStockMovimientos
+    };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `respaldo_${new Date().toISOString().split('T')[0]}.json`;
@@ -1741,8 +1805,6 @@ const App = () => {
                 const role = e.target.role.value;
                 const turno = parseInt(e.target.turno.value, 10) || 1;
                 
-                console.log("Creando usuario con turno:", turno, typeof turno);
-                
                 if (!nombre || !login || !password) {
                   showNotify("Completá todos los campos", "error");
                   setSaving(false);
@@ -1773,15 +1835,11 @@ const App = () => {
                   
                   // Actualizar turno del usuario
                   if (newUserId) {
-                    console.log("Actualizando turno para nuevo usuario:", newUserId, "turno:", turno);
                     const { data: updateData, error: turnoError } = await sb.from('profiles').update({ turno }).eq('id', newUserId).select();
-                    console.log("Resultado update turno:", updateData, turnoError);
                     if (turnoError) {
                       console.error("Error al asignar turno:", turnoError);
                       showNotify("Usuario creado pero error al asignar turno: " + turnoError.message, "error");
                     }
-                  } else {
-                    console.log("No se obtuvo newUserId del RPC");
                   }
                   
                   await addLog('CREAR_USUARIO', `Creó usuario: ${nombre} (${role}) - T${turno}`);
@@ -2274,7 +2332,7 @@ const App = () => {
                     const isClose = diasRestantes >= 0 && diasRestantes <= 5;
                     const citados = j.citados || [];
                     // Admin puede todo, moderator solo los que creó, user nada
-                    const canEdit = userProfile?.role === 'admin' || (userProfile?.role === 'moderator' && j.creado_por === userProfile?.nombre);
+                    const canEdit = canEditJuicio(j);
                     const isMe = citados.includes(userProfile?.nombre);
                     
                     // Título dinámico
