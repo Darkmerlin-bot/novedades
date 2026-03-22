@@ -649,7 +649,8 @@ const App = () => {
     // Throttling: bloquear si hay lockout activo
     if (loginLockedUntil && Date.now() < loginLockedUntil) {
       const secsLeft = Math.ceil((loginLockedUntil - Date.now()) / 1000);
-      showNotify(`Demasiados intentos. Esperá ${secsLeft}s`, "error");
+      const timeMsg = secsLeft >= 60 ? `${Math.ceil(secsLeft / 60)} min` : `${secsLeft}s`;
+      showNotify(`Demasiados intentos. Esperá ${timeMsg}`, "error");
       return;
     }
     
@@ -659,13 +660,13 @@ const App = () => {
     if (error) {
       const newAttempts = loginAttempts + 1;
       setLoginAttempts(newAttempts);
-      // Bloqueo progresivo: 5s tras 3 intentos, 15s tras 5, 60s tras 8+
+      // Bloqueo progresivo: 10s tras 3 intentos, 60s tras 5, 10min tras 8+
       if (newAttempts >= 8) {
-        setLoginLockedUntil(Date.now() + 60000);
+        setLoginLockedUntil(Date.now() + 600000);
       } else if (newAttempts >= 5) {
-        setLoginLockedUntil(Date.now() + 15000);
+        setLoginLockedUntil(Date.now() + 60000);
       } else if (newAttempts >= 3) {
-        setLoginLockedUntil(Date.now() + 5000);
+        setLoginLockedUntil(Date.now() + 10000);
       }
       await sb.from('logs').insert([{ action: 'LOGIN_FALLIDO', details: 'Usuario: ' + loginUsername + ' | Intento fallido (#' + newAttempts + ')' }]);
       showNotify("Usuario o contraseña incorrectos", "error");
@@ -1313,11 +1314,15 @@ const App = () => {
               />
               <label>Contraseña</label>
             </div>
-            {loginLockedUntil && Date.now() < loginLockedUntil && (
-              <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-xs font-bold">
-                <Icon name="clock" size={14} /> Demasiados intentos. Esperá unos segundos.
-              </div>
-            )}
+            {loginLockedUntil && Date.now() < loginLockedUntil && (() => {
+              const secs = Math.ceil((loginLockedUntil - Date.now()) / 1000);
+              const msg = secs >= 60 ? `Esperá ${Math.ceil(secs / 60)} minuto${Math.ceil(secs / 60) > 1 ? 's' : ''}.` : `Esperá ${secs} segundos.`;
+              return (
+                <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-xs font-bold">
+                  <Icon name="clock" size={14} /> Demasiados intentos. {msg}
+                </div>
+              );
+            })()}
             <button type="submit" disabled={loginLoading || (loginLockedUntil && Date.now() < loginLockedUntil)} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black shadow-xl hover:bg-slate-800 hover:shadow-2xl mt-2 uppercase text-sm disabled:opacity-50 transition-all flex items-center justify-center gap-2">
               {loginLoading ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Verificando...</> : <><Icon name="lock" size={16} /> Entrar</>}
             </button>
