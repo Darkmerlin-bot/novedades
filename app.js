@@ -105,6 +105,9 @@ const { createClient } = supabase;
     [data-theme="dark"] .shadow-md, [data-theme="dark"] .shadow-sm { box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important; }
     [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea { background: #1e293b !important; color: #f1f5f9 !important; border-color: #475569 !important; }
     
+    /* Header selects - force dark dropdown */
+    header select option { background: #1e293b; color: #f1f5f9; }
+    
     /* Print */
     @media print { .print\\:hidden { display: none !important; } body { background: white !important; } [data-theme] { --bg-primary: white; } }
   `;
@@ -232,11 +235,12 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
               value={turnoActivo} 
               onChange={(e) => setTurnoActivo(parseInt(e.target.value))}
               className="px-3 py-2 bg-white/10 text-white rounded-xl font-bold text-xs cursor-pointer border border-white/20 backdrop-blur-sm hover:bg-white/15 transition-all"
+              style={{ colorScheme: 'dark' }}
             >
-              <option value="0">Todos los turnos</option>
-              <option value="1">T1 - 1er Turno</option>
-              <option value="2">T2 - 2do Turno</option>
-              <option value="3">T3 - 3er Turno</option>
+              <option value="0" className="bg-slate-800 text-white">Todos los turnos</option>
+              <option value="1" className="bg-slate-800 text-white">T1 - 1er Turno</option>
+              <option value="2" className="bg-slate-800 text-white">T2 - 2do Turno</option>
+              <option value="3" className="bg-slate-800 text-white">T3 - 3er Turno</option>
             </select>
           )}
           <div className="flex flex-col items-end mr-2">
@@ -488,7 +492,7 @@ const App = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const [expandedId, setExpandedId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedYear, setSelectedYear] = useState(String(currentYear));
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -941,24 +945,24 @@ const App = () => {
   // ==================== FIN SISTEMA DE TURNOS ====================
   const sortByNumber = (a, b) => extractNumber(a.numero_novedad) - extractNumber(b.numero_novedad);
   
-  // Colores pasteles para usuarios en calendario de licencias
+  // Colores para usuarios en calendario — máximo contraste entre adyacentes, saturación 300 + borde 500
   const userColorPalette = [
-    { bg: 'bg-blue-200', text: 'text-blue-800', border: 'border-blue-400' },
-    { bg: 'bg-rose-200', text: 'text-rose-800', border: 'border-rose-400' },
-    { bg: 'bg-emerald-200', text: 'text-emerald-800', border: 'border-emerald-400' },
-    { bg: 'bg-violet-200', text: 'text-violet-800', border: 'border-violet-400' },
-    { bg: 'bg-amber-200', text: 'text-amber-800', border: 'border-amber-400' },
-    { bg: 'bg-cyan-200', text: 'text-cyan-800', border: 'border-cyan-400' },
-    { bg: 'bg-pink-200', text: 'text-pink-800', border: 'border-pink-400' },
-    { bg: 'bg-lime-200', text: 'text-lime-800', border: 'border-lime-400' },
-    { bg: 'bg-indigo-200', text: 'text-indigo-800', border: 'border-indigo-400' },
-    { bg: 'bg-orange-200', text: 'text-orange-800', border: 'border-orange-400' },
-    { bg: 'bg-teal-200', text: 'text-teal-800', border: 'border-teal-400' },
-    { bg: 'bg-fuchsia-200', text: 'text-fuchsia-800', border: 'border-fuchsia-400' },
-    { bg: 'bg-red-200', text: 'text-red-800', border: 'border-red-400' },
-    { bg: 'bg-sky-200', text: 'text-sky-800', border: 'border-sky-400' },
-    { bg: 'bg-yellow-200', text: 'text-yellow-800', border: 'border-yellow-400' },
-    { bg: 'bg-purple-200', text: 'text-purple-800', border: 'border-purple-400' },
+    { bg: 'bg-blue-300',    text: 'text-blue-900',    border: 'border-blue-500',    dot: '#3b82f6' },
+    { bg: 'bg-orange-300',  text: 'text-orange-900',  border: 'border-orange-500',  dot: '#f97316' },
+    { bg: 'bg-emerald-300', text: 'text-emerald-900', border: 'border-emerald-500', dot: '#10b981' },
+    { bg: 'bg-rose-300',    text: 'text-rose-900',    border: 'border-rose-500',    dot: '#f43f5e' },
+    { bg: 'bg-violet-300',  text: 'text-violet-900',  border: 'border-violet-500',  dot: '#8b5cf6' },
+    { bg: 'bg-amber-300',   text: 'text-amber-900',   border: 'border-amber-500',   dot: '#f59e0b' },
+    { bg: 'bg-cyan-300',    text: 'text-cyan-900',    border: 'border-cyan-500',    dot: '#06b6d4' },
+    { bg: 'bg-fuchsia-300', text: 'text-fuchsia-900', border: 'border-fuchsia-500', dot: '#d946ef' },
+    { bg: 'bg-lime-300',    text: 'text-lime-900',    border: 'border-lime-600',    dot: '#84cc16' },
+    { bg: 'bg-red-300',     text: 'text-red-900',     border: 'border-red-500',     dot: '#ef4444' },
+    { bg: 'bg-teal-300',    text: 'text-teal-900',    border: 'border-teal-500',    dot: '#14b8a6' },
+    { bg: 'bg-yellow-200',  text: 'text-yellow-900',  border: 'border-yellow-500',  dot: '#eab308' },
+    { bg: 'bg-indigo-300',  text: 'text-indigo-900',  border: 'border-indigo-500',  dot: '#6366f1' },
+    { bg: 'bg-pink-200',    text: 'text-pink-900',    border: 'border-pink-500',    dot: '#ec4899' },
+    { bg: 'bg-sky-300',     text: 'text-sky-900',     border: 'border-sky-500',     dot: '#0ea5e9' },
+    { bg: 'bg-purple-300',  text: 'text-purple-900',  border: 'border-purple-500',  dot: '#a855f7' },
   ];
   
   // Mapa de usuarios a índice de color (se calcula una vez)
@@ -3061,7 +3065,8 @@ const App = () => {
                           {usuariosConLicencias.map(nombre => {
                             const color = getUserColor(nombre);
                             return (
-                              <div key={nombre} className={`${color.bg} ${color.text} px-2 py-1 rounded text-xs font-bold`}>
+                              <div key={nombre} className={`${color.bg} ${color.text} px-2 py-1 rounded text-xs font-bold flex items-center gap-1.5 border-l-3 ${color.border}`}>
+                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color.dot }}></span>
                                 {nombre.split(' ')[0]}
                               </div>
                             );
@@ -3126,7 +3131,7 @@ const App = () => {
                           <div 
                             key={day}
                             onClick={() => setSelectedCalendarDate(dateStr)}
-                            className={`text-center py-1 rounded cursor-pointer hover:ring-2 hover:ring-slate-400 ${bgColor} ${textColor} ${selectedCalendarDate === dateStr ? 'ring-2 ring-slate-800' : ''} ${dayLicencias.length > 1 ? 'ring-2 ring-offset-1 ring-yellow-400' : ''} ${isToday ? 'font-black' : ''}`}
+                            className={`text-center py-1 rounded cursor-pointer hover:ring-2 hover:ring-slate-400 ${bgColor} ${textColor} ${selectedCalendarDate === dateStr ? 'ring-2 ring-slate-800' : ''} ${dayLicencias.length > 1 ? 'ring-2 ring-offset-1 ring-yellow-400' : ''} ${isToday ? 'font-black' : ''} ${dayLicencias.length > 0 && dayLicencias[0].tipo !== 'enfermedad' && dayLicencias[0].tipo !== 'estudio' && dayLicencias[0].tipo !== 'descanso' ? 'border-l-2 ' + (getUserColor(dayLicencias[0].user_nombre).border) : ''}`}
                             title={dayLicencias.map(l => `${l.user_nombre}: ${l.tipo}`).join(', ')}
                           >
                             {day}
