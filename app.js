@@ -497,40 +497,41 @@ const App = () => {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   
-  // Throttling persistente (sobrevive recargas de página)
+  // Throttling de login con countdown que re-renderiza cada segundo
   const [loginAttempts, setLoginAttempts] = useState(() => {
     try { return parseInt(sessionStorage.getItem('loginAttempts') || '0', 10); } catch { return 0; }
   });
-  const [loginLockedUntil, setLoginLockedUntil] = useState(() => {
+  const [lockoutSeconds, setLockoutSeconds] = useState(() => {
     try {
-      const stored = sessionStorage.getItem('loginLockedUntil');
-      if (stored) {
-        const ts = parseInt(stored, 10);
-        return Date.now() < ts ? ts : null;
-      }
-      return null;
-    } catch { return null; }
+      const until = parseInt(sessionStorage.getItem('loginLockedUntil') || '0', 10);
+      const remaining = Math.ceil((until - Date.now()) / 1000);
+      return remaining > 0 ? remaining : 0;
+    } catch { return 0; }
   });
+  const loginLocked = lockoutSeconds > 0;
   
-  // Persistir cambios en sessionStorage
+  // Tick cada segundo mientras está bloqueado
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setLockoutSeconds(prev => {
+        if (prev <= 1) { clearInterval(interval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutSeconds > 0]);
+  
+  // Persistir intentos
   useEffect(() => {
     try { sessionStorage.setItem('loginAttempts', String(loginAttempts)); } catch {}
   }, [loginAttempts]);
-  useEffect(() => {
-    try {
-      if (loginLockedUntil) sessionStorage.setItem('loginLockedUntil', String(loginLockedUntil));
-      else sessionStorage.removeItem('loginLockedUntil');
-    } catch {}
-  }, [loginLockedUntil]);
   
-  // Timer que desbloquea automáticamente cuando expira el lockout
-  useEffect(() => {
-    if (!loginLockedUntil) return;
-    const remaining = loginLockedUntil - Date.now();
-    if (remaining <= 0) { setLoginLockedUntil(null); return; }
-    const timer = setTimeout(() => setLoginLockedUntil(null), remaining);
-    return () => clearTimeout(timer);
-  }, [loginLockedUntil]);
+  // Helper para activar lockout
+  const activateLockout = (seconds) => {
+    setLockoutSeconds(seconds);
+    try { sessionStorage.setItem('loginLockedUntil', String(Date.now() + seconds * 1000)); } catch {}
+  };
   const [editingProfile, setEditingProfile] = useState(null);
   
   // Estados para Juicios
@@ -680,9 +681,8 @@ const App = () => {
     e.preventDefault();
     
     // Throttling: bloquear si hay lockout activo
-    if (loginLockedUntil && Date.now() < loginLockedUntil) {
-      const secsLeft = Math.ceil((loginLockedUntil - Date.now()) / 1000);
-      const timeMsg = secsLeft >= 60 ? `${Math.ceil(secsLeft / 60)} min` : `${secsLeft}s`;
+    if (loginLocked) {
+      const timeMsg = lockoutSeconds >= 60 ? `${Math.ceil(lockoutSeconds / 60)} min` : `${lockoutSeconds}s`;
       showNotify(`Demasiados intentos. Esperá ${timeMsg}`, "error");
       return;
     }
@@ -695,17 +695,18 @@ const App = () => {
       setLoginAttempts(newAttempts);
       // Bloqueo progresivo: 10s tras 3 intentos, 60s tras 5, 10min tras 8+
       if (newAttempts >= 8) {
-        setLoginLockedUntil(Date.now() + 600000);
+        activateLockout(600);
       } else if (newAttempts >= 5) {
-        setLoginLockedUntil(Date.now() + 60000);
+        activateLockout(60);
       } else if (newAttempts >= 3) {
-        setLoginLockedUntil(Date.now() + 10000);
+        activateLockout(10);
       }
       await sb.from('logs').insert([{ action: 'LOGIN_FALLIDO', details: 'Usuario: ' + loginUsername + ' | Intento fallido (#' + newAttempts + ')' }]);
       showNotify("Usuario o contraseña incorrectos", "error");
     } else {
       setLoginAttempts(0);
-      setLoginLockedUntil(null);
+      setLockoutSeconds(0);
+      try { sessionStorage.removeItem('loginAttempts'); sessionStorage.removeItem('loginLockedUntil'); } catch {}
       // Registrar login exitoso
       const { data: profileData } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
       if (profileData) {
@@ -1347,16 +1348,12 @@ const App = () => {
               />
               <label>Contraseña</label>
             </div>
-            {loginLockedUntil && Date.now() < loginLockedUntil && (() => {
-              const secs = Math.ceil((loginLockedUntil - Date.now()) / 1000);
-              const msg = secs >= 60 ? `Esperá ${Math.ceil(secs / 60)} minuto${Math.ceil(secs / 60) > 1 ? 's' : ''}.` : `Esperá ${secs} segundos.`;
-              return (
-                <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-xs font-bold">
-                  <Icon name="clock" size={14} /> Demasiados intentos. {msg}
-                </div>
-              );
-            })()}
-            <button type="submit" disabled={loginLoading || (loginLockedUntil && Date.now() < loginLockedUntil)} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black shadow-xl hover:bg-slate-800 hover:shadow-2xl mt-2 uppercase text-sm disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+            {loginLocked && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-xs font-bold">
+                <Icon name="clock" size={14} /> Demasiados intentos. Esperá {lockoutSeconds >= 60 ? `${Math.ceil(lockoutSeconds / 60)} minuto${Math.ceil(lockoutSeconds / 60) > 1 ? 's' : ''}` : `${lockoutSeconds}s`}.
+              </div>
+            )}
+            <button type="submit" disabled={loginLoading || loginLocked} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black shadow-xl hover:bg-slate-800 hover:shadow-2xl mt-2 uppercase text-sm disabled:opacity-50 transition-all flex items-center justify-center gap-2">
               {loginLoading ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Verificando...</> : <><Icon name="lock" size={16} /> Entrar</>}
             </button>
           </form>
