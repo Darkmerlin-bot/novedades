@@ -496,8 +496,41 @@ const App = () => {
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
-  const [loginAttempts, setLoginAttempts] = useState(0);
-  const [loginLockedUntil, setLoginLockedUntil] = useState(null);
+  
+  // Throttling persistente (sobrevive recargas de página)
+  const [loginAttempts, setLoginAttempts] = useState(() => {
+    try { return parseInt(sessionStorage.getItem('loginAttempts') || '0', 10); } catch { return 0; }
+  });
+  const [loginLockedUntil, setLoginLockedUntil] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('loginLockedUntil');
+      if (stored) {
+        const ts = parseInt(stored, 10);
+        return Date.now() < ts ? ts : null;
+      }
+      return null;
+    } catch { return null; }
+  });
+  
+  // Persistir cambios en sessionStorage
+  useEffect(() => {
+    try { sessionStorage.setItem('loginAttempts', String(loginAttempts)); } catch {}
+  }, [loginAttempts]);
+  useEffect(() => {
+    try {
+      if (loginLockedUntil) sessionStorage.setItem('loginLockedUntil', String(loginLockedUntil));
+      else sessionStorage.removeItem('loginLockedUntil');
+    } catch {}
+  }, [loginLockedUntil]);
+  
+  // Timer que desbloquea automáticamente cuando expira el lockout
+  useEffect(() => {
+    if (!loginLockedUntil) return;
+    const remaining = loginLockedUntil - Date.now();
+    if (remaining <= 0) { setLoginLockedUntil(null); return; }
+    const timer = setTimeout(() => setLoginLockedUntil(null), remaining);
+    return () => clearTimeout(timer);
+  }, [loginLockedUntil]);
   const [editingProfile, setEditingProfile] = useState(null);
   
   // Estados para Juicios
