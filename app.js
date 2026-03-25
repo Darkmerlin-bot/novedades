@@ -458,7 +458,9 @@ const App = () => {
   const [novedades, setNovedades] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [logs, setLogs] = useState([]);
-  const [currentView, setCurrentView] = useState('list');
+  const [currentView, setCurrentView] = useState(() => {
+    try { return localStorage.getItem('filter_view') || 'list'; } catch { return 'list'; }
+  });
   const [editingNovedad, setEditingNovedad] = useState(null);
   const [isComision, setIsComision] = useState(false);
   const [isEventoSocial, setIsEventoSocial] = useState(false);
@@ -488,30 +490,25 @@ const App = () => {
   const [showReport, setShowReport] = useState(false);
   const [showNewUser, setShowNewUser] = useState(false);
   const [selectedUserTurno, setSelectedUserTurno] = useState(0); // 0 = todos (para filtro de usuarios)
-  const [turnoActivo, setTurnoActivo] = useState(0); // 0 = todos, 1/2/3 = turno específico (para admin/supervisor)
+  const [turnoActivo, setTurnoActivo] = useState(() => {
+    try { return parseInt(localStorage.getItem('filter_turno') || '0', 10); } catch { return 0; }
+  });
   const [selectedUserStats, setSelectedUserStats] = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [expandedId, setExpandedId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedYear, setSelectedYear] = useState(String(currentYear));
+  const [selectedYear, setSelectedYear] = useState(() => {
+    try { return localStorage.getItem('filter_year') || String(currentYear); } catch { return String(currentYear); }
+  });
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   
-  // Throttling de login con countdown que re-renderiza cada segundo
-  const [loginAttempts, setLoginAttempts] = useState(() => {
-    try { return parseInt(sessionStorage.getItem('loginAttempts') || '0', 10); } catch { return 0; }
-  });
-  const [lockoutSeconds, setLockoutSeconds] = useState(() => {
-    try {
-      const until = parseInt(sessionStorage.getItem('loginLockedUntil') || '0', 10);
-      const remaining = Math.ceil((until - Date.now()) / 1000);
-      return remaining > 0 ? remaining : 0;
-    } catch { return 0; }
-  });
+  // Rate limit de login — servidor controla, cliente solo muestra countdown
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
   const loginLocked = lockoutSeconds > 0;
   
-  // Tick cada segundo mientras está bloqueado
+  // Tick cada segundo mientras está bloqueado (solo visual)
   useEffect(() => {
     if (lockoutSeconds <= 0) return;
     const interval = setInterval(() => {
@@ -522,17 +519,6 @@ const App = () => {
     }, 1000);
     return () => clearInterval(interval);
   }, [lockoutSeconds > 0]);
-  
-  // Persistir intentos
-  useEffect(() => {
-    try { sessionStorage.setItem('loginAttempts', String(loginAttempts)); } catch {}
-  }, [loginAttempts]);
-  
-  // Helper para activar lockout
-  const activateLockout = (seconds) => {
-    setLockoutSeconds(seconds);
-    try { sessionStorage.setItem('loginLockedUntil', String(Date.now() + seconds * 1000)); } catch {}
-  };
   const [editingProfile, setEditingProfile] = useState(null);
   
   // Estados para Juicios
@@ -549,9 +535,11 @@ const App = () => {
   // Estados para Licencias/Calendario
   const [licencias, setLicencias] = useState([]);
   const [calendarioYear, setCalendarioYear] = useState(new Date().getFullYear());
-  const [licPrintUser, setLicPrintUser] = useState(''); // Para imprimir por usuario
+  const [licPrintUser, setLicPrintUser] = useState('');
   const [calendarioMonth, setCalendarioMonth] = useState(new Date().getMonth());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
+  // Form controlado de licencias (en vez de document.getElementById)
+  const [licForm, setLicForm] = useState({ usuario: '', fechaDesde: '', fechaHasta: '', tipo: 'licencia', descripcion: '' });
   
   // Estados para Stock
   const [stockItems, setStockItems] = useState([]);
@@ -563,6 +551,8 @@ const App = () => {
   const [itemSugerencias, setItemSugerencias] = useState([]);
   const [highlightedItem, setHighlightedItem] = useState(null);
   const [stockSearch, setStockSearch] = useState('');
+  // Form controlado de stock item (en vez de document.getElementById)
+  const [itemForm, setItemForm] = useState({ tipo: 'consumible', cantidad: 0, minimo: 5, replicar: false });
   
   // Estados para Auditoría
   const [selectedAuditUser, setSelectedAuditUser] = useState(null);
@@ -597,6 +587,27 @@ const App = () => {
     const loadingScreen = document.getElementById('loading-screen');
     if (loadingScreen) loadingScreen.style.display = 'none';
   }, []);
+
+  // Sincronizar form de licencias cuando cambia la fecha seleccionada
+  useEffect(() => {
+    if (selectedCalendarDate && selectedCalendarDate !== 'nueva') {
+      setLicForm(prev => ({ ...prev, fechaDesde: selectedCalendarDate, fechaHasta: selectedCalendarDate }));
+    } else {
+      setLicForm(prev => ({ ...prev, fechaDesde: '', fechaHasta: '' }));
+    }
+  }, [selectedCalendarDate]);
+  
+  // Sincronizar form de stock item cuando cambia el item en edición
+  useEffect(() => {
+    if (editingItem) {
+      setItemForm({ tipo: editingItem.tipo || 'consumible', cantidad: editingItem.cantidad || 0, minimo: editingItem.cantidad_minima || 5, replicar: false });
+    }
+  }, [editingItem]);
+
+  // Persistir filtros en localStorage
+  useEffect(() => { try { localStorage.setItem('filter_view', currentView); } catch {} }, [currentView]);
+  useEffect(() => { try { localStorage.setItem('filter_turno', String(turnoActivo)); } catch {} }, [turnoActivo]);
+  useEffect(() => { try { localStorage.setItem('filter_year', selectedYear); } catch {} }, [selectedYear]);
 
   // TIMEOUT DE SESIÓN POR INACTIVIDAD (30 minutos)
   const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutos en milisegundos
@@ -681,7 +692,7 @@ const App = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     
-    // Throttling: bloquear si hay lockout activo
+    // Si el countdown visual sigue activo, bloquear sin consultar servidor
     if (loginLocked) {
       const timeMsg = lockoutSeconds >= 60 ? `${Math.ceil(lockoutSeconds / 60)} min` : `${lockoutSeconds}s`;
       showNotify(`Demasiados intentos. Esperá ${timeMsg}`, "error");
@@ -690,25 +701,43 @@ const App = () => {
     
     setLoginLoading(true);
     const email = loginUsername.toLowerCase().trim() + '@local.com';
-    const { data, error } = await sb.auth.signInWithPassword({ email, password: loginPassword });
-    if (error) {
-      const newAttempts = loginAttempts + 1;
-      setLoginAttempts(newAttempts);
-      // Bloqueo progresivo: 10s tras 3 intentos, 60s tras 5, 10min tras 8+
-      if (newAttempts >= 8) {
-        activateLockout(600);
-      } else if (newAttempts >= 5) {
-        activateLockout(60);
-      } else if (newAttempts >= 3) {
-        activateLockout(10);
+    
+    // 1. Consultar rate limit en el SERVIDOR antes de intentar login
+    try {
+      const { data: rateCheck, error: rateErr } = await sb.rpc('check_login_rate_limit', { p_email: email });
+      if (!rateErr && rateCheck && !rateCheck.allowed) {
+        setLockoutSeconds(rateCheck.wait_seconds);
+        const timeMsg = rateCheck.wait_seconds >= 60 ? `${Math.ceil(rateCheck.wait_seconds / 60)} min` : `${rateCheck.wait_seconds}s`;
+        showNotify(`Demasiados intentos. Esperá ${timeMsg}`, "error");
+        setLoginLoading(false);
+        return;
       }
-      await sb.from('logs').insert([{ action: 'LOGIN_FALLIDO', details: 'Usuario: ' + loginUsername + ' | Intento fallido (#' + newAttempts + ')' }]);
+    } catch (err) {
+      // Si falla el rate check, continuar con el login (no bloquear por error del check)
+    }
+    
+    // 2. Intentar login
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: loginPassword });
+    
+    if (error) {
+      // 3. Registrar intento fallido en el SERVIDOR
+      await sb.rpc('record_login_attempt', { p_email: email, p_success: false }).catch(() => {});
+      await sb.from('logs').insert([{ action: 'LOGIN_FALLIDO', details: 'Usuario: ' + loginUsername + ' | Intento fallido' }]);
+      
+      // 4. Re-consultar rate limit para mostrar bloqueo si aplica
+      try {
+        const { data: newCheck } = await sb.rpc('check_login_rate_limit', { p_email: email });
+        if (newCheck && !newCheck.allowed && newCheck.wait_seconds > 0) {
+          setLockoutSeconds(newCheck.wait_seconds);
+        }
+      } catch (err) {}
+      
       showNotify("Usuario o contraseña incorrectos", "error");
     } else {
-      setLoginAttempts(0);
+      // 5. Registrar login exitoso en el SERVIDOR (resetea el conteo de fallos)
+      await sb.rpc('record_login_attempt', { p_email: email, p_success: true }).catch(() => {});
       setLockoutSeconds(0);
-      try { sessionStorage.removeItem('loginAttempts'); sessionStorage.removeItem('loginLockedUntil'); } catch {}
-      // Registrar login exitoso
+      // Registrar en logs
       const { data: profileData } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
       if (profileData) {
         await sb.from('logs').insert([{ 
@@ -1534,7 +1563,7 @@ const App = () => {
   // APP
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); setSelectedYear(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={filterByTurno(juicios).filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={filterByTurno(recordatorios).filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} turnoActivo={turnoActivo} setTurnoActivo={setTurnoActivo} TURNOS={TURNOS} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={filterByTurno(juicios).filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={filterByTurno(recordatorios).filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} turnoActivo={turnoActivo} setTurnoActivo={setTurnoActivo} TURNOS={TURNOS} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
@@ -3247,28 +3276,28 @@ const App = () => {
                         <div className="space-y-2">
                           <div className="flex flex-wrap gap-2 items-end">
                             {canManageLicencias() && (
-                              <select id="licUsuario" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold flex-1 min-w-[120px]">
+                              <select value={licForm.usuario} onChange={e => setLicForm(f => ({...f, usuario: e.target.value}))} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold flex-1 min-w-[120px]">
                                 {getProfilesByTurno().map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                               </select>
                             )}
-                            <input id="licFechaDesde" type="date" defaultValue={selectedCalendarDate !== 'nueva' ? selectedCalendarDate : ''} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
+                            <input type="date" value={licForm.fechaDesde} onChange={e => setLicForm(f => ({...f, fechaDesde: e.target.value}))} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
                             <span className="text-slate-400 text-sm">a</span>
-                            <input id="licFechaHasta" type="date" defaultValue={selectedCalendarDate !== 'nueva' ? selectedCalendarDate : ''} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
-                            <select id="licTipo" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold">
+                            <input type="date" value={licForm.fechaHasta} onChange={e => setLicForm(f => ({...f, fechaHasta: e.target.value}))} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
+                            <select value={licForm.tipo} onChange={e => setLicForm(f => ({...f, tipo: e.target.value}))} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold">
                               <option value="licencia">📋 Licencia</option>
                               <option value="enfermedad">🏥 Enfermedad</option>
                               <option value="estudio">📚 Estudio</option>
                               <option value="descanso">😴 Descanso</option>
                             </select>
-                            <input id="licDescripcion" placeholder="Nota..." className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm flex-1 min-w-[100px]" />
+                            <input value={licForm.descripcion} onChange={e => setLicForm(f => ({...f, descripcion: e.target.value}))} placeholder="Nota..." className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm flex-1 min-w-[100px]" />
                           </div>
                           <div className="flex gap-2">
                             <button onClick={async () => {
-                              const fechaDesde = document.getElementById('licFechaDesde').value;
-                              const fechaHasta = document.getElementById('licFechaHasta').value || fechaDesde;
-                              const tipo = document.getElementById('licTipo').value;
-                              const descripcion = document.getElementById('licDescripcion').value;
-                              const targetUserId = canManageLicencias() ? document.getElementById('licUsuario').value : session.user.id;
+                              const fechaDesde = licForm.fechaDesde;
+                              const fechaHasta = licForm.fechaHasta || fechaDesde;
+                              const tipo = licForm.tipo;
+                              const descripcion = licForm.descripcion;
+                              const targetUserId = canManageLicencias() ? (licForm.usuario || getProfilesByTurno()[0]?.id) : session.user.id;
                               const targetUserNombre = canManageLicencias() ? profiles.find(p => p.id === targetUserId)?.nombre : userProfile.nombre;
                               
                               if (!fechaDesde) { showNotify("Selecciona una fecha", "error"); return; }
@@ -3299,9 +3328,9 @@ const App = () => {
                               <button onClick={async () => {
                                 if (!confirm('¿Eliminar licencias en este rango?')) return;
                                 
-                                const fechaDesde = document.getElementById('licFechaDesde').value;
-                                const fechaHasta = document.getElementById('licFechaHasta').value || fechaDesde;
-                                const targetUserId = document.getElementById('licUsuario').value;
+                                const fechaDesde = licForm.fechaDesde;
+                                const fechaHasta = licForm.fechaHasta || fechaDesde;
+                                const targetUserId = licForm.usuario || getProfilesByTurno()[0]?.id;
                                 const targetUserNombre = profiles.find(p => p.id === targetUserId)?.nombre;
                                 
                                 if (!fechaDesde) { showNotify("Selecciona una fecha", "error"); return; }
@@ -3575,24 +3604,24 @@ const App = () => {
                         </div>
                       )}
                     </div>
-                    <select id="itemTipo" defaultValue={editingItem.tipo || 'consumible'} className="px-2 py-1 border rounded text-xs font-bold bg-white">
+                    <select value={itemForm.tipo} onChange={e => setItemForm(f => ({...f, tipo: e.target.value}))} className="px-2 py-1 border rounded text-xs font-bold bg-white">
                       <option value="consumible">📦 Consumible</option>
                       <option value="fijo">🔧 Fijo</option>
                     </select>
-                    <input id="itemCantidad" type="number" placeholder="Cant" defaultValue={editingItem.cantidad || 0} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
-                    <input id="itemMinimo" type="number" placeholder="Min" defaultValue={editingItem.cantidad_minima || 5} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
-                    {!editingItem.id && <label className="flex items-center gap-1 text-[10px] bg-blue-100 px-2 py-1 rounded"><input type="checkbox" id="itemReplicar" className="w-3 h-3" /><span>Todas</span></label>}
+                    <input type="number" placeholder="Cant" value={itemForm.cantidad} onChange={e => setItemForm(f => ({...f, cantidad: e.target.value}))} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
+                    <input type="number" placeholder="Min" value={itemForm.minimo} onChange={e => setItemForm(f => ({...f, minimo: e.target.value}))} className="w-12 px-2 py-1 border rounded text-xs font-bold" />
+                    {!editingItem.id && <label className="flex items-center gap-1 text-[10px] bg-blue-100 px-2 py-1 rounded"><input type="checkbox" checked={itemForm.replicar} onChange={e => setItemForm(f => ({...f, replicar: e.target.checked}))} className="w-3 h-3" /><span>Todas</span></label>}
                     <button onClick={async () => {
                       const nombre = itemNombreInput.trim();
-                      const tipo = document.getElementById('itemTipo').value;
-                      const cantidad = parseInt(document.getElementById('itemCantidad').value) || 0;
-                      const cantidad_minima = parseInt(document.getElementById('itemMinimo').value) || 5;
+                      const tipo = itemForm.tipo;
+                      const cantidad = parseInt(itemForm.cantidad) || 0;
+                      const cantidad_minima = parseInt(itemForm.minimo) || 5;
                       if (!nombre) { showNotify("Nombre requerido", "error"); return; }
                       if (editingItem.id) { 
                         await sb.from('stock_items').update({ nombre, tipo, cantidad, cantidad_minima }).eq('id', editingItem.id); 
                         showNotify("Actualizado");
                       } else {
-                        const replicar = document.getElementById('itemReplicar')?.checked;
+                        const replicar = itemForm.replicar;
                         if (replicar) {
                           const ubicaciones = ubicacionesFiltradas.map(u => u.id);
                           const items = ubicaciones.map(ub => ({ nombre, tipo, ubicacion: ub, cantidad: ub === selectedUbicacion ? cantidad : 0, cantidad_minima, turno: getTurnoParaGuardar() }));
