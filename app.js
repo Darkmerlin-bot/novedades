@@ -927,6 +927,8 @@ const App = () => {
   const canSeeAllTurnos = () => ['admin', 'supervisor'].includes(userProfile?.role);
   const canManageUsers = () => userProfile?.role === 'admin';
   const canSeeLogs = () => userProfile?.role === 'admin';
+  // Encargado = admin de su turno (menos Personal y Logs)
+  const canEditAll = () => ['admin', 'supervisor', 'encargado'].includes(userProfile?.role);
   const canManageNovedades = () => ['admin', 'supervisor', 'encargado', 'moderadorplus', 'moderator'].includes(userProfile?.role);
   const canManageJuicios = () => ['admin', 'supervisor', 'encargado', 'moderadorplus', 'moderator'].includes(userProfile?.role);
   // Permisos de edición de juicio individual: admin/supervisor/encargado siempre, moderadorplus/moderator solo los que creó
@@ -1499,7 +1501,7 @@ const App = () => {
                     {tasks.length === 0 ? <p className="text-slate-400 text-xs italic py-4 text-center bg-slate-50 rounded-xl">Sin tareas</p> : tasks.map(task => {
                       const isMe = task.person === userProfile.nombre;
                       const done = isTaskDone(n, task);
-                      const canToggle = userProfile.role === 'admin' || (userProfile.role === 'moderator' && isMe);
+                      const canToggle = canEditAll() || (userProfile.role === 'moderator' && isMe);
                       return (
                         <label key={task.checkKey} className={`flex items-center gap-4 py-2 ${canToggle ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'} group select-none rounded-lg px-3 ${isMe ? 'bg-slate-100' : 'bg-slate-50'}`}>
                           <div onClick={() => canToggle && handleToggleCheck(n.id, task.checkKey, task.checkKeyOld)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'} ${!canToggle && 'opacity-50'}`}>{done && <span className="text-white text-[10px]">✓</span>}</div>
@@ -1516,7 +1518,7 @@ const App = () => {
                 <span className="text-[9px] text-slate-400 font-bold uppercase">Cargado: {n.creado_por}</span>
                 {n.modificado_por && <span className="text-[9px] text-emerald-500 font-bold uppercase">Mod: {n.modificado_por}</span>}
               </div>
-              {userProfile.role === 'admin' && (
+              {canEditAll() && (
                 <div className="flex gap-2">
                   <button onClick={() => { setEditingNovedad(n); setOriginalUpdatedAt(n.updated_at); setIsComision(n.es_comision || false); setIsEventoSocial(n.es_evento_social || false); setCurrentView('form'); }} className="text-[10px] bg-slate-100 px-3 py-2 rounded-lg font-bold text-slate-600 hover:bg-slate-200 transition-all flex items-center gap-1.5 border border-slate-200"><Icon name="edit" size={12} /> Editar</button>
                   <button onClick={async () => { if(confirm("¿Eliminar?")){ await sb.from('novedades').delete().eq('id', n.id); await addLog('BORRAR', 'Eliminó ' + n.numero_novedad); loadData(); showNotify("Eliminado"); } }} className="text-[10px] bg-red-50 px-3 py-2 rounded-lg font-bold text-red-600 hover:bg-red-100 transition-all flex items-center gap-1.5 border border-red-200"><Icon name="trash" size={12} /> Eliminar</button>
@@ -2786,7 +2788,7 @@ const App = () => {
                             showNotify("Recordatorio completado");
                             loadData();
                           }} className="p-3 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-200" title="Completar">✅</button>
-                          {(r.creado_por === session.user.id || userProfile?.role === 'admin') && (
+                          {(r.creado_por === session.user.id || canEditAll()) && (
                             <>
                               <button onClick={() => setEditingRecordatorio(r)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200" title="Editar">✏️</button>
                               <button onClick={async () => {
@@ -3221,7 +3223,7 @@ const App = () => {
                                   <p className="font-black text-lg">{l.user_nombre}</p>
                                   <p className="text-sm font-bold">{tipoLabel[l.tipo] || l.tipo}{l.descripcion ? ` - ${l.descripcion}` : ''}</p>
                                 </div>
-                                {(l.user_id === session?.user?.id || userProfile?.role === 'admin') && (
+                                {(l.user_id === session?.user?.id || canEditAll()) && (
                                   <button onClick={async () => {
                                     if (!confirm(`¿Eliminar licencia de ${l.user_nombre}?`)) return;
                                     const { error } = await sb.from('licencias').delete().eq('id', l.id);
@@ -3293,7 +3295,7 @@ const App = () => {
                               setSelectedCalendarDate(null);
                               loadData();
                             }} className="flex-1 py-2 bg-emerald-500 text-white rounded-lg font-bold text-sm hover:bg-emerald-600">➕ Agregar</button>
-                            {userProfile?.role === 'admin' && (
+                            {canEditAll() && (
                               <button onClick={async () => {
                                 if (!confirm('¿Eliminar licencias en este rango?')) return;
                                 
@@ -4291,7 +4293,7 @@ const App = () => {
       )}
 
       {/* MODAL REPORTE */}
-      {showReport && userProfile.role === 'admin' && (
+      {showReport && canEditAll() && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 no-print" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => { setShowReport(false); setPrintReady(false); setPrintUser('todos'); }}>
           <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center sticky top-0 z-10 print:hidden no-print">
