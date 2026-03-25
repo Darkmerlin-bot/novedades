@@ -744,7 +744,8 @@ const App = () => {
 
   const loadData = async () => {
     if (!session) return;
-    setDataLoading(true);
+    // Solo mostrar skeleton en la carga inicial, no al refrescar con datos existentes
+    if (novedades.length === 0) setDataLoading(true);
     
     let loadErrors = [];
     
