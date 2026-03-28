@@ -568,6 +568,7 @@ const App = () => {
   const [itemSugerencias, setItemSugerencias] = useState([]);
   const [highlightedItem, setHighlightedItem] = useState(null);
   const [stockSearch, setStockSearch] = useState('');
+  const [stockTurnoFilter, setStockTurnoFilter] = useState(0); // 0=todos, 1-4=turno específico (solo admin/supervisor)
   // Form controlado de stock item (en vez de document.getElementById)
   const [itemForm, setItemForm] = useState({ tipo: 'consumible', cantidad: 0, minimo: 5, replicar: false });
   
@@ -3473,11 +3474,13 @@ const App = () => {
         {/* STOCK / INVENTARIO */}
         {currentView === 'stock' && (() => {
           // Filtrar stock y ubicaciones por turno
-          const stockFiltrado = filterByTurno(stockItems);
-          const turnoEfectivo = getTurnoEfectivo();
-          const ubicacionesFiltradas = turnoEfectivo === 0 
+          // Admin/Supervisor: usar stockTurnoFilter (filtro propio del stock)
+          // Otros roles: usar su turno asignado
+          const stockTurnoEfectivo = canSeeAllTurnos() ? stockTurnoFilter : getUserTurno();
+          const stockFiltrado = stockTurnoEfectivo === 0 ? stockItems : stockItems.filter(i => i.turno === stockTurnoEfectivo);
+          const ubicacionesFiltradas = stockTurnoEfectivo === 0 
             ? stockUbicaciones 
-            : stockUbicaciones.filter(u => u.turno === turnoEfectivo);
+            : stockUbicaciones.filter(u => u.turno === stockTurnoEfectivo);
           // Seleccionar primera ubicación del turno si no hay ninguna seleccionada o la actual no está en el turno
           if (ubicacionesFiltradas.length > 0 && (!selectedUbicacion || !ubicacionesFiltradas.find(u => u.id === selectedUbicacion))) {
             setTimeout(() => setSelectedUbicacion(ubicacionesFiltradas[0].id), 0);
@@ -3487,7 +3490,7 @@ const App = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
               <div>
                 <h2 className="text-2xl font-black text-slate-800">📦 Stock</h2>
-                <p className="text-xs text-slate-500 font-bold">{turnoEfectivo > 0 ? TURNOS[turnoEfectivo] : 'Todos los turnos'}</p>
+                <p className="text-xs text-slate-500 font-bold">{stockTurnoEfectivo > 0 ? TURNOS[stockTurnoEfectivo] : 'Todos los turnos'}</p>
               </div>
               <div className="flex gap-2 items-center">
                 <div className="relative flex-1 sm:w-48">
@@ -3550,17 +3553,30 @@ const App = () => {
               </div>
             </div>
             
+            {/* Filtro de turno para stock (admin/supervisor) */}
+            {canSeeAllTurnos() && (
+              <div className="flex gap-1.5 items-center">
+                <span className="text-[10px] font-bold text-slate-400 uppercase mr-1">Turno:</span>
+                <button onClick={() => setStockTurnoFilter(0)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${stockTurnoFilter === 0 ? 'bg-slate-800 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'}`}>Todos</button>
+                {[1, 2, 3, 4].map(t => (
+                  <button key={t} onClick={() => setStockTurnoFilter(t)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${stockTurnoFilter === t ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'}`}>{t === 4 ? 'ZO' : `T${t}`}</button>
+                ))}
+              </div>
+            )}
+            
             {stockSearch && (
               <div className="bg-amber-50 rounded-xl border-2 border-amber-200 p-3">
-                <p className="text-xs font-bold text-amber-700 mb-2">Resultados en todas las ubicaciones:</p>
+                <p className="text-xs font-bold text-amber-700 mb-2">Resultados {stockTurnoEfectivo > 0 ? `en ${TURNOS[stockTurnoEfectivo]}` : 'en todos los turnos'}:</p>
                 {(() => {
                   const resultados = stockFiltrado.filter(i => i.nombre.toLowerCase().includes(stockSearch.toLowerCase()));
                   if (resultados.length === 0) return <p className="text-amber-600 text-sm">No encontrado</p>;
                   const getUbNombre = (id) => stockUbicaciones.find(u => u.id === id)?.nombre || id;
+                  const getTurnoLabel = (id) => { const ub = stockUbicaciones.find(u => u.id === id); return ub ? (ub.turno === 4 ? 'ZO' : `T${ub.turno || 1}`) : ''; };
                   return (<div className="space-y-1">{resultados.map(item => (
                     <div key={item.id} onClick={() => { setSelectedUbicacion(item.ubicacion); setStockSearch(''); setHighlightedItem(item.id); setTimeout(() => setHighlightedItem(null), 6000); }} className={`flex items-center justify-between p-2 rounded-lg text-sm cursor-pointer hover:ring-2 hover:ring-amber-400 ${item.cantidad <= item.cantidad_minima ? 'bg-red-100' : 'bg-white'}`}>
                       <span className="font-bold">{item.nombre}</span>
                       <div className="flex items-center gap-2">
+                        {canSeeAllTurnos() && <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">{getTurnoLabel(item.ubicacion)}</span>}
                         <span className="text-xs text-slate-500">{getUbNombre(item.ubicacion)}</span>
                         <span className={`text-[9px] px-1 rounded ${item.tipo === 'fijo' ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-700'}`}>{item.tipo === 'fijo' ? '🔧' : '📦'}</span>
                         <span className={`font-black ${item.cantidad <= item.cantidad_minima ? 'text-red-600' : 'text-slate-800'}`}>{item.cantidad}</span>
@@ -3574,7 +3590,8 @@ const App = () => {
             <div className="flex flex-wrap gap-1 items-center">
               {ubicacionesFiltradas.map(ub => {
                 const alertas = stockFiltrado.filter(i => i.ubicacion === ub.id && i.cantidad <= i.cantidad_minima).length;
-                return (<button key={ub.id} onClick={() => { setSelectedUbicacion(ub.id); setStockSearch(''); }} className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 ${selectedUbicacion === ub.id ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{ub.nombre}{alertas > 0 && <span className="bg-red-500 text-white text-[8px] px-1 rounded-full">{alertas}</span>}</button>);
+                const turnoLabel = canSeeAllTurnos() && stockTurnoEfectivo === 0 ? (ub.turno === 4 ? ' ZO' : ` T${ub.turno || 1}`) : '';
+                return (<button key={ub.id} onClick={() => { setSelectedUbicacion(ub.id); setStockSearch(''); }} className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 ${selectedUbicacion === ub.id ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{ub.nombre}{turnoLabel && <span className={`text-[8px] px-1 py-0.5 rounded ${selectedUbicacion === ub.id ? 'bg-indigo-400/50' : 'bg-indigo-100 text-indigo-600'}`}>{turnoLabel}</span>}{alertas > 0 && <span className="bg-red-500 text-white text-[8px] px-1 rounded-full">{alertas}</span>}</button>);
               })}
               {canManageStock() && (
                 <button onClick={() => setShowUbicacionesModal(true)} className="px-2 py-1.5 rounded-lg font-bold text-xs bg-teal-100 text-teal-700 hover:bg-teal-200">⚙️</button>
@@ -3663,13 +3680,16 @@ const App = () => {
                       } else {
                         const replicar = itemForm.replicar;
                         if (replicar) {
-                          const ubicaciones = ubicacionesFiltradas.map(u => u.id);
-                          const items = ubicaciones.map(ub => ({ nombre, tipo, ubicacion: ub, cantidad: ub === selectedUbicacion ? cantidad : 0, cantidad_minima, turno: getTurnoParaGuardar() }));
+                          const items = ubicacionesFiltradas.map(ub => {
+                            const ubTurno = stockUbicaciones.find(u => u.id === ub.id)?.turno || getUserTurno();
+                            return { nombre, tipo, ubicacion: ub.id, cantidad: ub.id === selectedUbicacion ? cantidad : 0, cantidad_minima, turno: ubTurno };
+                          });
                           const { error } = await sb.from('stock_items').insert(items);
                         if (error) { showNotify("Error: " + error.message, "error"); return; }
-                        showNotify(`Creado en ${ubicaciones.length} ubicaciones`);
+                        showNotify(`Creado en ${ubicacionesFiltradas.length} ubicaciones`);
                       } else {
-                        await sb.from('stock_items').insert([{ nombre, tipo, ubicacion: selectedUbicacion, cantidad, cantidad_minima, turno: getTurnoParaGuardar() }]);
+                        const ubTurno = stockUbicaciones.find(u => u.id === selectedUbicacion)?.turno || getUserTurno();
+                        await sb.from('stock_items').insert([{ nombre, tipo, ubicacion: selectedUbicacion, cantidad, cantidad_minima, turno: ubTurno }]);
                         showNotify("Creado");
                       }
                     }
@@ -4093,8 +4113,10 @@ const App = () => {
                   showNotify("Ubicación actualizada");
                   setEditingUbicacion(null);
                 } else {
-                  // Crear nueva con turno
-                  const turnoParaUbicacion = getTurnoParaGuardar();
+                  // Crear nueva con turno — usar stockTurnoFilter si está seleccionado, o el selector del form
+                  const turnoParaUbicacion = canSeeAllTurnos() 
+                    ? parseInt(e.target.ubTurno?.value || stockTurnoFilter || getUserTurno(), 10) 
+                    : getUserTurno();
                   const ubicacionesDelTurno = stockUbicaciones.filter(u => u.turno === turnoParaUbicacion);
                   const maxOrden = Math.max(0, ...ubicacionesDelTurno.map(u => u.orden || 0));
                   const { error } = await sb.from('stock_ubicaciones').insert([{ id, nombre, orden: maxOrden + 1, turno: turnoParaUbicacion, created_by: session.user.id }]);
@@ -4103,7 +4125,7 @@ const App = () => {
                     else showNotify("Error: " + error.message, "error"); 
                     return; 
                   }
-                  showNotify("Ubicación creada");
+                  showNotify(`Ubicación creada en ${TURNOS[turnoParaUbicacion]}`);
                 }
                 e.target.reset();
                 loadData();
@@ -4123,6 +4145,15 @@ const App = () => {
                     defaultValue={editingUbicacion?.nombre || ''}
                     className="flex-1 px-3 py-2 border rounded-lg text-sm font-bold" 
                   />
+                  {/* Selector de turno para admin/supervisor al crear nueva ubicación */}
+                  {canSeeAllTurnos() && !editingUbicacion && (
+                    <select name="ubTurno" defaultValue={stockTurnoFilter || getUserTurno()} className="px-2 py-2 border rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700">
+                      <option value="1">T1</option>
+                      <option value="2">T2</option>
+                      <option value="3">T3</option>
+                      <option value="4">ZO</option>
+                    </select>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button type="submit" className="flex-1 py-2 bg-teal-600 text-white rounded-lg font-bold text-xs">
@@ -4139,12 +4170,19 @@ const App = () => {
               {/* Lista de ubicaciones */}
               <div className="space-y-2">
                 {(() => {
-                  const turnoActual = getTurnoParaGuardar();
-                  const ubicacionesDelTurno = stockUbicaciones.filter(u => u.turno === turnoActual);
-                  return (<>
-                    <p className="text-[10px] font-black text-slate-500 uppercase">Ubicaciones del {TURNOS[turnoActual]} ({ubicacionesDelTurno.length})</p>
-                    {ubicacionesDelTurno.map((ub, idx) => {
-                      const itemCount = stockItems.filter(i => i.ubicacion === ub.id).length;
+                  // Admin/supervisor: mostrar agrupado por turno; otros: solo su turno
+                  const turnosToShow = canSeeAllTurnos() 
+                    ? (stockTurnoFilter > 0 ? [stockTurnoFilter] : [1, 2, 3, 4])
+                    : [getUserTurno()];
+                  
+                  return turnosToShow.map(t => {
+                    const ubicacionesDelTurno = stockUbicaciones.filter(u => u.turno === t);
+                    if (ubicacionesDelTurno.length === 0) return null;
+                    return (
+                      <div key={t} className="mb-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase mb-1">{TURNOS[t]} ({ubicacionesDelTurno.length})</p>
+                        {ubicacionesDelTurno.map((ub, idx) => {
+                          const itemCount = stockItems.filter(i => i.ubicacion === ub.id).length;
                       return (
                         <div key={ub.id} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2">
                           <div className="flex items-center gap-2">
@@ -4174,7 +4212,9 @@ const App = () => {
                         </div>
                       );
                     })}
-                  </>);
+                      </div>
+                    );
+                  });
                 })()}
               </div>
 
