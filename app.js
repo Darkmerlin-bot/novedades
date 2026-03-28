@@ -258,6 +258,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
               <option value="1" className="bg-slate-800 text-white">T1 - 1er Turno</option>
               <option value="2" className="bg-slate-800 text-white">T2 - 2do Turno</option>
               <option value="3" className="bg-slate-800 text-white">T3 - 3er Turno</option>
+              <option value="4" className="bg-slate-800 text-white">ZO - Zona Oeste</option>
             </select>
           )}
           <div className="flex flex-col items-end mr-2">
@@ -267,7 +268,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
                 {userProfile?.role === 'admin' ? 'Admin' : userProfile?.role === 'supervisor' ? 'Supervisor' : userProfile?.role === 'encargado' ? 'Encargado' : userProfile?.role === 'moderadorplus' ? 'Mod+' : userProfile?.role === 'moderator' ? 'Moderador' : 'Usuario'}
               </span>
               {!['admin', 'supervisor'].includes(userProfile?.role) && (
-                <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase border border-indigo-400/30 bg-indigo-500/10 text-indigo-400">T{userProfile?.turno || 1}</span>
+                <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase border border-indigo-400/30 bg-indigo-500/10 text-indigo-400">{userProfile?.turno === 4 ? 'ZO' : `T${userProfile?.turno || 1}`}</span>
               )}
             </div>
           </div>
@@ -964,7 +965,7 @@ const App = () => {
   const extractYear = (n) => n.anio ? n.anio.toString() : n.created_at ? new Date(n.created_at).getFullYear().toString() : '';
 
   // ==================== SISTEMA DE TURNOS Y PERMISOS ====================
-  const TURNOS = { 1: '1er Turno', 2: '2do Turno', 3: '3er Turno' };
+  const TURNOS = { 1: '1er Turno', 2: '2do Turno', 3: '3er Turno', 4: 'Zona Oeste' };
   const ROLES = {
     admin: { label: 'Administrador', color: 'bg-red-500' },
     supervisor: { label: 'Supervisor', color: 'bg-purple-500' },
@@ -1826,8 +1827,8 @@ const App = () => {
             {/* Filtro por turno */}
             <div className="flex gap-2 mb-4">
               <button onClick={() => setSelectedUserTurno(0)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === 0 ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>Todos</button>
-              {[1, 2, 3].map(t => (
-                <button key={t} onClick={() => setSelectedUserTurno(t)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === t ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}`}>T{t}</button>
+              {[1, 2, 3, 4].map(t => (
+                <button key={t} onClick={() => setSelectedUserTurno(t)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === t ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}`}>{t === 4 ? 'ZO' : `T${t}`}</button>
               ))}
             </div>
             
@@ -1844,7 +1845,7 @@ const App = () => {
                           <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
                             <span className={`px-2 py-0.5 rounded ${roleInfo.color} text-white text-[8px]`}>{roleInfo.label}</span>
                             {!['admin', 'supervisor'].includes(p.role) && (
-                              <span className="px-2 py-0.5 rounded bg-indigo-500 text-white text-[8px]">T{p.turno || 1}</span>
+                              <span className="px-2 py-0.5 rounded bg-indigo-500 text-white text-[8px]">{p.turno === 4 ? 'ZO' : `T${p.turno || 1}`}</span>
                             )}
                           </div>
                         </div>
@@ -2031,6 +2032,7 @@ const App = () => {
                       <option value="1">1er Turno</option>
                       <option value="2">2do Turno</option>
                       <option value="3">3er Turno</option>
+                      <option value="4">Zona Oeste</option>
                     </select>
                     {['admin', 'supervisor'].includes(editingProfile.role) && (
                       <p className="text-[9px] text-slate-400 ml-1">Admin y Supervisor ven todos los turnos automáticamente</p>
@@ -2185,6 +2187,7 @@ const App = () => {
                     <option value="1">1er Turno</option>
                     <option value="2">2do Turno</option>
                     <option value="3">3er Turno</option>
+                      <option value="4">Zona Oeste</option>
                   </select>
                   <p className="text-[9px] text-slate-400 ml-1">Admin y Supervisor ven todos los turnos automáticamente</p>
                 </div>
@@ -4264,7 +4267,7 @@ const App = () => {
                               <div className="text-[9px] text-slate-500 font-bold uppercase flex items-center gap-1">
                                 {ROLES[p.role]?.label || p.role}
                                 {canSeeAllTurnos() && !['admin', 'supervisor'].includes(p.role) && (
-                                  <span className="px-1 bg-indigo-200 text-indigo-700 rounded text-[8px]">T{p.turno || 1}</span>
+                                  <span className="px-1 bg-indigo-200 text-indigo-700 rounded text-[8px]">{p.turno === 4 ? 'ZO' : `T${p.turno || 1}`}</span>
                                 )}
                               </div>
                             </div>
