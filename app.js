@@ -191,6 +191,22 @@ const escapeHtml = (str) => {
     .replace(/'/g, '&#039;');
 };
 
+// Función para exportar datos como CSV
+const exportCSV = (filename, headers, rows) => {
+  const escapeCsv = (val) => {
+    const str = String(val ?? '');
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) return `"${str.replace(/"/g, '""')}"`;
+    return str;
+  };
+  const csv = [headers.map(escapeCsv).join(','), ...rows.map(row => row.map(escapeCsv).join(','))].join('\n');
+  // BOM para que Excel detecte UTF-8
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
 const currentYear = new Date().getFullYear();
 const availableYears = [];
 for (let y = currentYear + 1; y >= 2020; y--) availableYears.push(y);
@@ -610,53 +626,59 @@ const App = () => {
   useEffect(() => { try { localStorage.setItem('filter_year', selectedYear); } catch {} }, [selectedYear]);
 
   // TIMEOUT DE SESIÓN POR INACTIVIDAD (30 minutos)
-  const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutos en milisegundos
-  const timeoutRef = React.useRef(null);
+  // Usa timestamp de última actividad + setInterval (no se "duerme" con la pestaña en background)
+  const SESSION_TIMEOUT = 30 * 60 * 1000;
+  const WARNING_BEFORE = 2 * 60 * 1000;
+  const lastActivityRef = React.useRef(Date.now());
+  const intervalRef = React.useRef(null);
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
   
   const resetSessionTimeout = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    lastActivityRef.current = Date.now();
     setShowTimeoutWarning(false);
-    
-    if (session) {
-      // Mostrar advertencia 2 minutos antes
-      timeoutRef.current = setTimeout(() => {
-        setShowTimeoutWarning(true);
-        // Cerrar sesión después de 2 minutos más si no hay actividad
-        timeoutRef.current = setTimeout(async () => {
-          await sb.auth.signOut({ scope: 'local' });
-          // Limpiar cualquier token residual
-          localStorage.removeItem('sb-whfrenunfcrcrljithex-auth-token');
-          setShowTimeoutWarning(false);
-          setLoginUsername('');
-          setLoginPassword('');
-          setSession(null);
-          setUserProfile(null);
-          showNotify("Sesión cerrada por inactividad", "error");
-        }, 2 * 60 * 1000);
-      }, SESSION_TIMEOUT - 2 * 60 * 1000);
-    }
   };
   
   useEffect(() => {
     if (!session) return;
     
+    // Registrar actividad con debounce de 30s
     const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
-    let lastActivity = 0;
+    let lastDebounce = 0;
     const handleActivity = () => {
       const now = Date.now();
-      if (now - lastActivity > 30000) { // Solo resetear cada 30 segundos
-        lastActivity = now;
+      if (now - lastDebounce > 30000) {
+        lastDebounce = now;
         resetSessionTimeout();
       }
     };
     
     events.forEach(event => window.addEventListener(event, handleActivity));
-    resetSessionTimeout();
+    lastActivityRef.current = Date.now();
+    
+    // Chequear cada 30 segundos si expiró (funciona incluso con pestaña en background)
+    intervalRef.current = setInterval(async () => {
+      const elapsed = Date.now() - lastActivityRef.current;
+      
+      if (elapsed >= SESSION_TIMEOUT) {
+        // Expiró: cerrar sesión
+        clearInterval(intervalRef.current);
+        await sb.auth.signOut({ scope: 'local' });
+        localStorage.removeItem('sb-whfrenunfcrcrljithex-auth-token');
+        setShowTimeoutWarning(false);
+        setLoginUsername('');
+        setLoginPassword('');
+        setSession(null);
+        setUserProfile(null);
+        showNotify("Sesión cerrada por inactividad", "error");
+      } else if (elapsed >= SESSION_TIMEOUT - WARNING_BEFORE) {
+        // Faltan menos de 2 minutos: mostrar advertencia
+        setShowTimeoutWarning(true);
+      }
+    }, 30000);
     
     return () => {
       events.forEach(event => window.removeEventListener(event, handleActivity));
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [session]);
 
@@ -721,7 +743,7 @@ const App = () => {
     
     if (error) {
       // 3. Registrar intento fallido en el SERVIDOR
-      await sb.rpc('record_login_attempt', { p_email: email, p_success: false }).catch(() => {});
+      try { await sb.rpc('record_login_attempt', { p_email: email, p_success: false }); } catch (e) {}
       await sb.from('logs').insert([{ action: 'LOGIN_FALLIDO', details: 'Usuario: ' + loginUsername + ' | Intento fallido' }]);
       
       // 4. Re-consultar rate limit para mostrar bloqueo si aplica
@@ -735,7 +757,7 @@ const App = () => {
       showNotify("Usuario o contraseña incorrectos", "error");
     } else {
       // 5. Registrar login exitoso en el SERVIDOR (resetea el conteo de fallos)
-      await sb.rpc('record_login_attempt', { p_email: email, p_success: true }).catch(() => {});
+      try { await sb.rpc('record_login_attempt', { p_email: email, p_success: true }); } catch (e) {}
       setLockoutSeconds(0);
       // Registrar en logs
       const { data: profileData } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
@@ -2179,6 +2201,21 @@ const App = () => {
           <div className="space-y-4">
             <div className="flex justify-between items-start mb-6">
               <div><h2 className="text-3xl font-black text-slate-800">Auditoría</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Registro de actividad</p></div>
+              <button onClick={() => {
+                const filteredLogs = logs.filter(l => {
+                  if (logsFilterUser !== 'todos' && l.user_nombre !== logsFilterUser) return false;
+                  if (logsFilterAction !== 'todos' && !l.action?.includes(logsFilterAction)) return false;
+                  return true;
+                });
+                const rows = filteredLogs.map(l => [
+                  new Date(l.created_at).toLocaleString(),
+                  l.user_nombre || 'Sistema',
+                  l.action,
+                  l.details || ''
+                ]);
+                exportCSV(`auditoria_${new Date().toISOString().split('T')[0]}.csv`, ['Fecha', 'Usuario', 'Acción', 'Detalle'], rows);
+                showNotify("CSV exportado");
+              }} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2"><Icon name="save" size={14} /> Exportar CSV</button>
             </div>
             
             {/* Pestañas de auditoría */}
@@ -2897,7 +2934,7 @@ const App = () => {
                           const isWeekend = [0,6].includes(new Date(calendarioYear, mesIndex, day).getDay());
                           let clase = isWeekend ? 'finde' : '', inicial = '';
                           if (dayLic.length > 0) { clase = dayLic[0].tipo === 'enfermedad' ? 'enfermedad' : dayLic[0].tipo === 'estudio' ? 'estudio' : dayLic[0].tipo === 'descanso' ? 'descanso' : 'licencia'; inicial = dayLic.map(l => l.user_nombre?.charAt(0) || '').join(''); }
-                          printWindow.document.write(`<div class="dia ${clase}">${day}${inicial ? `<span class="inicial">${inicial}</span>` : ''}</div>`);
+                          printWindow.document.write(`<div class="dia ${clase}">${day}${inicial ? `<span class="inicial">${escapeHtml(inicial)}</span>` : ''}</div>`);
                         }
                         printWindow.document.write('</div></div>');
                       });
@@ -2949,7 +2986,7 @@ const App = () => {
                           const isWeekend = [0,6].includes(new Date(calendarioYear, mesIndex, day).getDay());
                           let clase = isWeekend ? 'finde' : '', inicial = '';
                           if (dayLic.length > 0) { clase = dayLic[0].tipo === 'enfermedad' ? 'enfermedad' : dayLic[0].tipo === 'estudio' ? 'estudio' : dayLic[0].tipo === 'descanso' ? 'descanso' : 'licencia'; inicial = dayLic.map(l => l.user_nombre?.charAt(0) || '').join(''); }
-                          printWindow.document.write(`<div class="dia ${clase}">${day}${inicial ? `<span class="inicial">${inicial}</span>` : ''}</div>`);
+                          printWindow.document.write(`<div class="dia ${clase}">${day}${inicial ? `<span class="inicial">${escapeHtml(inicial)}</span>` : ''}</div>`);
                         }
                         printWindow.document.write('</div></div>');
                       });
@@ -2962,7 +2999,7 @@ const App = () => {
                           const mesLics = licenciasYear.filter(l => l.fecha?.startsWith(monthStr)).sort((a,b) => a.fecha.localeCompare(b.fecha));
                           if (mesLics.length > 0) {
                             printWindow.document.write(`<div class="detalle-mes"><h3>${mesNombre} (${mesLics.length})</h3>`);
-                            mesLics.forEach(l => { const tipoLabel = l.tipo === 'licencia' ? '📋 Licencia' : l.tipo === 'enfermedad' ? '🤒 Enfermedad' : l.tipo === 'estudio' ? '📚 Estudio' : '😴 Descanso'; printWindow.document.write(`<div class="detalle-item"><span>${l.fecha.split('-')[2]} - ${l.user_nombre}</span><span>${tipoLabel}</span></div>`); });
+                            mesLics.forEach(l => { const tipoLabel = l.tipo === 'licencia' ? '📋 Licencia' : l.tipo === 'enfermedad' ? '🤒 Enfermedad' : l.tipo === 'estudio' ? '📚 Estudio' : '😴 Descanso'; printWindow.document.write(`<div class="detalle-item"><span>${l.fecha.split("-")[2]} - ${escapeHtml(l.user_nombre)}</span><span>${tipoLabel}</span></div>`); });
                             printWindow.document.write('</div>');
                           }
                         });
@@ -3003,7 +3040,7 @@ const App = () => {
                           const mesLics = tipoLics.filter(l => l.fecha?.startsWith(monthStr)).sort((a,b) => a.fecha.localeCompare(b.fecha));
                           if (mesLics.length > 0) {
                             printWindow.document.write(`<div class="mes"><h3>${mesNombre}</h3>`);
-                            mesLics.forEach(l => printWindow.document.write(`<div class="item"><span>${l.fecha.split('-')[2]}</span><span>${l.user_nombre}</span></div>`));
+                            mesLics.forEach(l => printWindow.document.write(`<div class="item"><span>${l.fecha.split('-')[2]}</span><span>${escapeHtml(l.user_nombre)}</span></div>`));
                             printWindow.document.write('</div>');
                           }
                         });
@@ -3034,7 +3071,7 @@ const App = () => {
                         const mesLics = licenciasYear.filter(l => l.fecha?.startsWith(monthStr)).sort((a,b) => a.fecha.localeCompare(b.fecha));
                         if (mesLics.length > 0) {
                           printWindow.document.write(`<div class="mes"><h2>${mesNombre} (${mesLics.length})</h2>`);
-                          mesLics.forEach(l => printWindow.document.write(`<div class="item"><span>Día ${l.fecha.split('-')[2]}</span><span>${l.user_nombre}</span></div>`));
+                          mesLics.forEach(l => printWindow.document.write(`<div class="item"><span>Día ${l.fecha.split('-')[2]}</span><span>${escapeHtml(l.user_nombre)}</span></div>`));
                           printWindow.document.write('</div>');
                         }
                       });
@@ -3060,7 +3097,7 @@ const App = () => {
                       const userLics = licenciasFiltradas.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.user_nombre === licPrintUser);
                       if (userLics.length === 0) { showNotify(`${licPrintUser} no tiene registros en ${calendarioYear}`, "error"); return; }
                       const printWindow = window.open('', '_blank');
-                      printWindow.document.write(`<html><head><title>${licPrintUser} - ${calendarioYear}</title><style>
+                      printWindow.document.write(`<html><head><title>${escapeHtml(licPrintUser)} - ${calendarioYear}</title><style>
                         body { font-family: Arial, sans-serif; padding: 20px; }
                         h1 { font-size: 16px; border-bottom: 2px solid #333; padding-bottom: 10px; }
                         .resumen { display: flex; gap: 20px; margin: 15px 0; padding: 10px; background: #f8fafc; border-radius: 8px; }
@@ -3073,7 +3110,7 @@ const App = () => {
                         .licencia { color: #1e40af; } .enfermedad { color: #dc2626; } .estudio { color: #9333ea; } .descanso { color: #d97706; }
                         .fecha-impresion { text-align: right; font-size: 9px; color: #999; margin-top: 20px; }
                       </style></head><body>`);
-                      printWindow.document.write(`<h1>👤 ${licPrintUser} - ${calendarioYear}</h1>`);
+                      printWindow.document.write(`<h1>👤 ${escapeHtml(licPrintUser)} - ${calendarioYear}</h1>`);
                       const conteo = { licencia: 0, enfermedad: 0, estudio: 0, descanso: 0 };
                       userLics.forEach(l => conteo[l.tipo]++);
                       printWindow.document.write(`<div class="resumen"><div><div class="num" style="color:#1e40af">${conteo.licencia}</div><div class="label">Licencias</div></div><div><div class="num" style="color:#dc2626">${conteo.enfermedad}</div><div class="label">Enfermedad</div></div><div><div class="num" style="color:#9333ea">${conteo.estudio}</div><div class="label">Estudio</div></div><div><div class="num" style="color:#d97706">${conteo.descanso}</div><div class="label">Descanso</div></div><div><div class="num">${userLics.length}</div><div class="label">TOTAL</div></div></div>`);
@@ -3466,8 +3503,8 @@ const App = () => {
                       const consumibles = items.filter(i => i.tipo !== 'fijo');
                       const fijos = items.filter(i => i.tipo === 'fijo');
                       const printWindow = window.open('', '_blank');
-                      printWindow.document.write(`<html><head><title>Stock - ${getUbNombre(selectedUbicacion)}</title><style>body{font-family:Arial,sans-serif;padding:15px;font-size:10px}h1{font-size:16px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:10px}h2{font-size:12px;margin-top:15px;color:#666;margin-bottom:5px}.item{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #999;font-size:10px;line-height:1.2}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:9px;color:#999;margin-top:15px}</style></head><body>`);
-                      printWindow.document.write(`<h1>${getUbNombre(selectedUbicacion)}</h1>`);
+                      printWindow.document.write(`<html><head><title>Stock - ${escapeHtml(getUbNombre(selectedUbicacion))}</title><style>body{font-family:Arial,sans-serif;padding:15px;font-size:10px}h1{font-size:16px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:10px}h2{font-size:12px;margin-top:15px;color:#666;margin-bottom:5px}.item{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #999;font-size:10px;line-height:1.2}.bajo{color:red;font-weight:bold}.fecha{text-align:right;font-size:9px;color:#999;margin-top:15px}</style></head><body>`);
+                      printWindow.document.write(`<h1>${escapeHtml(getUbNombre(selectedUbicacion))}</h1>`);
                       if(consumibles.length > 0) { printWindow.document.write('<h2>📦 CONSUMIBLES</h2>'); consumibles.forEach(i => printWindow.document.write(`<div class="item"><span>${escapeHtml(i.nombre)}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
                       if(fijos.length > 0) { printWindow.document.write('<h2>🔧 ELEMENTOS FIJOS</h2>'); fijos.forEach(i => printWindow.document.write(`<div class="item"><span>${escapeHtml(i.nombre)}</span><span class="${i.cantidad <= i.cantidad_minima ? 'bajo' : ''}">${i.cantidad}</span></div>`)); }
                       printWindow.document.write(`<p class="fecha">Impreso: ${new Date().toLocaleString()}</p></body></html>`);
@@ -4150,7 +4187,17 @@ const App = () => {
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-8 bg-slate-900 text-white flex justify-between items-center sticky top-0 z-10">
               <h3 className="font-black uppercase text-sm">📊 Estadísticas</h3>
-              <button onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); }} className="text-slate-500 hover:text-white">✕</button>
+              <div className="flex gap-2">
+                <button onClick={() => {
+                  const rows = profiles.map(p => {
+                    const s = getUserDetailedStats(p, statsYear);
+                    return [p.nombre, p.role, p.turno || 1, s.informeActuacion.c + '/' + s.informeActuacion.a, s.informeCriminalistico.c + '/' + s.informeCriminalistico.a, s.informePericial.c + '/' + s.informePericial.a, s.croquis.c + '/' + s.croquis.a, s.totalComisiones, s.totalEventos, s.juicios, s.total, s.done, s.total > 0 ? Math.round((s.done / s.total) * 100) + '%' : '0%'];
+                  });
+                  exportCSV(`estadisticas_${statsYear}.csv`, ['Nombre', 'Rol', 'Turno', 'Inf.Actuación', 'Criminalístico', 'Pericial', 'Croquis', 'Comisiones', 'Eventos', 'Juicios', 'Total', 'Completadas', '% Completado'], rows);
+                  showNotify("CSV exportado");
+                }} className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-xs font-bold transition-all">📥 CSV</button>
+                <button onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); }} className="text-slate-500 hover:text-white">✕</button>
+              </div>
             </div>
             <div className="p-8 space-y-8">
               {/* Selector de año */}
