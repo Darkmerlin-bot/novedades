@@ -893,7 +893,7 @@ const App = () => {
     }
   }, [juicios, userProfile]);
 
-  // Calcular recordatorios próximos (24 horas)
+  // Calcular recordatorios próximos (24 horas) - filtrados por visibilidad
   useEffect(() => {
     if (!recordatorios || recordatorios.length === 0) {
       setUpcomingRecordatorios([]);
@@ -904,7 +904,8 @@ const App = () => {
       const ahora = new Date();
       const en24Horas = new Date(ahora.getTime() + 24 * 60 * 60 * 1000);
       
-      const proximos = recordatorios.filter(r => {
+      const visibles = filterRecordatoriosByVisibility(recordatorios);
+      const proximos = visibles.filter(r => {
         if (!r || !r.fecha_hora || r.completado) return false;
         const fecha = new Date(r.fecha_hora);
         return fecha <= en24Horas;
@@ -915,7 +916,7 @@ const App = () => {
       console.error('Error en cálculo de recordatorios próximos:', e);
       setUpcomingRecordatorios([]);
     }
-  }, [recordatorios]);
+  }, [recordatorios, userProfile]);
 
   // Validación de duplicados en servidor
   const checkDuplicateServer = async (num, anio, excludeId) => {
@@ -1035,6 +1036,17 @@ const App = () => {
     return getUserTurno();
   };
   // ==================== FIN SISTEMA DE TURNOS ====================
+  
+  // Filtrar recordatorios por visibilidad:
+  // turno=0 (general) → visible para TODOS
+  // turno=1-4 → visible solo para ese turno + admin/supervisor
+  const filterRecordatoriosByVisibility = (items) => {
+    if (!items || !Array.isArray(items)) return [];
+    if (canSeeAllTurnos()) return items; // Admin/supervisor ven todo
+    const miTurno = getUserTurno();
+    return items.filter(r => r.turno === 0 || r.turno === miTurno);
+  };
+
   const sortByNumber = (a, b) => extractNumber(a.numero_novedad) - extractNumber(b.numero_novedad);
   
   // Colores para usuarios en calendario — máximo contraste entre adyacentes, saturación 300 + borde 500
@@ -1587,7 +1599,7 @@ const App = () => {
   // APP
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={filterByTurno(juicios).filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={filterByTurno(recordatorios).filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} turnoActivo={turnoActivo} setTurnoActivo={setTurnoActivo} TURNOS={TURNOS} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={filterByTurno(juicios).filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={filterRecordatoriosByVisibility(recordatorios).filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} turnoActivo={turnoActivo} setTurnoActivo={setTurnoActivo} TURNOS={TURNOS} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
       
       <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
@@ -2739,6 +2751,7 @@ const App = () => {
                   const fecha = d.get('fecha');
                   const hora = d.get('hora') || '09:00';
                   const titulo = d.get('titulo');
+                  const recTurno = parseInt(d.get('recTurno') || '0', 10);
                   
                   if (!titulo) {
                     showNotify("El título es obligatorio", "error");
@@ -2758,18 +2771,19 @@ const App = () => {
                     descripcion: d.get('descripcion') || null,
                     fecha_hora: fechaHora.toISOString(),
                     creado_por: session.user.id,
-                    creado_por_nombre: userProfile.nombre
+                    creado_por_nombre: userProfile.nombre,
+                    turno: recTurno
                   };
                   
                   try {
                     if (editingRecordatorio.id) {
                       const { error } = await sb.from('recordatorios').update(payload).eq('id', editingRecordatorio.id);
                       if (error) { showNotify("Error: " + error.message, "error"); setSaving(false); return; }
-                      await addLog('EDITAR_RECORDATORIO', 'Editó recordatorio: ' + titulo);
+                      await addLog('EDITAR_RECORDATORIO', 'Editó recordatorio: ' + titulo + (recTurno === 0 ? ' (General)' : ` (${TURNOS[recTurno]})`));
                     } else {
                       const { error } = await sb.from('recordatorios').insert([payload]);
                       if (error) { showNotify("Error: " + error.message, "error"); setSaving(false); return; }
-                      await addLog('CREAR_RECORDATORIO', 'Creó recordatorio: ' + titulo);
+                      await addLog('CREAR_RECORDATORIO', 'Creó recordatorio: ' + titulo + (recTurno === 0 ? ' (General)' : ` (${TURNOS[recTurno]})`));
                     }
                     showNotify(editingRecordatorio.id ? "Recordatorio actualizado" : "Recordatorio creado");
                     setEditingRecordatorio(null);
@@ -2797,6 +2811,17 @@ const App = () => {
                       <input name="hora" type="time" defaultValue={editingRecordatorio.fecha_hora ? editingRecordatorio.fecha_hora.split('T')[1]?.substring(0,5) : '09:00'} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-purple-500" />
                     </div>
                   </div>
+                  {/* Selector de alcance: General o por Turno */}
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Alcance</label>
+                    <select name="recTurno" defaultValue={editingRecordatorio.turno ?? 0} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-purple-500 cursor-pointer">
+                      <option value="0">🌐 General — visible para todos</option>
+                      <option value="1">T1 — Solo 1er Turno</option>
+                      <option value="2">T2 — Solo 2do Turno</option>
+                      <option value="3">T3 — Solo 3er Turno</option>
+                      <option value="4">ZO — Solo Zona Oeste</option>
+                    </select>
+                  </div>
                   <div className="flex gap-3 pt-4">
                     <button type="submit" disabled={saving} className="flex-1 py-4 bg-purple-600 text-white rounded-xl font-black uppercase text-xs disabled:opacity-50">{saving ? 'Guardando...' : (editingRecordatorio.id ? 'Actualizar' : 'Crear')}</button>
                     <button type="button" onClick={() => setEditingRecordatorio(null)} className="px-8 py-4 bg-slate-200 text-slate-600 rounded-xl font-black uppercase text-xs">Cancelar</button>
@@ -2806,20 +2831,23 @@ const App = () => {
             )}
             
             {/* Lista de recordatorios */}
-            {recordatorios.length === 0 ? (
+            {(() => {
+              const recVisibles = filterRecordatoriosByVisibility(recordatorios);
+              return recVisibles.length === 0 ? (
               <div className="bg-white rounded-[2rem] shadow-xl p-12 text-center">
                 <div className="text-6xl mb-4">🔔</div>
                 <p className="text-slate-500 font-bold">No hay recordatorios pendientes</p>
               </div>
             ) : (
               <div className="space-y-4">
-                {recordatorios.map(r => {
+                {recVisibles.map(r => {
                   const fecha = new Date(r.fecha_hora);
                   const ahora = new Date();
                   const diffMs = fecha - ahora;
                   const vencido = diffMs < 0;
                   const diffHoras = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
                   const diffDias = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24));
+                  const esGeneral = r.turno === 0 || r.turno === null;
                   
                   let tiempoTexto = '';
                   if (vencido) {
@@ -2840,6 +2868,10 @@ const App = () => {
                             <span className={`text-2xl ${vencido ? 'animate-pulse' : ''}`}>{vencido ? '⚠️' : '🔔'}</span>
                             <h4 className="font-black text-slate-800 text-lg">{r.titulo}</h4>
                             {vencido && <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-black">VENCIDO</span>}
+                            {esGeneral 
+                              ? <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold border border-emerald-200">🌐 General</span>
+                              : <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold border border-indigo-200">{r.turno === 4 ? 'ZO' : `T${r.turno}`}</span>
+                            }
                           </div>
                           {r.descripcion && <p className="text-slate-600 text-sm ml-9 mb-2">{r.descripcion}</p>}
                           <div className="ml-9 flex items-center gap-4 text-xs text-slate-500">
@@ -2877,7 +2909,8 @@ const App = () => {
                   );
                 })}
               </div>
-            )}
+            );
+            })()}
           </div>
         )}
 
