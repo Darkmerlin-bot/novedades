@@ -553,6 +553,7 @@ const App = () => {
   const [licencias, setLicencias] = useState([]);
   const [calendarioYear, setCalendarioYear] = useState(new Date().getFullYear());
   const [licPrintUser, setLicPrintUser] = useState('');
+  const [licDetailUser, setLicDetailUser] = useState(null); // nombre del usuario cuyo detalle se muestra
   const [calendarioMonth, setCalendarioMonth] = useState(new Date().getMonth());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
   // Form controlado de licencias (en vez de document.getElementById)
@@ -3202,12 +3203,13 @@ const App = () => {
                     </div>
                     {usuariosConLicencias.length > 0 && (
                       <div>
-                        <p className="text-xs font-bold text-slate-500 mb-2">👤 Licencias por usuario:</p>
+                        <p className="text-xs font-bold text-slate-500 mb-2">👤 Licencias por usuario (clic para detalle):</p>
                         <div className="flex flex-wrap gap-2">
                           {usuariosConLicencias.map(nombre => {
                             const color = getUserColor(nombre);
+                            const isSelected = licDetailUser === nombre;
                             return (
-                              <div key={nombre} className={`${color.bg} ${color.text} px-2 py-1 rounded text-xs font-bold flex items-center gap-1.5 border-l-3 ${color.border}`}>
+                              <div key={nombre} onClick={() => setLicDetailUser(isSelected ? null : nombre)} className={`${color.bg} ${color.text} px-2 py-1 rounded text-xs font-bold flex items-center gap-1.5 border-l-3 ${color.border} cursor-pointer transition-all hover:shadow-md ${isSelected ? 'ring-2 ring-slate-800 shadow-lg scale-105' : ''}`}>
                                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color.dot }}></span>
                                 {nombre.split(' ')[0]}
                               </div>
@@ -3216,7 +3218,111 @@ const App = () => {
                         </div>
                       </div>
                     )}
+                    {/* Selector para ver detalle de cualquier usuario */}
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 mb-2">🔍 Ver detalle de:</p>
+                      <select value={licDetailUser || ''} onChange={(e) => setLicDetailUser(e.target.value || null)} className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold cursor-pointer">
+                        <option value="">-- Seleccionar usuario --</option>
+                        {getProfilesByTurno().map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
                   </div>
+                </div>
+              );
+            })()}
+            
+            {/* Panel de detalle de licencias por usuario */}
+            {licDetailUser && (() => {
+              const userLics = licenciasFiltradas.filter(l => l.fecha?.startsWith(calendarioYear.toString()) && l.user_nombre === licDetailUser);
+              const conteo = { licencia: 0, enfermedad: 0, estudio: 0, descanso: 0 };
+              userLics.forEach(l => { if (conteo[l.tipo] !== undefined) conteo[l.tipo]++; });
+              const total = userLics.length;
+              const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+              const userColor = getUserColor(licDetailUser);
+              const tipoLabel = { licencia: '📋 Licencia', enfermedad: '🏥 Enfermedad', estudio: '📚 Estudio', descanso: '😴 Descanso' };
+              const tipoColor = { licencia: 'bg-blue-100 text-blue-700 border-blue-200', enfermedad: 'bg-red-100 text-red-700 border-red-200', estudio: 'bg-purple-100 text-purple-700 border-purple-200', descanso: 'bg-amber-100 text-amber-700 border-amber-200' };
+              
+              return (
+                <div className="bg-white rounded-2xl shadow-xl border-2 border-slate-200 overflow-hidden animate-fadeIn">
+                  {/* Header del detalle */}
+                  <div className={`${userColor.bg} p-5 flex justify-between items-center`}>
+                    <div className="flex items-center gap-3">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: userColor.dot }}></span>
+                      <div>
+                        <h3 className={`font-black text-lg ${userColor.text}`}>{licDetailUser}</h3>
+                        <p className={`text-xs font-bold ${userColor.text} opacity-70`}>Detalle de licencias — {calendarioYear}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setLicDetailUser(null)} className="p-2 bg-white/50 rounded-xl hover:bg-white/80 transition-all">
+                      <Icon name="x" size={16} />
+                    </button>
+                  </div>
+                  
+                  {total === 0 ? (
+                    <div className="p-8 text-center">
+                      <p className="text-slate-400 font-bold">No tiene registros en {calendarioYear}</p>
+                    </div>
+                  ) : (
+                    <div className="p-5 space-y-5">
+                      {/* Resumen de conteo */}
+                      <div className="grid grid-cols-5 gap-2">
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+                          <div className="text-2xl font-black text-blue-600">{conteo.licencia}</div>
+                          <div className="text-[9px] font-bold text-blue-500 uppercase">Licencia</div>
+                        </div>
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+                          <div className="text-2xl font-black text-red-600">{conteo.enfermedad}</div>
+                          <div className="text-[9px] font-bold text-red-500 uppercase">Enfermedad</div>
+                        </div>
+                        <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 text-center">
+                          <div className="text-2xl font-black text-purple-600">{conteo.estudio}</div>
+                          <div className="text-[9px] font-bold text-purple-500 uppercase">Estudio</div>
+                        </div>
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+                          <div className="text-2xl font-black text-amber-600">{conteo.descanso}</div>
+                          <div className="text-[9px] font-bold text-amber-500 uppercase">Descanso</div>
+                        </div>
+                        <div className="bg-slate-100 border border-slate-300 rounded-xl p-3 text-center">
+                          <div className="text-2xl font-black text-slate-800">{total}</div>
+                          <div className="text-[9px] font-bold text-slate-500 uppercase">Total</div>
+                        </div>
+                      </div>
+                      
+                      {/* Desglose por mes */}
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                        {meses.map((mesNombre, mesIndex) => {
+                          const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
+                          const mesLics = userLics.filter(l => l.fecha?.startsWith(monthStr)).sort((a, b) => a.fecha.localeCompare(b.fecha));
+                          if (mesLics.length === 0) return null;
+                          return (
+                            <div key={mesIndex} className="border border-slate-200 rounded-xl overflow-hidden">
+                              <div className="bg-slate-50 px-4 py-2 flex justify-between items-center">
+                                <span className="font-black text-sm text-slate-700">{mesNombre}</span>
+                                <span className="text-xs font-bold text-slate-500">{mesLics.length} día{mesLics.length > 1 ? 's' : ''}</span>
+                              </div>
+                              <div className="divide-y divide-slate-100">
+                                {mesLics.map(l => {
+                                  const dia = parseInt(l.fecha.split('-')[2], 10);
+                                  const fechaObj = new Date(l.fecha + 'T12:00:00');
+                                  const diaSemana = fechaObj.toLocaleDateString('es-ES', { weekday: 'short' });
+                                  return (
+                                    <div key={l.id} className="px-4 py-2 flex justify-between items-center hover:bg-slate-50">
+                                      <div className="flex items-center gap-3">
+                                        <span className="font-black text-slate-700 w-8 text-right">{dia}</span>
+                                        <span className="text-xs text-slate-400 capitalize w-10">{diaSemana}</span>
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded border ${tipoColor[l.tipo] || 'bg-slate-100 text-slate-600'}`}>{tipoLabel[l.tipo] || l.tipo}</span>
+                                      </div>
+                                      {l.descripcion && <span className="text-xs text-slate-400 italic">{l.descripcion}</span>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()}
