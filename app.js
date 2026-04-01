@@ -836,7 +836,7 @@ const App = () => {
     if (ubErr) loadErrors.push('stock_ubicaciones');
     setStockUbicaciones(ubicacionesData || []);
     
-    const { data: movData, error: movErr } = await sb.from('stock_movimientos').select('*').order('created_at', { ascending: false }).limit(100);
+    const { data: movData, error: movErr } = await sb.from('stock_movimientos').select('*').order('created_at', { ascending: false }).limit(500);
     if (movErr) loadErrors.push('stock_movimientos');
     setStockMovimientos(movData || []);
     
@@ -3857,13 +3857,13 @@ const App = () => {
                         <div className="flex items-center gap-1 flex-1 min-w-0"><span className="font-semibold text-slate-800 text-sm truncate">{item.nombre}</span>{bajo && <span className="text-[8px] bg-red-500 text-white px-1 rounded">!</span>}</div>
                         <div className="flex items-center gap-0.5">
                           {canManageStock() ? (<>
-                            <button onClick={async () => { const c = prompt("Sacar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; if(n>item.cantidad){showNotify("No hay","error");return;} await sb.from('stock_items').update({cantidad:item.cantidad-n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'salida',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre,ubicacion:item.ubicacion}]); loadData(); }} className="w-6 h-6 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">-</button>
+                            <button onClick={async () => { const c = prompt("Sacar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; if(n>item.cantidad){showNotify("No hay","error");return;} await sb.from('stock_items').update({cantidad:item.cantidad-n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'salida',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre,ubicacion:item.ubicacion,turno:item.turno}]); loadData(); }} className="w-6 h-6 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">-</button>
                             <span className={`w-8 text-center text-sm font-black ${bajo?'text-red-600':'text-slate-700'}`}>{item.cantidad}</span>
-                            <button onClick={async () => { const c = prompt("Agregar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; await sb.from('stock_items').update({cantidad:item.cantidad+n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'entrada',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre,ubicacion:item.ubicacion}]); loadData(); }} className="w-6 h-6 bg-emerald-100 text-emerald-600 rounded text-xs font-bold hover:bg-emerald-200">+</button>
+                            <button onClick={async () => { const c = prompt("Agregar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; await sb.from('stock_items').update({cantidad:item.cantidad+n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'entrada',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre,ubicacion:item.ubicacion,turno:item.turno}]); loadData(); }} className="w-6 h-6 bg-emerald-100 text-emerald-600 rounded text-xs font-bold hover:bg-emerald-200">+</button>
                             <button onClick={()=>{setEditingItem(item); setItemNombreInput(item.nombre || ''); setItemSugerencias([]);}} className="w-6 h-6 text-slate-400 hover:bg-slate-100 rounded text-[10px]">✏</button>
                             <button onClick={async()=>{if(!confirm('Eliminar?'))return;await sb.from('stock_items').delete().eq('id',item.id);loadData();}} className="w-6 h-6 text-red-400 hover:bg-red-50 rounded text-[10px]">🗑</button>
                           </>) : esConsumible ? (<>
-                            <button onClick={async () => { const c = prompt("Sacar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; if(n>item.cantidad){showNotify("No hay suficiente","error");return;} await sb.from('stock_items').update({cantidad:item.cantidad-n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'salida',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre,ubicacion:item.ubicacion}]); showNotify(`Retirado: ${n} ${item.nombre}`); loadData(); }} className="w-6 h-6 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">-</button>
+                            <button onClick={async () => { const c = prompt("Sacar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; if(n>item.cantidad){showNotify("No hay suficiente","error");return;} await sb.from('stock_items').update({cantidad:item.cantidad-n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'salida',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre,ubicacion:item.ubicacion,turno:item.turno}]); showNotify(`Retirado: ${n} ${item.nombre}`); loadData(); }} className="w-6 h-6 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">-</button>
                             <span className={`w-8 text-center text-sm font-black ${bajo?'text-red-600':'text-slate-700'}`}>{item.cantidad}</span>
                           </>) : (<span className={`text-sm font-black ${bajo?'text-red-600':'text-slate-700'}`}>{item.cantidad}</span>)}
                         </div>
@@ -3903,14 +3903,24 @@ const App = () => {
             
             <div className="bg-white rounded-xl shadow-md border border-slate-200 p-2">
               <details><summary className="font-bold text-slate-700 text-xs cursor-pointer">📜 Movimientos de {ubicacionesFiltradas.find(u => u.id === selectedUbicacion)?.nombre || 'esta ubicación'}</summary>
-              <div className="space-y-0.5 max-h-32 overflow-y-auto mt-2">
-                {stockMovimientos.filter(m => m.ubicacion === selectedUbicacion).slice(0,15).map(mov => {
-                  const item = stockItems.find(i => i.id === mov.item_id);
-                  const fecha = new Date(mov.created_at);
-                  const fechaStr = `${fecha.getDate()}/${fecha.getMonth()+1} ${fecha.getHours()}:${String(fecha.getMinutes()).padStart(2,'0')}`;
-                  return (<div key={mov.id} className={`flex items-center justify-between py-0.5 px-2 rounded text-xs ${mov.tipo==='entrada'?'bg-emerald-50':'bg-red-50'}`}><span className={`font-bold ${mov.tipo==='entrada'?'text-emerald-700':'text-red-700'}`}>{mov.tipo==='entrada'?'+':'-'}{mov.cantidad} {item?.nombre||'?'}</span><span className="text-slate-400 text-[10px]">{mov.user_nombre?.split(' ')[0]} • {fechaStr}</span></div>);
-                })}
-                {stockMovimientos.filter(m => m.ubicacion === selectedUbicacion).length === 0 && <p className="text-slate-400 text-center py-2 text-xs">Sin movimientos</p>}
+              <div className="space-y-0.5 max-h-48 overflow-y-auto mt-2">
+                {(() => {
+                  // Filtrar movimientos SOLO de esta ubicación Y de este turno
+                  const ubTurno = stockUbicaciones.find(u => u.id === selectedUbicacion)?.turno;
+                  const movsFiltrados = stockMovimientos.filter(m => 
+                    m.ubicacion === selectedUbicacion && 
+                    (ubTurno == null || m.turno === ubTurno || !m.turno)
+                  ).slice(0, 30);
+                  
+                  if (movsFiltrados.length === 0) return <p className="text-slate-400 text-center py-2 text-xs">Sin movimientos en esta ubicación</p>;
+                  
+                  return movsFiltrados.map(mov => {
+                    const item = stockItems.find(i => i.id === mov.item_id);
+                    const fecha = new Date(mov.created_at);
+                    const fechaStr = `${fecha.getDate()}/${fecha.getMonth()+1} ${fecha.getHours()}:${String(fecha.getMinutes()).padStart(2,'0')}`;
+                    return (<div key={mov.id} className={`flex items-center justify-between py-0.5 px-2 rounded text-xs ${mov.tipo==='entrada'?'bg-emerald-50':'bg-red-50'}`}><span className={`font-bold ${mov.tipo==='entrada'?'text-emerald-700':'text-red-700'}`}>{mov.tipo==='entrada'?'+':'-'}{mov.cantidad} {item?.nombre||'?'}</span><span className="text-slate-400 text-[10px]">{mov.user_nombre?.split(' ')[0]} • {fechaStr}</span></div>);
+                  });
+                })()}
               </div></details>
             </div>
           </div>
