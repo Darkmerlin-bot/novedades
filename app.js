@@ -576,6 +576,11 @@ const App = () => {
   // Estados para Auditoría
   const [selectedAuditUser, setSelectedAuditUser] = useState(null);
   const [statsYear, setStatsYear] = useState('todos');
+  const [statsTurnoFilter, setStatsTurnoFilter] = useState(() => {
+    // Encargado: forzar a su turno por defecto
+    // Admin/Supervisor: todos
+    return 0; // se ajusta después en el modal según rol
+  });
   
   // Estados para feedback y bloqueo optimista
   const [saving, setSaving] = useState(false);
@@ -1354,12 +1359,19 @@ const App = () => {
   };
   
   // Estadísticas filtradas por año
-  const getFilteredStats = () => {
-    const filteredNovedades = statsYear === 'todos' ? novedades : novedades.filter(n => n.anio?.toString() === statsYear);
-    const filteredJuicios = statsYear === 'todos' ? juicios : juicios.filter(j => {
+  const getFilteredStats = (turnoFilter) => {
+    let filteredNovedades = statsYear === 'todos' ? novedades : novedades.filter(n => n.anio?.toString() === statsYear);
+    // Filtrar por turno si se especifica
+    if (turnoFilter && turnoFilter > 0) {
+      filteredNovedades = filteredNovedades.filter(n => n.turno === turnoFilter);
+    }
+    let filteredJuicios = statsYear === 'todos' ? juicios : juicios.filter(j => {
       const fecha = parseFechaJuicio(j.fecha_juicio);
       return fecha && fecha.getFullYear().toString() === statsYear;
     });
+    if (turnoFilter && turnoFilter > 0) {
+      filteredJuicios = filteredJuicios.filter(j => j.turno === turnoFilter);
+    }
     
     return {
       totalNovedades: filteredNovedades.length,
@@ -4374,63 +4386,90 @@ const App = () => {
       )}
 
       {/* MODAL ESTADÍSTICAS */}
-      {showStats && canSeeStats() && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); }}>
+      {showStats && canSeeStats() && (() => {
+        // Turno efectivo para estadísticas: encargado forzado a su turno, admin/supervisor eligen
+        const statsEffectiveTurno = canSeeAllTurnos() ? statsTurnoFilter : getUserTurno();
+        const statsProfiles = statsEffectiveTurno === 0 
+          ? profiles 
+          : profiles.filter(p => p.turno === statsEffectiveTurno || ['admin', 'supervisor'].includes(p.role));
+        const currentStats = getFilteredStats(statsEffectiveTurno);
+        
+        return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); setStatsTurnoFilter(0); }}>
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-8 bg-slate-900 text-white flex justify-between items-center sticky top-0 z-10">
-              <h3 className="font-black uppercase text-sm">📊 Estadísticas</h3>
+              <h3 className="font-black uppercase text-sm">📊 Estadísticas {statsEffectiveTurno > 0 ? `— ${TURNOS[statsEffectiveTurno]}` : ''}</h3>
               <div className="flex gap-2">
                 <button onClick={() => {
-                  const rows = profiles.map(p => {
+                  const rows = statsProfiles.map(p => {
                     const s = getUserDetailedStats(p, statsYear);
                     return [p.nombre, p.role, p.turno || 1, s.informeActuacion.c + '/' + s.informeActuacion.a, s.informeCriminalistico.c + '/' + s.informeCriminalistico.a, s.informePericial.c + '/' + s.informePericial.a, s.croquis.c + '/' + s.croquis.a, s.totalComisiones, s.totalEventos, s.juicios, s.total, s.done, s.total > 0 ? Math.round((s.done / s.total) * 100) + '%' : '0%'];
                   });
-                  exportCSV(`estadisticas_${statsYear}.csv`, ['Nombre', 'Rol', 'Turno', 'Inf.Actuación', 'Criminalístico', 'Pericial', 'Croquis', 'Comisiones', 'Eventos', 'Juicios', 'Total', 'Completadas', '% Completado'], rows);
+                  const turnoLabel = statsEffectiveTurno > 0 ? `_${TURNOS[statsEffectiveTurno].replace(/\s/g, '')}` : '';
+                  exportCSV(`estadisticas_${statsYear}${turnoLabel}.csv`, ['Nombre', 'Rol', 'Turno', 'Inf.Actuación', 'Criminalístico', 'Pericial', 'Croquis', 'Comisiones', 'Eventos', 'Juicios', 'Total', 'Completadas', '% Completado'], rows);
                   showNotify("CSV exportado");
                 }} className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-xs font-bold transition-all">📥 CSV</button>
-                <button onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); }} className="text-slate-500 hover:text-white">✕</button>
+                <button onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); setStatsTurnoFilter(0); }} className="text-slate-500 hover:text-white">✕</button>
               </div>
             </div>
-            <div className="p-8 space-y-8">
-              {/* Selector de año */}
-              <div className="flex items-center gap-4">
-                <label className="text-[10px] font-black text-slate-500 uppercase">Filtrar por año:</label>
-                <select 
-                  value={statsYear} 
-                  onChange={(e) => setStatsYear(e.target.value)}
-                  className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
-                >
-                  <option value="todos">Todos los años</option>
-                  {getAvailableStatsYears().map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
+            <div className="p-8 space-y-6">
+              {/* Filtros: año + turno */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-4">
+                  <label className="text-[10px] font-black text-slate-500 uppercase">Año:</label>
+                  <select 
+                    value={statsYear} 
+                    onChange={(e) => setStatsYear(e.target.value)}
+                    className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
+                  >
+                    <option value="todos">Todos los años</option>
+                    {getAvailableStatsYears().map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                {/* Filtro de turno: admin/supervisor pueden elegir, encargado ve solo su turno */}
+                {canSeeAllTurnos() ? (
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase">Turno:</label>
+                    <div className="flex gap-1.5 flex-1">
+                      <button onClick={() => setStatsTurnoFilter(0)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${statsTurnoFilter === 0 ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Todos</button>
+                      {[1, 2, 3, 4].map(t => (
+                        <button key={t} onClick={() => setStatsTurnoFilter(t)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${statsTurnoFilter === t ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{t === 4 ? 'ZO' : `T${t}`}</button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
+                    <span className="text-[10px] font-black text-indigo-600 uppercase">Turno: {TURNOS[getUserTurno()]}</span>
+                  </div>
+                )}
               </div>
               
               {/* Resumen general */}
               <div>
-                <h4 className="text-[10px] font-black text-slate-500 uppercase mb-4">Resumen {statsYear !== 'todos' && `(${statsYear})`}</h4>
+                <h4 className="text-[10px] font-black text-slate-500 uppercase mb-4">Resumen {statsYear !== 'todos' ? `(${statsYear})` : ''} {statsEffectiveTurno > 0 ? `— ${TURNOS[statsEffectiveTurno]}` : ''}</h4>
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                   <div className="bg-slate-100 p-3 rounded-2xl text-center">
-                    <div className="text-2xl font-black text-slate-800">{getFilteredStats().totalNovedades}</div>
+                    <div className="text-2xl font-black text-slate-800">{currentStats.totalNovedades}</div>
                     <div className="text-[7px] uppercase font-black text-slate-500">Novedades</div>
                   </div>
                   <div className="bg-amber-100 p-3 rounded-2xl text-center">
-                    <div className="text-2xl font-black text-amber-700">{getFilteredStats().pendientes}</div>
+                    <div className="text-2xl font-black text-amber-700">{currentStats.pendientes}</div>
                     <div className="text-[7px] uppercase font-black text-amber-600">Pendientes</div>
                   </div>
                   <div className="bg-emerald-100 p-3 rounded-2xl text-center">
-                    <div className="text-2xl font-black text-emerald-700">{getFilteredStats().completadas}</div>
+                    <div className="text-2xl font-black text-emerald-700">{currentStats.completadas}</div>
                     <div className="text-[7px] uppercase font-black text-emerald-600">Completadas</div>
                   </div>
                   <div className="bg-orange-100 p-3 rounded-2xl text-center">
-                    <div className="text-2xl font-black text-orange-700">{getFilteredStats().comisiones}</div>
+                    <div className="text-2xl font-black text-orange-700">{currentStats.comisiones}</div>
                     <div className="text-[7px] uppercase font-black text-orange-600">Comisiones</div>
                   </div>
                   <div className="bg-pink-100 p-3 rounded-2xl text-center">
-                    <div className="text-2xl font-black text-pink-700">{getFilteredStats().eventos || 0}</div>
+                    <div className="text-2xl font-black text-pink-700">{currentStats.eventos || 0}</div>
                     <div className="text-[7px] uppercase font-black text-pink-600">Eventos</div>
                   </div>
                   <div className="bg-blue-100 p-3 rounded-2xl text-center">
-                    <div className="text-2xl font-black text-blue-700">{getFilteredStats().totalJuicios}</div>
+                    <div className="text-2xl font-black text-blue-700">{currentStats.totalJuicios}</div>
                     <div className="text-[7px] uppercase font-black text-blue-600">Juicios</div>
                   </div>
                 </div>
@@ -4439,10 +4478,10 @@ const App = () => {
               {/* Por usuario */}
               <div>
                 <h4 className="text-[10px] font-black text-slate-500 uppercase mb-4">
-                  Por Usuario {!canSeeAllTurnos() && `(${TURNOS[getUserTurno()]})`} (clic para detalle)
+                  Por Usuario {statsEffectiveTurno > 0 ? `(${TURNOS[statsEffectiveTurno]})` : '(Todos)'} (clic para detalle)
                 </h4>
                 <div className="space-y-3">
-                  {(canSeeAllTurnos() ? profiles : profiles.filter(p => p.turno === getUserTurno())).map(p => {
+                  {statsProfiles.map(p => {
                     const stats = getUserDetailedStats(p, statsYear);
                     const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
                     const isSel = selectedUserStats?.id === p.id;
@@ -4554,11 +4593,12 @@ const App = () => {
                   })}
                 </div>
               </div>
-              <button onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); }} className="w-full py-4 bg-slate-200 rounded-2xl font-black text-slate-600 uppercase text-[10px]">Cerrar</button>
+              <button onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); setStatsTurnoFilter(0); }} className="w-full py-4 bg-slate-200 rounded-2xl font-black text-slate-600 uppercase text-[10px]">Cerrar</button>
             </div>
           </div>
         </div>
-      )}
+      );
+      })()}
 
       {/* MODAL REPORTE */}
       {showReport && canEditAll() && (
