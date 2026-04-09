@@ -506,7 +506,8 @@ const App = () => {
   const [modalShownOnce, setModalShownOnce] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showNewUser, setShowNewUser] = useState(false);
-  const [selectedUserTurno, setSelectedUserTurno] = useState(0); // 0 = todos (para filtro de usuarios)
+  const [selectedUserTurno, setSelectedUserTurno] = useState(0);
+  const [userSearch, setUserSearch] = useState('');
   const [turnoActivo, setTurnoActivo] = useState(() => {
     try { return parseInt(localStorage.getItem('filter_turno') || '0', 10); } catch { return 0; }
   });
@@ -575,6 +576,7 @@ const App = () => {
   
   // Estados para Auditoría
   const [selectedAuditUser, setSelectedAuditUser] = useState(null);
+  const [auditTurnoFilter, setAuditTurnoFilter] = useState(0);
   const [statsYear, setStatsYear] = useState('todos');
   const [statsTurnoFilter, setStatsTurnoFilter] = useState(() => {
     // Encargado: forzar a su turno por defecto
@@ -1850,16 +1852,30 @@ const App = () => {
               <button onClick={() => setShowNewUser(true)} className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2"><Icon name="plus" size={16} /> Nuevo Usuario</button>
             </div>
             
-            {/* Filtro por turno */}
-            <div className="flex gap-2 mb-4">
-              <button onClick={() => setSelectedUserTurno(0)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === 0 ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>Todos</button>
-              {[1, 2, 3, 4].map(t => (
-                <button key={t} onClick={() => setSelectedUserTurno(t)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === t ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}`}>{t === 4 ? 'ZO' : `T${t}`}</button>
-              ))}
+            {/* Filtro por turno + búsqueda */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <div className="flex gap-2">
+                <button onClick={() => setSelectedUserTurno(0)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === 0 ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>Todos</button>
+                {[1, 2, 3, 4].map(t => (
+                  <button key={t} onClick={() => setSelectedUserTurno(t)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === t ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}`}>{t === 4 ? 'ZO' : `T${t}`}</button>
+                ))}
+              </div>
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Icon name="search" size={14} className="text-slate-400" /></div>
+                <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} placeholder="Buscar por nombre..." className="w-full pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
+                {userSearch && <button onClick={() => setUserSearch('')} className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600"><Icon name="x" size={14} /></button>}
+              </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {profiles.filter(p => selectedUserTurno === 0 || p.turno === selectedUserTurno).map(p => {
+              {profiles.filter(p => {
+                if (selectedUserTurno !== 0 && p.turno !== selectedUserTurno) return false;
+                if (userSearch.trim()) {
+                  const s = userSearch.toLowerCase();
+                  return (p.nombre || '').toLowerCase().includes(s) || (p.email || '').toLowerCase().includes(s);
+                }
+                return true;
+              }).map(p => {
                 const roleInfo = ROLES[p.role] || ROLES.user;
                 return (
                   <div key={p.id} className="bg-white p-5 rounded-2xl border border-slate-200 card-lift" style={{ boxShadow: 'var(--shadow-card)' }}>
@@ -2023,7 +2039,46 @@ const App = () => {
                     </select>
                   )}
                 </div>
-                {/* Selector de turno - siempre visible para editar otros usuarios */}
+                {/* Panel visual de permisos del rol seleccionado */}
+                {!editingProfile.isSelf && (() => {
+                  const role = editingProfile.role || 'user';
+                  const perms = {
+                    'Ver novedades':      { user: true, moderator: true, moderadorplus: true, encargado: true, supervisor: true, admin: true },
+                    'Completar sus tareas': { user: true, moderator: true, moderadorplus: true, encargado: true, supervisor: true, admin: true },
+                    'Crear novedades':    { user: false, moderator: true, moderadorplus: true, encargado: true, supervisor: true, admin: true },
+                    'Editar/Eliminar nov.': { user: false, moderator: false, moderadorplus: false, encargado: true, supervisor: true, admin: true },
+                    'Marcar checks otros': { user: false, moderator: false, moderadorplus: false, encargado: true, supervisor: true, admin: true },
+                    'Gestionar juicios':  { user: false, moderator: true, moderadorplus: true, encargado: true, supervisor: true, admin: true },
+                    'Gestionar licencias': { user: false, moderator: true, moderadorplus: true, encargado: true, supervisor: true, admin: true },
+                    'Gestionar stock':    { user: false, moderator: false, moderadorplus: true, encargado: true, supervisor: true, admin: true },
+                    'Retirar consumibles': { user: true, moderator: true, moderadorplus: true, encargado: true, supervisor: true, admin: true },
+                    'Ver estadísticas':   { user: false, moderator: false, moderadorplus: false, encargado: true, supervisor: true, admin: true },
+                    'Auditar usuarios':   { user: false, moderator: false, moderadorplus: false, encargado: true, supervisor: true, admin: true },
+                    'Imprimir reportes':  { user: false, moderator: false, moderadorplus: false, encargado: true, supervisor: true, admin: true },
+                    'Exportar respaldo':  { user: false, moderator: false, moderadorplus: false, encargado: false, supervisor: true, admin: true },
+                    'Ver todos los turnos': { user: false, moderator: false, moderadorplus: false, encargado: false, supervisor: true, admin: true },
+                    'Gestionar personal': { user: false, moderator: false, moderadorplus: false, encargado: false, supervisor: false, admin: true },
+                    'Ver logs del sistema': { user: false, moderator: false, moderadorplus: false, encargado: false, supervisor: false, admin: true },
+                  };
+                  return (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
+                      <p className="text-[10px] font-black text-slate-500 uppercase">Permisos de {ROLES[role]?.label || role}:</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                        {Object.entries(perms).map(([perm, roles]) => {
+                          const has = roles[role] || false;
+                          return (
+                            <div key={perm} className={`flex items-center gap-2 py-0.5 ${has ? '' : 'opacity-40'}`}>
+                              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${has ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'}`}>
+                                {has && <span className="text-white text-[8px]">✓</span>}
+                              </div>
+                              <span className="text-[10px] font-semibold text-slate-700">{perm}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {!editingProfile.isSelf && (
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-indigo-500 uppercase ml-1">Turno Asignado</label>
@@ -3940,16 +3995,34 @@ const App = () => {
 
         {/* AUDITORÍA DE USUARIOS (Admin/Supervisor/Encargado) */}
         {currentView === 'auditoria' && canAudit() && (() => {
-          // Filtrar profiles según el rol del usuario
-          const auditableProfiles = canSeeAllTurnos() ? profiles : profiles.filter(p => p.turno === getUserTurno());
+          // Turno efectivo para auditoría: encargado forzado, admin/supervisor eligen
+          const auditEffectiveTurno = canSeeAllTurnos() ? auditTurnoFilter : getUserTurno();
+          const auditableProfiles = auditEffectiveTurno === 0 
+            ? profiles 
+            : profiles.filter(p => p.turno === auditEffectiveTurno || ['admin', 'supervisor'].includes(p.role));
           return (
           <div className="space-y-6">
             <div className="mb-6">
               <h2 className="text-3xl font-black text-slate-800">🔍 Auditar Usuario</h2>
               <p className="text-xs text-slate-600 font-bold uppercase mt-1">
-                {canSeeAllTurnos() ? 'Ver pendientes por persona (todos los turnos)' : `Ver pendientes por persona (${TURNOS[getUserTurno()]})`}
+                {auditEffectiveTurno > 0 ? `Ver pendientes (${TURNOS[auditEffectiveTurno]})` : 'Ver pendientes por persona (todos los turnos)'}
               </p>
             </div>
+            
+            {/* Filtro de turno para auditoría */}
+            {canSeeAllTurnos() ? (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Turno:</span>
+                <button onClick={() => { setAuditTurnoFilter(0); setSelectedAuditUser(null); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${auditTurnoFilter === 0 ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Todos</button>
+                {[1, 2, 3, 4].map(t => (
+                  <button key={t} onClick={() => { setAuditTurnoFilter(t); setSelectedAuditUser(null); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${auditTurnoFilter === t ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{t === 4 ? 'ZO' : `T${t}`}</button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl w-fit">
+                <span className="text-[10px] font-black text-indigo-600 uppercase">Turno: {TURNOS[getUserTurno()]}</span>
+              </div>
+            )}
             
             {/* Selector de usuario */}
             <div className="bg-white rounded-2xl p-6 shadow-md border border-slate-200">
@@ -3963,7 +4036,7 @@ const App = () => {
                 className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer"
               >
                 <option value="">-- Elegir usuario --</option>
-                {auditableProfiles.map(p => <option key={p.id} value={p.id}>{p.nombre} ({ROLES[p.role]?.label || p.role}) {!canSeeAllTurnos() ? '' : `- T${p.turno || 1}`}</option>)}
+                {auditableProfiles.map(p => <option key={p.id} value={p.id}>{p.nombre} ({ROLES[p.role]?.label || p.role}) {auditEffectiveTurno === 0 ? `- ${p.turno === 4 ? 'ZO' : `T${p.turno || 1}`}` : ''}</option>)}
               </select>
             </div>
 
