@@ -108,6 +108,14 @@ const { createClient } = supabase;
     /* Header selects - force dark dropdown */
     header select option { background: #1e293b; color: #f1f5f9; }
     
+    /* Mobile optimizations */
+    @media (max-width: 640px) {
+      .card-lift:hover { transform: none; } /* Disable hover lift on touch devices */
+      .float-label-group label { font-size: 12px; }
+      .float-label-group input:focus + label,
+      .float-label-group input:not(:placeholder-shown) + label { transform: translateY(-26px) scale(0.72); }
+    }
+    
     /* Print */
     @media print { .print\\:hidden { display: none !important; } body { background: white !important; } [data-theme] { --bg-primary: white; } }
   `;
@@ -213,7 +221,7 @@ for (let y = currentYear + 1; y >= 2020; y--) availableYears.push(y);
 
 // NOTIFICACIÓN
 const Notification = ({ message, type }) => (
-  <div className={`fixed top-6 right-6 z-[200] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-slideInRight glass-strong border ${type === 'success' ? 'border-emerald-200 text-slate-800' : 'border-red-300 bg-red-500/90 text-white'}`}>
+  <div className={`fixed top-4 left-4 right-4 sm:left-auto sm:right-6 z-[200] px-4 sm:px-6 py-3 sm:py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-slideInRight glass-strong border ${type === 'success' ? 'border-emerald-200 text-slate-800' : 'border-red-300 bg-red-500/90 text-white'}`}>
     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${type === 'success' ? 'bg-emerald-100' : 'bg-white/20'}`}>
       <Icon name={type === 'success' ? 'check' : 'alert'} size={16} className={type === 'success' ? 'text-emerald-600' : 'text-white'} />
     </div>
@@ -241,7 +249,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
             <div className="bg-emerald-500 p-2.5 rounded-xl text-xl shadow-lg shadow-emerald-500/30">🔬</div>
           )}
           <div>
-            <h1 className="text-xl font-extrabold tracking-tight">Policía Científica</h1>
+            <h1 className="text-base sm:text-xl font-extrabold tracking-tight">Policía Científica</h1>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Sistema de Gestión</p>
           </div>
         </div>
@@ -262,7 +270,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
             </select>
           )}
           <div className="flex flex-col items-end mr-2">
-            <span className="text-sm font-bold text-emerald-400">{userProfile?.nombre}</span>
+            <span className="text-sm font-bold text-emerald-400 truncate max-w-[100px] sm:max-w-none">{userProfile?.nombre}</span>
             <div className="flex items-center gap-2">
               <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase border ${userProfile?.role === 'admin' ? 'border-red-400/30 bg-red-500/10 text-red-400' : userProfile?.role === 'supervisor' ? 'border-purple-400/30 bg-purple-500/10 text-purple-400' : userProfile?.role === 'encargado' ? 'border-blue-400/30 bg-blue-500/10 text-blue-400' : userProfile?.role === 'moderadorplus' ? 'border-teal-400/30 bg-teal-500/10 text-teal-400' : userProfile?.role === 'moderator' ? 'border-amber-400/30 bg-amber-500/10 text-amber-400' : 'border-slate-400/30 bg-slate-500/10 text-slate-400'}`}>
                 {userProfile?.role === 'admin' ? 'Admin' : userProfile?.role === 'supervisor' ? 'Supervisor' : userProfile?.role === 'encargado' ? 'Encargado' : userProfile?.role === 'moderadorplus' ? 'Mod+' : userProfile?.role === 'moderator' ? 'Moderador' : 'Usuario'}
@@ -272,7 +280,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
               )}
             </div>
           </div>
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             <button onClick={toggleDarkMode} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all border border-white/10" title={darkMode ? 'Modo Claro' : 'Modo Oscuro'}>
               <Icon name={darkMode ? 'sun' : 'moon'} size={16} />
             </button>
@@ -295,12 +303,12 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
               </button>
             )}
             <button onClick={onLogout} className="px-4 py-2.5 bg-red-500/80 hover:bg-red-500 text-white rounded-xl transition-all font-bold text-sm flex items-center gap-2 shadow-lg backdrop-blur-sm">
-              <Icon name="logout" size={15} /> Salir
+              <Icon name="logout" size={15} /> <span className="hidden sm:inline">Salir</span>
             </button>
           </div>
         </div>
       </div>
-      <nav className="flex flex-wrap gap-1.5 pb-1 border-t border-white/10 pt-3">
+      <nav className="flex gap-1.5 pb-1 border-t border-white/10 pt-3 overflow-x-auto no-scrollbar">
         {[
           { key: 'list', icon: 'folder', label: 'Pend.', count: pendingCount, countColor: 'bg-red-500' },
           { key: 'completed', icon: 'check', label: 'Compl.', count: completedCount, countColor: 'bg-emerald-500' },
@@ -323,15 +331,15 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
             <Icon name="search" size={14} /> Auditar
           </button>
         )}
-        {userProfile?.role === 'admin' && (
-          <>
-            <button onClick={() => setView('users')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${currentView === 'users' ? 'bg-emerald-500/90 text-white shadow-lg nav-tab-active' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-              <Icon name="users" size={14} /> Personal
-            </button>
-            <button onClick={() => setView('logs')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${currentView === 'logs' ? 'bg-emerald-500/90 text-white shadow-lg nav-tab-active' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-              <Icon name="log" size={14} /> Logs
-            </button>
-          </>
+        {(userProfile?.permisos?.gestionar_personal || userProfile?.role === 'admin') && (
+          <button onClick={() => setView('users')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${currentView === 'users' ? 'bg-emerald-500/90 text-white shadow-lg nav-tab-active' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+            <Icon name="users" size={14} /> Personal
+          </button>
+        )}
+        {(userProfile?.permisos?.ver_logs || userProfile?.role === 'admin') && (
+          <button onClick={() => setView('logs')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${currentView === 'logs' ? 'bg-emerald-500/90 text-white shadow-lg nav-tab-active' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+            <Icon name="log" size={14} /> Logs
+          </button>
         )}
       </nav>
     </div>
@@ -342,11 +350,11 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
 const PendingModal = ({ count, juiciosProximos, recordatoriosProximos, onClose, userName }) => (
   <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" style={{ background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(12px)' }}>
     <div className="bg-white w-full max-w-md rounded-[2.5rem] overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" style={{ boxShadow: 'var(--shadow-modal)' }}>
-      <div className="p-8 bg-red-500 text-white text-center">
+      <div className="p-5 sm:p-8 bg-red-500 text-white text-center">
         <div className="text-6xl mb-4">⚠️</div>
         <h3 className="font-black uppercase tracking-widest text-lg">Atención</h3>
       </div>
-      <div className="p-8">
+      <div className="p-5 sm:p-8">
         {count > 0 && (
           <div className="text-center mb-6">
             <p className="text-slate-600 font-bold text-lg mb-2">Tienes tareas pendientes</p>
@@ -538,6 +546,7 @@ const App = () => {
     return () => clearInterval(interval);
   }, [lockoutSeconds > 0]);
   const [editingProfile, setEditingProfile] = useState(null);
+  const [editPermisos, setEditPermisos] = useState({});
   
   // Estados para Juicios
   const [juicios, setJuicios] = useState([]);
@@ -847,7 +856,7 @@ const App = () => {
     if (movErr) loadErrors.push('stock_movimientos');
     setStockMovimientos(movData || []);
     
-    if (userProfile?.role === 'admin') {
+    if (userProfile?.permisos?.ver_logs || userProfile?.role === 'admin') {
       const { data: logData, error: logErr } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(500);
       if (logErr) loadErrors.push('logs');
       setLogs(logData || []);
@@ -984,31 +993,61 @@ const App = () => {
     moderator: { label: 'Moderador', color: 'bg-amber-500' },
     user: { label: 'Usuario', color: 'bg-slate-500' }
   };
-
-  // Funciones de permisos
-  const canSeeAllTurnos = () => ['admin', 'supervisor'].includes(userProfile?.role);
-  const canManageUsers = () => userProfile?.role === 'admin';
-  const canSeeLogs = () => userProfile?.role === 'admin';
-  // Encargado = admin de su turno (menos Personal y Logs)
-  const canEditAll = () => ['admin', 'supervisor', 'encargado'].includes(userProfile?.role);
-  const canManageNovedades = () => ['admin', 'supervisor', 'encargado', 'moderadorplus', 'moderator'].includes(userProfile?.role);
-  const canManageJuicios = () => ['admin', 'supervisor', 'encargado', 'moderadorplus', 'moderator'].includes(userProfile?.role);
-  // Permisos de edición de juicio individual: admin/supervisor/encargado siempre, moderadorplus/moderator solo los que creó
+  const PERMISSION_KEYS = [
+    { key: 'ver_novedades', label: 'Ver novedades', group: 'Novedades' },
+    { key: 'completar_tareas', label: 'Completar sus tareas', group: 'Novedades' },
+    { key: 'crear_novedades', label: 'Crear novedades', group: 'Novedades' },
+    { key: 'editar_novedades', label: 'Editar/Eliminar novedades', group: 'Novedades' },
+    { key: 'marcar_checks_otros', label: 'Marcar checks de otros', group: 'Novedades' },
+    { key: 'gestionar_juicios', label: 'Gestionar juicios', group: 'Módulos' },
+    { key: 'gestionar_licencias', label: 'Gestionar licencias', group: 'Módulos' },
+    { key: 'gestionar_stock', label: 'Gestionar stock', group: 'Módulos' },
+    { key: 'retirar_consumibles', label: 'Retirar consumibles', group: 'Módulos' },
+    { key: 'ver_estadisticas', label: 'Ver estadísticas', group: 'Administración' },
+    { key: 'auditar', label: 'Auditar usuarios', group: 'Administración' },
+    { key: 'imprimir', label: 'Imprimir reportes', group: 'Administración' },
+    { key: 'exportar_respaldo', label: 'Exportar respaldo', group: 'Administración' },
+    { key: 'ver_todos_turnos', label: 'Ver todos los turnos', group: 'Sistema' },
+    { key: 'gestionar_personal', label: 'Gestionar personal', group: 'Sistema' },
+    { key: 'ver_logs', label: 'Ver logs del sistema', group: 'Sistema' },
+  ];
+  const ROLE_PRESETS = {
+    admin: {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:true,marcar_checks_otros:true,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:true,retirar_consumibles:true,ver_estadisticas:true,auditar:true,imprimir:true,exportar_respaldo:true,ver_todos_turnos:true,gestionar_personal:true,ver_logs:true},
+    supervisor: {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:true,marcar_checks_otros:true,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:true,retirar_consumibles:true,ver_estadisticas:true,auditar:true,imprimir:true,exportar_respaldo:true,ver_todos_turnos:true,gestionar_personal:false,ver_logs:false},
+    encargado: {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:true,marcar_checks_otros:true,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:true,retirar_consumibles:true,ver_estadisticas:true,auditar:true,imprimir:true,exportar_respaldo:false,ver_todos_turnos:false,gestionar_personal:false,ver_logs:false},
+    moderadorplus: {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:false,marcar_checks_otros:false,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:true,retirar_consumibles:true,ver_estadisticas:false,auditar:false,imprimir:false,exportar_respaldo:false,ver_todos_turnos:false,gestionar_personal:false,ver_logs:false},
+    moderator: {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:false,marcar_checks_otros:false,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:false,retirar_consumibles:true,ver_estadisticas:false,auditar:false,imprimir:false,exportar_respaldo:false,ver_todos_turnos:false,gestionar_personal:false,ver_logs:false},
+    user: {ver_novedades:true,completar_tareas:true,crear_novedades:false,editar_novedades:false,marcar_checks_otros:false,gestionar_juicios:false,gestionar_licencias:false,gestionar_stock:false,retirar_consumibles:true,ver_estadisticas:false,auditar:false,imprimir:false,exportar_respaldo:false,ver_todos_turnos:false,gestionar_personal:false,ver_logs:false},
+  };
+  const hasPerm = (perm) => {
+    if (userProfile?.permisos && userProfile.permisos[perm] !== undefined) return userProfile.permisos[perm];
+    return ROLE_PRESETS[userProfile?.role]?.[perm] || false;
+  };
+  const detectRole = (perms) => {
+    for (const r of ['admin','supervisor','encargado','moderadorplus','moderator','user']) {
+      const p = ROLE_PRESETS[r];
+      if (Object.keys(p).every(k => !!p[k] === !!perms[k])) return r;
+    }
+    return 'user';
+  };
+  const canSeeAllTurnos = () => hasPerm('ver_todos_turnos');
+  const canManageUsers = () => hasPerm('gestionar_personal');
+  const canSeeLogs = () => hasPerm('ver_logs');
+  const canEditAll = () => hasPerm('editar_novedades');
+  const canManageNovedades = () => hasPerm('crear_novedades');
+  const canManageJuicios = () => hasPerm('gestionar_juicios');
   const canEditJuicio = (juicio) => {
-    const role = userProfile?.role;
-    if (['admin', 'supervisor', 'encargado'].includes(role)) return true;
-    if (['moderadorplus', 'moderator'].includes(role)) return juicio.creado_por === userProfile?.nombre;
+    if (hasPerm('editar_novedades')) return true;
+    if (hasPerm('gestionar_juicios')) return juicio.creado_por === userProfile?.nombre;
     return false;
   };
-  const canManageLicencias = () => ['admin', 'supervisor', 'encargado', 'moderadorplus', 'moderator'].includes(userProfile?.role);
-  // Stock: solo estos pueden agregar, editar y eliminar items
-  const canManageStock = () => ['admin', 'supervisor', 'encargado', 'moderadorplus'].includes(userProfile?.role);
-  // Todos pueden retirar consumibles del stock
-  const canWithdrawStock = () => true;
-  const canSeeStats = () => ['admin', 'supervisor', 'encargado'].includes(userProfile?.role);
-  const canAudit = () => ['admin', 'supervisor', 'encargado'].includes(userProfile?.role);
-  const canBackup = () => ['admin', 'supervisor'].includes(userProfile?.role);
-  const canPrint = () => ['admin', 'supervisor', 'encargado'].includes(userProfile?.role);
+  const canManageLicencias = () => hasPerm('gestionar_licencias');
+  const canManageStock = () => hasPerm('gestionar_stock');
+  const canWithdrawStock = () => hasPerm('retirar_consumibles');
+  const canSeeStats = () => hasPerm('ver_estadisticas');
+  const canAudit = () => hasPerm('auditar');
+  const canBackup = () => hasPerm('exportar_respaldo');
+  const canPrint = () => hasPerm('imprimir');
   const getUserTurno = () => userProfile?.turno || 1;
   
   // Obtener el turno efectivo para filtrar/crear datos
@@ -1392,14 +1431,14 @@ const App = () => {
   if (!session) {
     return (
       <div className="flex items-center justify-center min-h-screen p-4 font-sans" style={{ background: 'var(--bg-header)' }}>
-        <div className="w-full max-w-md glass-strong rounded-[2.5rem] p-10 shadow-2xl animate-slideUp border border-white/20">
+        <div className="w-full max-w-md glass-strong rounded-[1.5rem] sm:rounded-[2.5rem] p-6 sm:p-10 shadow-2xl animate-slideUp border border-white/20">
           <div className="text-center mb-8">
             {LOGO_URL_LARGE ? (
               <img src={LOGO_URL_LARGE} alt="Escudo Policía Científica" className="w-28 h-28 mx-auto mb-4 object-contain drop-shadow-2xl" />
             ) : (
               <div className="inline-block p-5 bg-emerald-50 rounded-full text-5xl mb-4">🔬</div>
             )}
-            <h2 className="text-3xl font-black text-slate-800">Policía Científica</h2>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-800">Policía Científica</h2>
             <p className="text-slate-400 text-sm mt-2 font-medium">Sistema de Gestión</p>
             <div className="mt-3 inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold px-4 py-1.5 rounded-full border border-emerald-200">
               <Icon name="lock" size={12} /> Acceso Seguro
@@ -1581,7 +1620,7 @@ const App = () => {
                     {tasks.length === 0 ? <p className="text-slate-400 text-xs italic py-4 text-center bg-slate-50 rounded-xl">Sin tareas</p> : tasks.map(task => {
                       const isMe = task.person === userProfile.nombre;
                       const done = isTaskDone(n, task);
-                      const canToggle = canEditAll() || (userProfile.role === 'moderator' && isMe);
+                      const canToggle = hasPerm('marcar_checks_otros') || (hasPerm('completar_tareas') && isMe);
                       return (
                         <label key={task.checkKey} className={`flex items-center gap-4 py-2 ${canToggle ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'} group select-none rounded-lg px-3 ${isMe ? 'bg-slate-100' : 'bg-slate-50'}`}>
                           <div onClick={() => canToggle && handleToggleCheck(n.id, task.checkKey, task.checkKeyOld)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'} ${!canToggle && 'opacity-50'}`}>{done && <span className="text-white text-[10px]">✓</span>}</div>
@@ -1616,12 +1655,12 @@ const App = () => {
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
       <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={filterByTurno(juicios).filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={filterRecordatoriosByVisibility(recordatorios).filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} turnoActivo={turnoActivo} setTurnoActivo={setTurnoActivo} TURNOS={TURNOS} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
       
-      <main className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn">
+      <main className="max-w-5xl mx-auto px-3 py-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
         {currentView === 'list' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center mb-6">
-              <div><h2 className="text-3xl font-black text-slate-800">Pendientes</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tus tareas primero</p></div>
+              <div><h2 className="text-2xl sm:text-3xl font-black text-slate-800">Pendientes</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tus tareas primero</p></div>
               {canManageNovedades() && <button onClick={() => setCurrentView('form')} className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2"><Icon name="plus" size={16} /> Nuevo</button>}
             </div>
             <SearchAndFilter searchTerm={searchTerm} onSearchChange={setSearchTerm} selectedYear={selectedYear} onYearChange={setSelectedYear} />
@@ -1637,7 +1676,7 @@ const App = () => {
         {/* COMPLETADOS */}
         {currentView === 'completed' && (
           <div className="space-y-4">
-            <div className="mb-6"><h2 className="text-3xl font-black text-slate-800">Completados</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tareas finalizadas</p></div>
+            <div className="mb-6"><h2 className="text-2xl sm:text-3xl font-black text-slate-800">Completados</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tareas finalizadas</p></div>
             <SearchAndFilter searchTerm={searchTerm} onSearchChange={setSearchTerm} selectedYear={selectedYear} onYearChange={setSelectedYear} />
             {dataLoading ? <Skeleton rows={4} /> : completedNovedades.length === 0 ? <EmptyState icon="folder" title="Sin completados" subtitle="Las novedades finalizadas aparecerán aquí" /> : <div className="grid gap-3">{completedNovedades.map(n => <NovedadCard key={n.id} n={n} isCompletedView={true} />)}</div>}
           </div>
@@ -1645,12 +1684,12 @@ const App = () => {
 
         {/* FORMULARIO (Solo Admin) */}
         {currentView === 'form' && canManageNovedades() && (
-          <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden max-w-2xl mx-auto border border-slate-200">
-            <div className="p-10 bg-slate-900 text-white flex justify-between items-center">
-              <div><h2 className="text-3xl font-black">{editingNovedad ? 'Editar' : 'Nueva'} Novedad</h2><p className="text-slate-400 text-xs mt-1 font-bold uppercase">Datos de la actuación</p></div>
+          <div className="bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden max-w-2xl mx-auto border border-slate-200">
+            <div className="p-6 sm:p-10 bg-slate-900 text-white flex justify-between items-center">
+              <div><h2 className="text-xl sm:text-3xl font-black">{editingNovedad ? 'Editar' : 'Nueva'} Novedad</h2><p className="text-slate-400 text-xs mt-1 font-bold uppercase">Datos de la actuación</p></div>
               <div className="text-4xl">📝</div>
             </div>
-            <form className="p-10 space-y-8" onSubmit={async (e) => {
+            <form className="p-5 sm:p-10 space-y-6 sm:space-y-8" onSubmit={async (e) => {
               e.preventDefault();
               if (saving) return;
               setSaving(true);
@@ -1753,11 +1792,11 @@ const App = () => {
               
               {/* Checkboxes Comisión y Evento Social */}
               <div className="flex flex-wrap gap-3">
-                <div className={`flex items-center gap-3 p-4 rounded-2xl flex-1 min-w-[200px] ${isComision ? 'bg-amber-100 border-2 border-amber-400' : 'bg-amber-50 border-2 border-amber-200'}`}>
+                <div className={`flex items-center gap-3 p-4 rounded-2xl flex-1 min-w-[140px] sm:min-w-[200px] ${isComision ? 'bg-amber-100 border-2 border-amber-400' : 'bg-amber-50 border-2 border-amber-200'}`}>
                   <input type="checkbox" id="esComision" name="esComision" checked={isComision} onChange={(e) => { setIsComision(e.target.checked); if(e.target.checked) setIsEventoSocial(false); }} className="w-5 h-5 rounded accent-amber-500" />
                   <label htmlFor="esComision" className="font-bold text-amber-800 cursor-pointer text-sm">🚗 Comisión</label>
                 </div>
-                <div className={`flex items-center gap-3 p-4 rounded-2xl flex-1 min-w-[200px] ${isEventoSocial ? 'bg-pink-100 border-2 border-pink-400' : 'bg-pink-50 border-2 border-pink-200'}`}>
+                <div className={`flex items-center gap-3 p-4 rounded-2xl flex-1 min-w-[140px] sm:min-w-[200px] ${isEventoSocial ? 'bg-pink-100 border-2 border-pink-400' : 'bg-pink-50 border-2 border-pink-200'}`}>
                   <input type="checkbox" id="esEventoSocial" name="esEventoSocial" checked={isEventoSocial} onChange={(e) => { setIsEventoSocial(e.target.checked); if(e.target.checked) setIsComision(false); }} className="w-5 h-5 rounded accent-pink-500" />
                   <label htmlFor="esEventoSocial" className="font-bold text-pink-800 cursor-pointer text-sm">🎉 Evento Social</label>
                 </div>
@@ -1845,339 +1884,270 @@ const App = () => {
         )}
 
         {/* USUARIOS (Admin) */}
-        {currentView === 'users' && userProfile.role === 'admin' && (
+        {currentView === 'users' && canManageUsers() && (
           <div className="space-y-6">
-            <div className="flex justify-between items-end mb-8">
-              <div><h2 className="text-3xl font-black text-slate-800">Personal</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Usuarios del sistema</p></div>
-              <button onClick={() => setShowNewUser(true)} className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2"><Icon name="plus" size={16} /> Nuevo Usuario</button>
-            </div>
-            
-            {/* Filtro por turno + búsqueda */}
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
-              <div className="flex gap-2">
-                <button onClick={() => setSelectedUserTurno(0)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === 0 ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>Todos</button>
-                {[1, 2, 3, 4].map(t => (
-                  <button key={t} onClick={() => setSelectedUserTurno(t)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === t ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}`}>{t === 4 ? 'ZO' : `T${t}`}</button>
-                ))}
-              </div>
-              <div className="relative flex-1">
-                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Icon name="search" size={14} className="text-slate-400" /></div>
-                <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} placeholder="Buscar por nombre..." className="w-full pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
-                {userSearch && <button onClick={() => setUserSearch('')} className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600"><Icon name="x" size={14} /></button>}
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {profiles.filter(p => {
-                if (selectedUserTurno !== 0 && p.turno !== selectedUserTurno) return false;
-                if (userSearch.trim()) {
-                  const s = userSearch.toLowerCase();
-                  return (p.nombre || '').toLowerCase().includes(s) || (p.email || '').toLowerCase().includes(s);
-                }
-                return true;
-              }).map(p => {
-                const roleInfo = ROLES[p.role] || ROLES.user;
-                return (
-                  <div key={p.id} className="bg-white p-5 rounded-2xl border border-slate-200 card-lift" style={{ boxShadow: 'var(--shadow-card)' }}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl text-white flex items-center justify-center font-black text-lg ${roleInfo.color}`}>{p.nombre?.charAt(0).toUpperCase()}</div>
-                        <div>
-                          <div className="font-black text-slate-800">{p.nombre}</div>
-                          <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
-                            <span className={`px-2 py-0.5 rounded ${roleInfo.color} text-white text-[8px]`}>{roleInfo.label}</span>
-                            {!['admin', 'supervisor'].includes(p.role) && (
-                              <span className="px-2 py-0.5 rounded bg-indigo-500 text-white text-[8px]">{p.turno === 4 ? 'ZO' : `T${p.turno || 1}`}</span>
-                            )}
+            {/* Si hay usuario seleccionado para editar, mostrar pantalla completa de edición */}
+            {editingProfile ? (
+              <div className="animate-fadeIn">
+                <div className="flex items-center gap-4 mb-6">
+                  <button onClick={() => { setEditingProfile(null); setEditPermisos({}); }} className="p-2 bg-slate-200 rounded-xl hover:bg-slate-300 transition-all"><Icon name="chevronDown" size={18} className="rotate-90" /></button>
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-800">{editingProfile.isSelf ? 'Mi Perfil' : `Editar: ${editingProfile.nombre}`}</h2>
+                    <p className="text-xs text-slate-500 font-bold uppercase">{ROLES[editingProfile.role]?.label} {!['admin','supervisor'].includes(editingProfile.role) ? `• ${editingProfile.turno === 4 ? 'Zona Oeste' : TURNOS[editingProfile.turno] || 'T1'}` : ''}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Columna izquierda: Datos del usuario */}
+                  <div className="space-y-4">
+                    <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4" style={{boxShadow:'var(--shadow-card)'}}>
+                      <h3 className="text-sm font-black text-slate-700 uppercase">Datos</h3>
+                      <form onSubmit={async (e) => {
+                        e.preventDefault();
+                        const nombre = e.target.nombre.value.trim();
+                        if (!nombre) return;
+                        await sb.from('profiles').update({ nombre }).eq('id', editingProfile.id);
+                        await addLog('EDITAR_USUARIO', `Cambió nombre de ${editingProfile.nombre} a ${nombre}`);
+                        showNotify("Nombre actualizado");
+                        setEditingProfile({...editingProfile, nombre});
+                        loadData();
+                      }}>
+                        <div className="space-y-1.5 mb-3">
+                          <label className="text-[10px] font-black text-slate-400 uppercase">Nombre</label>
+                          <div className="flex gap-2">
+                            <input name="nombre" defaultValue={editingProfile.nombre} required className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm" />
+                            <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-xs hover:bg-emerald-600">OK</button>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex gap-2">
-                        {p.id !== userProfile.id && (
-                          <>
-                            <button onClick={() => setEditingProfile(p)} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200"><span style={{display:'inline-flex',alignItems:'center',gap:'4px'}}>Editar</span></button>
-                            <button onClick={async () => {
-                              if (!confirm(`¿Eliminar usuario "${p.nombre}"?\n\nEsta acción no se puede deshacer.`)) return;
-                              try {
-                                const { error } = await sb.rpc('admin_delete_user', { target_user_id: p.id });
-                                if (error) {
-                                  showNotify("Error: " + error.message, "error");
-                                  return;
-                                }
-                                await addLog('ELIMINAR_USUARIO', `Eliminó usuario: ${p.nombre}`);
-                                showNotify("Usuario eliminado");
-                                loadData();
-                              } catch (err) {
-                                showNotify("Error: " + err.message, "error");
-                              }
-                            }} className="text-[10px] bg-red-100 px-3 py-2 rounded-xl font-bold text-red-600 hover:bg-red-200">Eliminar</button>
-                          </>
-                        )}
-                        {p.id === userProfile.id && (
-                          <button onClick={() => setEditingProfile({...p, isSelf: true})} className="text-[10px] bg-slate-100 px-3 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">✏️ Mi Perfil</button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* MODAL EDITAR USUARIO */}
-        {editingProfile && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => setEditingProfile(null)}>
-            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp" onClick={e => e.stopPropagation()}>
-              <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
-                <h3 className="font-black uppercase text-sm">✏️ Editar Usuario</h3>
-                <button onClick={() => setEditingProfile(null)} className="text-slate-500 hover:text-white">✕</button>
-              </div>
-              <form className="p-8 space-y-5" onSubmit={async (e) => {
-                e.preventDefault();
-                const nombre = e.target.nombre.value.trim();
-                if (!nombre) return;
-                await sb.from('profiles').update({ nombre }).eq('id', editingProfile.id);
-                await addLog('EDITAR_USUARIO', `Cambió nombre de ${editingProfile.nombre} a ${nombre}`);
-                showNotify("Usuario actualizado");
-                setEditingProfile(null);
-                loadData();
-              }}>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nombre</label>
-                  <input name="nombre" defaultValue={editingProfile.nombre} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Usuario (login)</label>
-                  {editingProfile.isSelf ? (
-                    <>
-                      <input value={editingProfile.email?.split('@')[0]} disabled className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-400" />
-                      <p className="text-[9px] text-slate-400 ml-1">No podés cambiar tu propio usuario</p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex gap-2">
-                        <input 
-                          name="login" 
-                          defaultValue={editingProfile.email?.split('@')[0]} 
-                          className="flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" 
-                          placeholder="usuario"
-                        />
-                        <button 
-                          type="button"
-                          onClick={async (e) => {
-                            const input = e.target.parentElement.querySelector('input[name="login"]');
-                            const newLogin = input.value.trim().toLowerCase();
-                            if (!newLogin) { showNotify("Ingresá un usuario", "error"); return; }
-                            if (newLogin === editingProfile.email?.split('@')[0]) { showNotify("El usuario es el mismo", "error"); return; }
-                            
-                            const newEmail = newLogin + '@local.com';
-                            const userId = editingProfile.user_id || editingProfile.id;
-                            if (!userId) {
-                              showNotify("Error: No se encontró el ID del usuario", "error");
-                              return;
-                            }
-                            try {
-                              const { error } = await sb.rpc('admin_update_user_email', { 
-                                user_id: userId, 
-                                new_email: newEmail 
-                              });
-                              if (error) { 
-                                showNotify("Error: " + error.message, "error"); 
-                                return; 
-                              }
-                              // Actualizar también en profiles
-                              await sb.from('profiles').update({ email: newEmail }).eq('id', editingProfile.id);
-                              await addLog('CAMBIO_LOGIN', `${editingProfile.nombre}: ${editingProfile.email?.split('@')[0]} → ${newLogin}`);
-                              showNotify("Usuario de login actualizado");
-                              loadData();
-                            } catch (err) {
-                              showNotify("Error: " + err.message, "error");
-                            }
-                          }}
-                          className="px-6 py-4 bg-blue-500 text-white rounded-2xl font-black text-xs uppercase hover:bg-blue-600"
-                        >
-                          Cambiar
-                        </button>
-                      </div>
-                      <p className="text-[9px] text-slate-400 ml-1">Solo letras y números, sin espacios</p>
-                    </>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Rol</label>
-                  {editingProfile.isSelf ? (
-                    <div>
-                      <input value={ROLES[editingProfile.role]?.label || 'Usuario'} disabled className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-400" />
-                      <p className="text-[9px] text-slate-400 ml-1">No podés cambiar tu propio rol</p>
-                    </div>
-                  ) : (
-                    <select name="role" defaultValue={editingProfile.role} onChange={async (e) => {
-                      const newRole = e.target.value;
-                      try {
-                        const { error } = await sb.from('profiles').update({ role: newRole }).eq('id', editingProfile.id);
-                        if (error) {
-                          showNotify("Error al cambiar rol: " + error.message, "error");
-                          e.target.value = editingProfile.role; // Revertir
-                          return;
-                        }
-                        await addLog('CAMBIO_ROL', `${editingProfile.nombre} ahora es ${newRole}`);
-                        showNotify("Rol actualizado");
-                        setEditingProfile({...editingProfile, role: newRole});
-                        loadData();
-                      } catch (err) {
-                        showNotify("Error: " + err.message, "error");
-                        e.target.value = editingProfile.role;
-                      }
-                    }} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold cursor-pointer">
-                      <option value="user">Usuario (solo ver y completar sus tareas)</option>
-                      <option value="moderator">Moderador (gestionar novedades de su turno)</option>
-                      <option value="moderadorplus">Moderador+ (moderador + gestión de stock)</option>
-                      <option value="encargado">Encargado (supervisor de su turno)</option>
-                      <option value="supervisor">Supervisor (acceso a todos los turnos)</option>
-                      <option value="admin">Administrador (acceso total + usuarios)</option>
-                    </select>
-                  )}
-                </div>
-                {/* Panel visual de permisos del rol seleccionado */}
-                {!editingProfile.isSelf && (() => {
-                  const role = editingProfile.role || 'user';
-                  const perms = {
-                    'Ver novedades':      { user: true, moderator: true, moderadorplus: true, encargado: true, supervisor: true, admin: true },
-                    'Completar sus tareas': { user: true, moderator: true, moderadorplus: true, encargado: true, supervisor: true, admin: true },
-                    'Crear novedades':    { user: false, moderator: true, moderadorplus: true, encargado: true, supervisor: true, admin: true },
-                    'Editar/Eliminar nov.': { user: false, moderator: false, moderadorplus: false, encargado: true, supervisor: true, admin: true },
-                    'Marcar checks otros': { user: false, moderator: false, moderadorplus: false, encargado: true, supervisor: true, admin: true },
-                    'Gestionar juicios':  { user: false, moderator: true, moderadorplus: true, encargado: true, supervisor: true, admin: true },
-                    'Gestionar licencias': { user: false, moderator: true, moderadorplus: true, encargado: true, supervisor: true, admin: true },
-                    'Gestionar stock':    { user: false, moderator: false, moderadorplus: true, encargado: true, supervisor: true, admin: true },
-                    'Retirar consumibles': { user: true, moderator: true, moderadorplus: true, encargado: true, supervisor: true, admin: true },
-                    'Ver estadísticas':   { user: false, moderator: false, moderadorplus: false, encargado: true, supervisor: true, admin: true },
-                    'Auditar usuarios':   { user: false, moderator: false, moderadorplus: false, encargado: true, supervisor: true, admin: true },
-                    'Imprimir reportes':  { user: false, moderator: false, moderadorplus: false, encargado: true, supervisor: true, admin: true },
-                    'Exportar respaldo':  { user: false, moderator: false, moderadorplus: false, encargado: false, supervisor: true, admin: true },
-                    'Ver todos los turnos': { user: false, moderator: false, moderadorplus: false, encargado: false, supervisor: true, admin: true },
-                    'Gestionar personal': { user: false, moderator: false, moderadorplus: false, encargado: false, supervisor: false, admin: true },
-                    'Ver logs del sistema': { user: false, moderator: false, moderadorplus: false, encargado: false, supervisor: false, admin: true },
-                  };
-                  return (
-                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
-                      <p className="text-[10px] font-black text-slate-500 uppercase">Permisos de {ROLES[role]?.label || role}:</p>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                        {Object.entries(perms).map(([perm, roles]) => {
-                          const has = roles[role] || false;
-                          return (
-                            <div key={perm} className={`flex items-center gap-2 py-0.5 ${has ? '' : 'opacity-40'}`}>
-                              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${has ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'}`}>
-                                {has && <span className="text-white text-[8px]">✓</span>}
-                              </div>
-                              <span className="text-[10px] font-semibold text-slate-700">{perm}</span>
+                      </form>
+                      
+                      {!editingProfile.isSelf && (
+                        <>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase">Login</label>
+                            <div className="flex gap-2">
+                              <input id="editLogin" defaultValue={editingProfile.email?.split('@')[0]} className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm" />
+                              <button type="button" onClick={async () => {
+                                const newLogin = document.getElementById('editLogin').value.trim().toLowerCase();
+                                if (!newLogin) return;
+                                if (newLogin === editingProfile.email?.split('@')[0]) { showNotify("Es el mismo", "error"); return; }
+                                try {
+                                  const { error } = await sb.rpc('admin_update_user_email', { user_id: editingProfile.id, new_email: newLogin + '@local.com' });
+                                  if (error) { showNotify("Error: " + error.message, "error"); return; }
+                                  await sb.from('profiles').update({ email: newLogin + '@local.com' }).eq('id', editingProfile.id);
+                                  await addLog('CAMBIO_LOGIN', `${editingProfile.nombre}: → ${newLogin}`);
+                                  showNotify("Login actualizado");
+                                  loadData();
+                                } catch (err) { showNotify("Error: " + err.message, "error"); }
+                              }} className="px-4 py-2 bg-blue-500 text-white rounded-xl font-bold text-xs hover:bg-blue-600">OK</button>
                             </div>
-                          );
-                        })}
-                      </div>
+                          </div>
+                          
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase">Turno</label>
+                            <select value={String(editingProfile.turno || 1)} onChange={async (e) => {
+                              const t = parseInt(e.target.value, 10);
+                              try {
+                                const { error } = await sb.from('profiles').update({ turno: t }).eq('id', editingProfile.id).select();
+                                if (error) { showNotify("Error: " + error.message, "error"); return; }
+                                await addLog('CAMBIO_TURNO', `${editingProfile.nombre} → ${TURNOS[t]}`);
+                                showNotify("Turno cambiado");
+                                setEditingProfile({...editingProfile, turno: t});
+                                loadData();
+                              } catch (err) { showNotify("Error: " + err.message, "error"); }
+                            }} className="w-full p-3 bg-indigo-50 border border-indigo-200 rounded-xl font-bold text-sm text-indigo-700 cursor-pointer">
+                              <option value="1">1er Turno</option>
+                              <option value="2">2do Turno</option>
+                              <option value="3">3er Turno</option>
+                              <option value="4">Zona Oeste</option>
+                            </select>
+                          </div>
+                          
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase">Nueva Contraseña</label>
+                            <div className="flex gap-2">
+                              <input id="editPass" type="password" placeholder="Min. 6 caracteres" className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm" />
+                              <button type="button" onClick={async () => {
+                                const pass = document.getElementById('editPass').value;
+                                if (!pass || pass.length < 6) { showNotify("Mínimo 6 caracteres", "error"); return; }
+                                try {
+                                  const { error } = await sb.rpc('admin_update_user_password', { target_user_id: editingProfile.id, new_password: pass });
+                                  if (error) { showNotify("Error: " + error.message, "error"); return; }
+                                  await addLog('CAMBIO_PASS_ADMIN', `Cambió contraseña de ${editingProfile.nombre}`);
+                                  showNotify("Contraseña actualizada");
+                                  document.getElementById('editPass').value = '';
+                                } catch (err) { showNotify("Error: " + err.message, "error"); }
+                              }} className="px-4 py-2 bg-amber-500 text-white rounded-xl font-bold text-xs hover:bg-amber-600">OK</button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                      {editingProfile.isSelf && (
+                        <p className="text-xs text-slate-400 italic">Solo podés cambiar tu nombre. Para cambiar contraseña usá el botón 🔑 del header.</p>
+                      )}
                     </div>
-                  );
-                })()}
-                {!editingProfile.isSelf && (
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-indigo-500 uppercase ml-1">Turno Asignado</label>
-                    <select 
-                      name="turno" 
-                      value={String(editingProfile.turno || 1)} 
-                      onChange={async (e) => {
-                        const newTurno = parseInt(e.target.value, 10);
-                        showNotify("Guardando turno...", "success");
+                    
+                    {/* Eliminar usuario */}
+                    {!editingProfile.isSelf && (
+                      <button onClick={async () => {
+                        if (!confirm(`¿Eliminar "${editingProfile.nombre}"?\n\nEsta acción no se puede deshacer.`)) return;
                         try {
-                          const { data, error } = await sb.from('profiles').update({ turno: newTurno }).eq('id', editingProfile.id).select();
-                          if (error) {
-                            console.error("Error RLS:", error);
-                            showNotify("Error: " + error.message + " - Ejecutá fix_turno_update.sql", "error");
-                            return;
-                          }
-                          if (!data || data.length === 0) {
-                            showNotify("No se pudo actualizar. Verificá permisos RLS", "error");
-                            return;
-                          }
-                          await addLog('CAMBIO_TURNO', `${editingProfile.nombre} asignado a ${TURNOS[newTurno]}`);
-                          showNotify("✓ Turno cambiado a " + TURNOS[newTurno]);
-                          setEditingProfile({...editingProfile, turno: newTurno});
+                          const { error } = await sb.rpc('admin_delete_user', { target_user_id: editingProfile.id });
+                          if (error) { showNotify("Error: " + error.message, "error"); return; }
+                          await addLog('ELIMINAR_USUARIO', `Eliminó: ${editingProfile.nombre}`);
+                          showNotify("Usuario eliminado");
+                          setEditingProfile(null);
                           loadData();
-                        } catch (err) {
-                          console.error("Error:", err);
-                          showNotify("Error: " + err.message, "error");
-                        }
-                      }} 
-                      className="w-full p-4 bg-indigo-50 border border-indigo-200 rounded-2xl font-bold cursor-pointer text-indigo-700"
-                    >
-                      <option value="1">1er Turno</option>
-                      <option value="2">2do Turno</option>
-                      <option value="3">3er Turno</option>
-                      <option value="4">Zona Oeste</option>
-                    </select>
-                    {['admin', 'supervisor'].includes(editingProfile.role) && (
-                      <p className="text-[9px] text-slate-400 ml-1">Admin y Supervisor ven todos los turnos automáticamente</p>
+                        } catch (err) { showNotify("Error: " + err.message, "error"); }
+                      }} className="w-full py-3 bg-red-50 border-2 border-red-200 text-red-600 rounded-xl font-bold text-xs hover:bg-red-100 transition-all">
+                        Eliminar usuario permanentemente
+                      </button>
                     )}
                   </div>
-                )}
-                {!editingProfile.isSelf && (
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nueva Contraseña</label>
-                    <div className="flex gap-2">
-                      <input 
-                        name="newpass" 
-                        type="password" 
-                        placeholder="Mínimo 6 caracteres"
-                        className="flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" 
-                      />
-                      <button 
-                        type="button"
-                        onClick={async (e) => {
-                          const input = e.target.parentElement.querySelector('input[name="newpass"]');
-                          const newPass = input.value;
-                          if (!newPass || newPass.length < 6) { 
-                            showNotify("La contraseña debe tener al menos 6 caracteres", "error"); 
-                            return; 
-                          }
-                          const userId = editingProfile.user_id || editingProfile.id;
-                          if (!userId) {
-                            showNotify("Error: No se encontró el ID del usuario", "error");
-                            return;
-                          }
+
+                  {/* Columna derecha: Permisos (2 columnas de ancho) */}
+                  {!editingProfile.isSelf && (
+                    <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5" style={{boxShadow:'var(--shadow-card)'}}>
+                      <div className="flex justify-between items-center mb-5">
+                        <h3 className="text-sm font-black text-slate-700 uppercase">Permisos</h3>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold px-3 py-1 rounded-lg ${ROLES[detectRole(editPermisos)]?.color || 'bg-slate-500'} text-white`}>
+                            {ROLES[detectRole(editPermisos)]?.label || 'Personalizado'}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Presets rápidos */}
+                      <div className="mb-5">
+                        <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Cargar preset:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(ROLES).map(([roleKey, roleInfo]) => (
+                            <button key={roleKey} onClick={() => setEditPermisos({...ROLE_PRESETS[roleKey]})} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-2 ${detectRole(editPermisos) === roleKey ? roleInfo.color + ' text-white border-transparent shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}`}>
+                              {roleInfo.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {/* Grid de permisos por grupo */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {['Novedades', 'Módulos', 'Administración', 'Sistema'].map(group => (
+                          <div key={group} className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                            <h4 className="text-[10px] font-black text-slate-500 uppercase mb-3 border-b border-slate-200 pb-2">{group}</h4>
+                            <div className="space-y-2">
+                              {PERMISSION_KEYS.filter(pk => pk.group === group).map(pk => {
+                                const checked = !!editPermisos[pk.key];
+                                return (
+                                  <label key={pk.key} className="flex items-center gap-3 cursor-pointer select-none group py-0.5">
+                                    <div 
+                                      onClick={() => setEditPermisos(prev => ({...prev, [pk.key]: !prev[pk.key]}))} 
+                                      className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${checked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white group-hover:border-emerald-400'}`}
+                                    >
+                                      {checked && <span className="text-white text-[10px] font-bold">✓</span>}
+                                    </div>
+                                    <span className={`text-xs font-semibold ${checked ? 'text-slate-800' : 'text-slate-400'}`}>{pk.label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* Botón guardar permisos */}
+                      <div className="flex gap-3 mt-5 pt-5 border-t border-slate-200">
+                        <button onClick={async () => {
+                          const newRole = detectRole(editPermisos);
                           try {
-                            const { error } = await sb.rpc('admin_update_user_password', { 
-                              target_user_id: userId, 
-                              new_password: newPass 
-                            });
-                            if (error) { 
-                              showNotify("Error: " + error.message, "error"); 
-                              return; 
-                            }
-                            await addLog('CAMBIO_PASS_ADMIN', `Cambió contraseña de ${editingProfile.nombre}`);
-                            showNotify("Contraseña actualizada");
-                            input.value = '';
-                          } catch (err) {
-                            showNotify("Error: " + err.message, "error");
-                          }
-                        }}
-                        className="px-6 py-4 bg-amber-500 text-white rounded-2xl font-black text-xs uppercase hover:bg-amber-600"
-                      >
-                        Cambiar
-                      </button>
+                            const { error } = await sb.from('profiles').update({ permisos: editPermisos, role: newRole }).eq('id', editingProfile.id);
+                            if (error) { showNotify("Error: " + error.message, "error"); return; }
+                            await addLog('CAMBIO_PERMISOS', `${editingProfile.nombre} → ${ROLES[newRole]?.label} (${Object.keys(editPermisos).filter(k => editPermisos[k]).length} permisos)`);
+                            showNotify("Permisos guardados — Rol: " + (ROLES[newRole]?.label || newRole));
+                            setEditingProfile({...editingProfile, role: newRole, permisos: editPermisos});
+                            loadData();
+                          } catch (err) { showNotify("Error: " + err.message, "error"); }
+                        }} className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black uppercase text-xs shadow-lg transition-all flex items-center justify-center gap-2">
+                          <Icon name="check" size={16} /> Guardar Permisos
+                        </button>
+                        <button onClick={() => { setEditingProfile(null); setEditPermisos({}); }} className="px-8 py-4 bg-slate-200 text-slate-600 rounded-xl font-black uppercase text-xs hover:bg-slate-300 transition-all">
+                          Volver
+                        </button>
+                      </div>
                     </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Lista de usuarios */}
+                <div className="flex justify-between items-end mb-8">
+                  <div><h2 className="text-2xl sm:text-3xl font-black text-slate-800">Personal</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Usuarios del sistema</p></div>
+                  <button onClick={() => setShowNewUser(true)} className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2"><Icon name="plus" size={16} /> Nuevo</button>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                  <div className="flex gap-2">
+                    <button onClick={() => setSelectedUserTurno(0)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === 0 ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>Todos</button>
+                    {[1, 2, 3, 4].map(t => (
+                      <button key={t} onClick={() => setSelectedUserTurno(t)} className={`px-4 py-2 rounded-xl text-sm font-bold ${selectedUserTurno === t ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}`}>{t === 4 ? 'ZO' : `T${t}`}</button>
+                    ))}
                   </div>
-                )}
-                <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl">Guardar Cambios</button>
-              </form>
-            </div>
+                  <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Icon name="search" size={14} className="text-slate-400" /></div>
+                    <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} placeholder="Buscar por nombre..." className="w-full pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
+                    {userSearch && <button onClick={() => setUserSearch('')} className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600"><Icon name="x" size={14} /></button>}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {profiles.filter(p => {
+                    if (selectedUserTurno !== 0 && p.turno !== selectedUserTurno) return false;
+                    if (userSearch.trim()) return (p.nombre || '').toLowerCase().includes(userSearch.toLowerCase());
+                    return true;
+                  }).map(p => {
+                    const roleInfo = ROLES[p.role] || ROLES.user;
+                    const permCount = p.permisos ? Object.values(p.permisos).filter(Boolean).length : 0;
+                    return (
+                      <div key={p.id} className="bg-white p-5 rounded-2xl border border-slate-200 card-lift" style={{boxShadow:'var(--shadow-card)'}}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-2xl text-white flex items-center justify-center font-black text-lg ${roleInfo.color}`}>{p.nombre?.charAt(0).toUpperCase()}</div>
+                            <div>
+                              <div className="font-black text-slate-800">{p.nombre}</div>
+                              <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded ${roleInfo.color} text-white text-[8px]`}>{roleInfo.label}</span>
+                                {!['admin','supervisor'].includes(p.role) && (
+                                  <span className="px-2 py-0.5 rounded bg-indigo-500 text-white text-[8px]">{p.turno === 4 ? 'ZO' : `T${p.turno || 1}`}</span>
+                                )}
+                                {permCount > 0 && <span className="text-[8px] text-slate-400">{permCount} permisos</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <button onClick={() => {
+                            const isMe = p.id === userProfile.id;
+                            const profile = isMe ? {...p, isSelf: true} : p;
+                            setEditingProfile(profile);
+                            setEditPermisos(p.permisos || ROLE_PRESETS[p.role] || ROLE_PRESETS.user);
+                          }} className="text-[10px] bg-slate-100 px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-all flex items-center gap-1.5">
+                            <Icon name="edit" size={12} /> {p.id === userProfile.id ? 'Mi Perfil' : 'Editar'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
 
         {/* MODAL NUEVO USUARIO */}
+
+        {/* MODAL NUEVO USUARIO */}
         {showNewUser && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => setShowNewUser(false)}>
-            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp" onClick={e => e.stopPropagation()}>
-              <div className="p-8 bg-emerald-600 text-white flex justify-between items-center">
+            <div className="bg-white w-full max-w-sm rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp" onClick={e => e.stopPropagation()}>
+              <div className="p-5 sm:p-8 bg-emerald-600 text-white flex justify-between items-center">
                 <h3 className="font-black uppercase text-sm">➕ Nuevo Usuario</h3>
                 <button onClick={() => setShowNewUser(false)} className="text-emerald-200 hover:text-white">✕</button>
               </div>
@@ -2281,10 +2251,10 @@ const App = () => {
         )}
 
         {/* LOGS (Admin) */}
-        {currentView === 'logs' && userProfile.role === 'admin' && (
+        {currentView === 'logs' && canSeeLogs() && (
           <div className="space-y-4">
             <div className="flex justify-between items-start mb-6">
-              <div><h2 className="text-3xl font-black text-slate-800">Auditoría</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Registro de actividad</p></div>
+              <div><h2 className="text-2xl sm:text-3xl font-black text-slate-800">Auditoría</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Registro de actividad</p></div>
               <button onClick={() => {
                 const filteredLogs = logs.filter(l => {
                   if (logsFilterUser !== 'todos' && l.user_nombre !== logsFilterUser) return false;
@@ -2564,7 +2534,7 @@ const App = () => {
         {currentView === 'juicios' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center mb-6">
-              <div><h2 className="text-3xl font-black text-slate-800">⚖️ Juicios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">{canSeeAllTurnos() ? 'Todas las citaciones' : 'Citaciones de tu turno'}</p></div>
+              <div><h2 className="text-2xl sm:text-3xl font-black text-slate-800">⚖️ Juicios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">{canSeeAllTurnos() ? 'Todas las citaciones' : 'Citaciones de tu turno'}</p></div>
               {canManageJuicios() && (
                 <button onClick={() => { setEditingJuicio({}); setSelectedCitados([]); }} className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2"><Icon name="plus" size={16} /> Nuevo Juicio</button>
               )}
@@ -2802,7 +2772,7 @@ const App = () => {
         {currentView === 'recordatorios' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center mb-6">
-              <div><h2 className="text-3xl font-black text-slate-800">🔔 Recordatorios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tareas y eventos pendientes</p></div>
+              <div><h2 className="text-2xl sm:text-3xl font-black text-slate-800">🔔 Recordatorios</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tareas y eventos pendientes</p></div>
               <button onClick={() => setEditingRecordatorio({})} className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2"><Icon name="plus" size={16} /> Nuevo</button>
             </div>
             
@@ -2989,7 +2959,7 @@ const App = () => {
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <div>
-                <h2 className="text-3xl font-black text-slate-800">📅 Almanaque de Licencias</h2>
+                <h2 className="text-2xl sm:text-3xl font-black text-slate-800">📅 Almanaque de Licencias</h2>
                 <p className="text-xs text-slate-600 font-bold uppercase mt-1">
                   Registro anual de ausencias {getTurnoEfectivo() > 0 ? `(${TURNOS[getTurnoEfectivo()]})` : '(Todos los turnos)'}
                 </p>
@@ -3332,7 +3302,7 @@ const App = () => {
                   ) : (
                     <div className="p-5 space-y-5">
                       {/* Resumen de conteo */}
-                      <div className="grid grid-cols-5 gap-2">
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
                           <div className="text-2xl font-black text-blue-600">{conteo.licencia}</div>
                           <div className="text-[9px] font-bold text-blue-500 uppercase">Licencia</div>
@@ -4003,7 +3973,7 @@ const App = () => {
           return (
           <div className="space-y-6">
             <div className="mb-6">
-              <h2 className="text-3xl font-black text-slate-800">🔍 Auditar Usuario</h2>
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-800">🔍 Auditar Usuario</h2>
               <p className="text-xs text-slate-600 font-bold uppercase mt-1">
                 {auditEffectiveTurno > 0 ? `Ver pendientes (${TURNOS[auditEffectiveTurno]})` : 'Ver pendientes por persona (todos los turnos)'}
               </p>
@@ -4313,8 +4283,8 @@ const App = () => {
       {/* MODAL CAMBIAR CONTRASEÑA */}
       {showPassModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }}>
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
-            <div className="p-8 bg-slate-900 text-white flex justify-between items-center"><h3 className="font-black uppercase text-sm">Cambiar Contraseña</h3><button onClick={() => setShowPassModal(false)} className="text-slate-500 hover:text-white">✕</button></div>
+          <div className="bg-white w-full max-w-sm rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
+            <div className="p-5 sm:p-8 bg-slate-900 text-white flex justify-between items-center"><h3 className="font-black uppercase text-sm">Cambiar Contraseña</h3><button onClick={() => setShowPassModal(false)} className="text-slate-500 hover:text-white">✕</button></div>
             <form className="p-8 space-y-5" onSubmit={async (e) => { e.preventDefault(); const pass = e.target.pass.value; if(pass.length < 6) return alert("Mínimo 6 caracteres"); const { error } = await sb.auth.updateUser({ password: pass }); if(error) showNotify("Error: " + error.message, "error"); else { await addLog('CAMBIO_PASS', 'Actualizó contraseña'); showNotify("Contraseña actualizada"); setShowPassModal(false); } }}>
               <p className="text-[10px] text-slate-500 font-bold uppercase">Mínimo 6 caracteres</p>
               <input name="pass" type="password" placeholder="Nueva contraseña..." required className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-bold" />
@@ -4327,7 +4297,7 @@ const App = () => {
       {/* MODAL UBICACIONES DE STOCK */}
       {showUbicacionesModal && canManageStock() && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => { setShowUbicacionesModal(false); setEditingUbicacion(null); }}>
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-md rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6 bg-teal-600 text-white flex justify-between items-center sticky top-0 z-10">
               <h3 className="font-black uppercase text-sm">⚙️ Gestionar Ubicaciones</h3>
               <button onClick={() => { setShowUbicacionesModal(false); setEditingUbicacion(null); }} className="text-teal-200 hover:text-white">✕</button>
@@ -4469,8 +4439,8 @@ const App = () => {
         
         return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); setStatsTurnoFilter(0); }}>
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-8 bg-slate-900 text-white flex justify-between items-center sticky top-0 z-10">
+          <div className="bg-white w-full max-w-lg rounded-[2rem] sm:rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-5 sm:p-8 bg-slate-900 text-white flex justify-between items-center sticky top-0 z-10">
               <h3 className="font-black uppercase text-sm">📊 Estadísticas {statsEffectiveTurno > 0 ? `— ${TURNOS[statsEffectiveTurno]}` : ''}</h3>
               <div className="flex gap-2">
                 <button onClick={() => {
@@ -4485,7 +4455,7 @@ const App = () => {
                 <button onClick={() => { setShowStats(false); setSelectedUserStats(null); setStatsYear('todos'); setStatsTurnoFilter(0); }} className="text-slate-500 hover:text-white">✕</button>
               </div>
             </div>
-            <div className="p-8 space-y-6">
+            <div className="p-5 sm:p-8 space-y-6">
               {/* Filtros: año + turno */}
               <div className="space-y-3">
                 <div className="flex items-center gap-4">
@@ -4581,7 +4551,7 @@ const App = () => {
                         <div className="h-2 bg-slate-300 rounded-full overflow-hidden mb-3">
                           <div className="h-full bg-emerald-500 rounded-full" style={{ width: pct + '%' }}></div>
                         </div>
-                        <div className="grid grid-cols-6 gap-2 text-center">
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
                           <div className="bg-white p-2 rounded-xl">
                             <div className="text-lg font-black text-slate-700">{stats.total}</div>
                             <div className="text-[7px] text-slate-500 font-bold uppercase">Tareas</div>
@@ -4676,7 +4646,7 @@ const App = () => {
       {/* MODAL REPORTE */}
       {showReport && canEditAll() && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 no-print" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => { setShowReport(false); setPrintReady(false); setPrintUser('todos'); }}>
-          <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-4xl rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center sticky top-0 z-10 print:hidden no-print">
               <h3 className="font-black uppercase text-sm">🖨️ Imprimir Reporte</h3>
               <div className="flex gap-2">
@@ -4686,7 +4656,7 @@ const App = () => {
             </div>
             
             {!printReady ? (
-              <div className="p-8 space-y-6">
+              <div className="p-5 sm:p-8 space-y-6">
                 <h4 className="text-lg font-black text-slate-800">¿Qué querés imprimir?</h4>
                 
                 {/* Tipo de reporte */}
@@ -4865,7 +4835,7 @@ const App = () => {
                       {printType !== 'auditoria' && (
                         <div className="mb-8">
                           <h2 className="text-lg font-black text-slate-700 border-b-2 border-slate-300 pb-2 mb-4">RESUMEN</h2>
-                          <div className="grid grid-cols-4 gap-4">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             <div className="bg-slate-100 p-4 rounded-xl text-center">
                               <div className="text-2xl font-black">{filteredNovedades.length}</div>
                               <div className="text-xs font-bold text-slate-500">TOTAL</div>
@@ -4946,7 +4916,7 @@ const App = () => {
                                     <div><span className="font-black text-slate-800">{p.nombre}</span><span className="text-xs text-slate-500 ml-2">{p.role}</span></div>
                                     <span className="font-black text-lg">{pct}%</span>
                                   </div>
-                                  <div className="grid grid-cols-6 gap-2 text-center text-xs">
+                                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-xs">
                                     <div className="bg-white p-2 rounded"><div className="font-bold">Inf. Actuación</div><div className="text-emerald-600">{stats.informeActuacion.c}/{stats.informeActuacion.a}</div></div>
                                     <div className="bg-white p-2 rounded"><div className="font-bold">Criminalístico</div><div className="text-emerald-600">{stats.informeCriminalistico.c}/{stats.informeCriminalistico.a}</div></div>
                                     <div className="bg-white p-2 rounded"><div className="font-bold">Pericial</div><div className="text-emerald-600">{stats.informePericial.c}/{stats.informePericial.a}</div></div>
@@ -4997,7 +4967,7 @@ const App = () => {
       {showTimeoutWarning && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }}>
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden animate-slideUp" style={{ boxShadow: 'var(--shadow-modal)' }}>
-            <div className="p-8 bg-gradient-to-br from-amber-400 to-amber-600 text-white text-center">
+            <div className="p-5 sm:p-8 bg-gradient-to-br from-amber-400 to-amber-600 text-white text-center">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/20 mb-4">
                 <Icon name="clock" size={32} />
               </div>
