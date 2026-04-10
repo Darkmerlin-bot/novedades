@@ -578,6 +578,7 @@ const App = () => {
   const [itemNombreInput, setItemNombreInput] = useState('');
   const [itemSugerencias, setItemSugerencias] = useState([]);
   const [highlightedItem, setHighlightedItem] = useState(null);
+  const [transferItem, setTransferItem] = useState(null); // { item, cantidad, destino }
   const [stockSearch, setStockSearch] = useState('');
   const [stockTurnoFilter, setStockTurnoFilter] = useState(0); // 0=todos, 1-4=turno específico (solo admin/supervisor)
   // Form controlado de stock item (en vez de document.getElementById)
@@ -3897,6 +3898,7 @@ const App = () => {
                             <button onClick={async () => { const c = prompt("Sacar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; if(n>item.cantidad){showNotify("No hay","error");return;} await sb.from('stock_items').update({cantidad:item.cantidad-n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'salida',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre,ubicacion:item.ubicacion,turno:item.turno}]); loadData(); }} className="w-6 h-6 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">-</button>
                             <span className={`w-8 text-center text-sm font-black ${bajo?'text-red-600':'text-slate-700'}`}>{item.cantidad}</span>
                             <button onClick={async () => { const c = prompt("Agregar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; await sb.from('stock_items').update({cantidad:item.cantidad+n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'entrada',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre,ubicacion:item.ubicacion,turno:item.turno}]); loadData(); }} className="w-6 h-6 bg-emerald-100 text-emerald-600 rounded text-xs font-bold hover:bg-emerald-200">+</button>
+                            <button onClick={() => setTransferItem({ item, cantidad: 1, destino: '' })} className="w-6 h-6 bg-blue-100 text-blue-600 rounded text-[10px] font-bold hover:bg-blue-200" title="Transferir a otra ubicación">⇄</button>
                             <button onClick={()=>{setEditingItem(item); setItemNombreInput(item.nombre || ''); setItemSugerencias([]);}} className="w-6 h-6 text-slate-400 hover:bg-slate-100 rounded text-[10px]">✏</button>
                             <button onClick={async()=>{if(!confirm('Eliminar?'))return;await sb.from('stock_items').delete().eq('id',item.id);loadData();}} className="w-6 h-6 text-red-400 hover:bg-red-50 rounded text-[10px]">🗑</button>
                           </>) : esConsumible ? (<>
@@ -3955,13 +3957,140 @@ const App = () => {
                     const item = stockItems.find(i => i.id === mov.item_id);
                     const fecha = new Date(mov.created_at);
                     const fechaStr = `${fecha.getDate()}/${fecha.getMonth()+1} ${fecha.getHours()}:${String(fecha.getMinutes()).padStart(2,'0')}`;
-                    return (<div key={mov.id} className={`flex items-center justify-between py-0.5 px-2 rounded text-xs ${mov.tipo==='entrada'?'bg-emerald-50':'bg-red-50'}`}><span className={`font-bold ${mov.tipo==='entrada'?'text-emerald-700':'text-red-700'}`}>{mov.tipo==='entrada'?'+':'-'}{mov.cantidad} {item?.nombre||'?'}</span><span className="text-slate-400 text-[10px]">{mov.user_nombre?.split(' ')[0]} • {fechaStr}</span></div>);
+                    const esTransferencia = mov.descripcion && (mov.descripcion.startsWith('Transferido') || mov.descripcion.startsWith('Recibido'));
+                    return (<div key={mov.id} className={`flex items-center justify-between py-0.5 px-2 rounded text-xs ${esTransferencia ? 'bg-blue-50' : mov.tipo==='entrada' ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                      <span className={`font-bold ${esTransferencia ? 'text-blue-700' : mov.tipo==='entrada' ? 'text-emerald-700' : 'text-red-700'}`}>{esTransferencia ? '⇄' : mov.tipo==='entrada' ? '+' : '-'}{mov.cantidad} {item?.nombre||'?'}{esTransferencia ? ` (${mov.descripcion})` : ''}</span>
+                      <span className="text-slate-400 text-[10px]">{mov.user_nombre?.split(' ')[0]} • {fechaStr}</span>
+                    </div>);
                   });
                 })()}
               </div></details>
             </div>
           </div>
         );})()}
+
+        {/* MODAL TRANSFERENCIA DE STOCK */}
+        {transferItem && (() => {
+          const { item } = transferItem;
+          const origenUb = stockUbicaciones.find(u => u.id === item.ubicacion);
+          // Destinos posibles: todas las ubicaciones excepto la actual
+          const destinos = stockUbicaciones.filter(u => u.id !== item.ubicacion);
+          
+          return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: "var(--bg-modal-overlay)", backdropFilter: "blur(12px)" }} onClick={() => setTransferItem(null)}>
+              <div className="bg-white w-full max-w-sm rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp" onClick={e => e.stopPropagation()}>
+                <div className="p-5 sm:p-8 bg-blue-600 text-white">
+                  <h3 className="font-black uppercase text-sm flex items-center gap-2">⇄ Transferir Item</h3>
+                  <p className="text-blue-200 text-xs mt-1">{item.nombre} — {origenUb?.nombre || item.ubicacion}</p>
+                  <p className="text-blue-300 text-[10px] mt-0.5">Stock actual: {item.cantidad}</p>
+                </div>
+                <div className="p-5 sm:p-8 space-y-5">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Cantidad a transferir</label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max={item.cantidad} 
+                      value={transferItem.cantidad} 
+                      onChange={(e) => setTransferItem(prev => ({...prev, cantidad: parseInt(e.target.value) || 0}))} 
+                      className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-lg text-center" 
+                    />
+                    {transferItem.cantidad > item.cantidad && <p className="text-red-500 text-xs mt-1 font-bold">No hay suficiente stock ({item.cantidad} disponibles)</p>}
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Destino</label>
+                    {destinos.length === 0 ? (
+                      <p className="text-slate-400 text-sm p-4 bg-slate-50 rounded-xl text-center">No hay otras ubicaciones disponibles</p>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {destinos.map(ub => {
+                          const isSelected = transferItem.destino === ub.id;
+                          const turnoLabel = ub.turno === 4 ? 'ZO' : `T${ub.turno || 1}`;
+                          // Ver si el item ya existe en destino
+                          const existeEnDestino = stockItems.find(i => i.nombre === item.nombre && i.ubicacion === ub.id);
+                          return (
+                            <button 
+                              key={ub.id} 
+                              onClick={() => setTransferItem(prev => ({...prev, destino: ub.id}))}
+                              className={`w-full text-left p-3 rounded-xl border-2 transition-all flex justify-between items-center ${isSelected ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-slate-200 bg-white hover:border-blue-300'}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${isSelected ? 'bg-blue-500 text-white' : 'bg-indigo-100 text-indigo-600'}`}>{turnoLabel}</span>
+                                <span className={`text-sm font-bold ${isSelected ? 'text-blue-700' : 'text-slate-700'}`}>{ub.nombre}</span>
+                              </div>
+                              {existeEnDestino && <span className="text-[9px] text-slate-400">ya tiene {existeEnDestino.cantidad}</span>}
+                              {isSelected && <span className="text-blue-500 font-black">✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      onClick={async () => {
+                        const cant = transferItem.cantidad;
+                        const destId = transferItem.destino;
+                        if (!cant || cant <= 0 || cant > item.cantidad) { showNotify("Cantidad inválida", "error"); return; }
+                        if (!destId) { showNotify("Seleccioná un destino", "error"); return; }
+                        
+                        const destUb = stockUbicaciones.find(u => u.id === destId);
+                        const destTurno = destUb?.turno || 1;
+                        const origenNombre = origenUb?.nombre || item.ubicacion;
+                        const destNombre = destUb?.nombre || destId;
+                        
+                        try {
+                          // 1. Restar del origen
+                          await sb.from('stock_items').update({ cantidad: item.cantidad - cant }).eq('id', item.id);
+                          
+                          // 2. Buscar si ya existe en destino
+                          const existente = stockItems.find(i => i.nombre === item.nombre && i.ubicacion === destId);
+                          if (existente) {
+                            // Sumar al existente
+                            await sb.from('stock_items').update({ cantidad: existente.cantidad + cant }).eq('id', existente.id);
+                          } else {
+                            // Crear nuevo en destino
+                            await sb.from('stock_items').insert([{ 
+                              nombre: item.nombre, 
+                              tipo: item.tipo, 
+                              ubicacion: destId, 
+                              cantidad: cant, 
+                              cantidad_minima: item.cantidad_minima, 
+                              turno: destTurno 
+                            }]);
+                          }
+                          
+                          // 3. Registrar movimientos
+                          await sb.from('stock_movimientos').insert([
+                            { item_id: item.id, tipo: 'salida', cantidad: cant, descripcion: `Transferido a ${destNombre}`, user_id: session.user.id, user_nombre: userProfile.nombre, ubicacion: item.ubicacion, turno: item.turno },
+                            { item_id: existente?.id || item.id, tipo: 'entrada', cantidad: cant, descripcion: `Recibido de ${origenNombre}`, user_id: session.user.id, user_nombre: userProfile.nombre, ubicacion: destId, turno: destTurno }
+                          ]);
+                          
+                          // 4. Log
+                          await addLog('TRANSFERIR_STOCK', `${cant}x ${item.nombre}: ${origenNombre} → ${destNombre}`);
+                          
+                          showNotify(`Transferido: ${cant}x ${item.nombre} → ${destNombre}`);
+                          setTransferItem(null);
+                          loadData();
+                        } catch (err) {
+                          showNotify("Error: " + err.message, "error");
+                        }
+                      }}
+                      disabled={!transferItem.destino || transferItem.cantidad <= 0 || transferItem.cantidad > item.cantidad}
+                      className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2"
+                    >
+                      ⇄ Transferir
+                    </button>
+                    <button onClick={() => setTransferItem(null)} className="px-6 py-4 bg-slate-200 text-slate-600 rounded-xl font-black uppercase text-xs hover:bg-slate-300">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* AUDITORÍA DE USUARIOS (Admin/Supervisor/Encargado) */}
         {currentView === 'auditoria' && canAudit() && (() => {
