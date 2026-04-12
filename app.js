@@ -1838,8 +1838,8 @@ const App = () => {
                   await addLog('EDITAR', 'Editó ' + num); showNotify("Actualizado");
                 } else {
                   const insertPayload = (isComision || isEventoSocial) ? 
-                    { ...payload, turno: getTurnoParaGuardar(), creado_por: userProfile.nombre, actuacion_realizada: true, criminalistico_realizado: true, pericial_realizado: true, croquis_realizado: true } :
-                    { ...payload, turno: getTurnoParaGuardar(), creado_por: userProfile.nombre, actuacion_realizada: false, criminalistico_realizado: false, pericial_realizado: false, croquis_realizado: false };
+                    { ...payload, turno: getTurnoParaGuardar(), creado_por: userProfile.nombre, actuacion_realizada: true, criminalistico_realizado: true, pericial_realizado: true, croquis_realizado: true, completado: true } :
+                    { ...payload, turno: getTurnoParaGuardar(), creado_por: userProfile.nombre, actuacion_realizada: false, criminalistico_realizado: false, pericial_realizado: false, croquis_realizado: false, completado: false };
                   const { error } = await sb.from('novedades').insert([insertPayload]);
                   if (error) { showNotify("Error al crear: " + error.message, "error"); setSaving(false); return; }
                   await addLog('CREAR', 'Creó ' + num); showNotify("Guardado");
