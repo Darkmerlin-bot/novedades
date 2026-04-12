@@ -548,7 +548,8 @@ const App = () => {
   }, [lockoutSeconds > 0]);
   const [editingProfile, setEditingProfile] = useState(null);
   const [editPermisos, setEditPermisos] = useState({});
-  const [editPermisos, setEditPermisos] = useState({});
+  const [editLoginVal, setEditLoginVal] = useState('');
+  const [editPassVal, setEditPassVal] = useState('');
   
   // Estados para Juicios
   const [juicios, setJuicios] = useState([]);
@@ -1942,9 +1943,9 @@ const App = () => {
                           <div className="space-y-1.5">
                             <label className="text-[10px] font-black text-slate-400 uppercase">Login</label>
                             <div className="flex gap-2">
-                              <input id="editLogin" defaultValue={editingProfile.email?.split('@')[0]} className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm" />
+                              <input value={editLoginVal} onChange={(e) => setEditLoginVal(e.target.value)} className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm" />
                               <button type="button" onClick={async () => {
-                                const newLogin = document.getElementById('editLogin').value.trim().toLowerCase();
+                                const newLogin = editLoginVal.trim().toLowerCase();
                                 if (!newLogin) return;
                                 if (newLogin === editingProfile.email?.split('@')[0]) { showNotify("Es el mismo", "error"); return; }
                                 try {
@@ -1982,16 +1983,15 @@ const App = () => {
                           <div className="space-y-1.5">
                             <label className="text-[10px] font-black text-slate-400 uppercase">Nueva Contraseña</label>
                             <div className="flex gap-2">
-                              <input id="editPass" type="password" placeholder="Min. 6 caracteres" className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm" />
+                              <input value={editPassVal} onChange={(e) => setEditPassVal(e.target.value)} type="password" placeholder="Min. 6 caracteres" className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm" />
                               <button type="button" onClick={async () => {
-                                const pass = document.getElementById('editPass').value;
-                                if (!pass || pass.length < 6) { showNotify("Mínimo 6 caracteres", "error"); return; }
+                                if (!editPassVal || editPassVal.length < 6) { showNotify("Mínimo 6 caracteres", "error"); return; }
                                 try {
-                                  const { error } = await sb.rpc('admin_update_user_password', { target_user_id: editingProfile.id, new_password: pass });
+                                  const { error } = await sb.rpc('admin_update_user_password', { target_user_id: editingProfile.id, new_password: editPassVal });
                                   if (error) { showNotify("Error: " + error.message, "error"); return; }
                                   await addLog('CAMBIO_PASS_ADMIN', `Cambió contraseña de ${editingProfile.nombre}`);
                                   showNotify("Contraseña actualizada");
-                                  document.getElementById('editPass').value = '';
+                                  setEditPassVal('');
                                 } catch (err) { showNotify("Error: " + err.message, "error"); }
                               }} className="px-4 py-2 bg-amber-500 text-white rounded-xl font-bold text-xs hover:bg-amber-600">OK</button>
                             </div>
@@ -2144,6 +2144,8 @@ const App = () => {
                             const profile = isMe ? {...p, isSelf: true} : p;
                             setEditingProfile(profile);
                             setEditPermisos(p.permisos || (p.role === 'admin' ? PERM_TEMPLATES['Acceso total'] : PERM_TEMPLATES['Básico']));
+                            setEditLoginVal(p.email?.split('@')[0] || '');
+                            setEditPassVal('');
                           }} className="text-[10px] bg-slate-100 px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-all flex items-center gap-1.5">
                             <Icon name="edit" size={12} /> {p.id === userProfile.id ? 'Mi Perfil' : 'Editar'}
                           </button>
