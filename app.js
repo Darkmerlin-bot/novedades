@@ -3307,11 +3307,11 @@ const App = () => {
                       <span className={`text-xs ${userColor.text} opacity-60`}>— {calendarioYear}</span>
                       {/* Contadores inline */}
                       <div className="flex gap-2 ml-2">
-                        {conteo.licencia > 0 && <span className="text-[10px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded">📋{conteo.licencia}</span>}
-                        {conteo.enfermedad > 0 && <span className="text-[10px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded">🏥{conteo.enfermedad}</span>}
-                        {conteo.estudio > 0 && <span className="text-[10px] font-bold bg-purple-500 text-white px-1.5 py-0.5 rounded">📚{conteo.estudio}</span>}
-                        {conteo.descanso > 0 && <span className="text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded">😴{conteo.descanso}</span>}
-                        <span className="text-[10px] font-black bg-slate-700 text-white px-1.5 py-0.5 rounded">{total}</span>
+                        {conteo.licencia > 0 && <span className="text-xs font-bold bg-blue-500 text-white px-2 py-0.5 rounded">📋{conteo.licencia}</span>}
+                        {conteo.enfermedad > 0 && <span className="text-xs font-bold bg-red-500 text-white px-2 py-0.5 rounded">🏥{conteo.enfermedad}</span>}
+                        {conteo.estudio > 0 && <span className="text-xs font-bold bg-purple-500 text-white px-2 py-0.5 rounded">📚{conteo.estudio}</span>}
+                        {conteo.descanso > 0 && <span className="text-xs font-bold bg-amber-500 text-white px-2 py-0.5 rounded">😴{conteo.descanso}</span>}
+                        <span className="text-xs font-black bg-slate-700 text-white px-2 py-0.5 rounded">{total}</span>
                       </div>
                     </div>
                     <button onClick={() => setLicDetailUser(null)} className="p-1.5 bg-white/50 rounded-lg hover:bg-white/80 transition-all">
@@ -3324,30 +3324,33 @@ const App = () => {
                   ) : (
                     <div className="p-3">
                       {/* Desglose compacto multicolumna */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                         {meses.map((mesNombre, mesIndex) => {
                           const monthStr = `${calendarioYear}-${String(mesIndex + 1).padStart(2, '0')}`;
                           const mesLics = userLics.filter(l => l.fecha?.startsWith(monthStr)).sort((a, b) => a.fecha.localeCompare(b.fecha));
                           if (mesLics.length === 0) return null;
                           return (
                             <div key={mesIndex} className="bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
-                              <div className="bg-slate-200 px-2 py-1 flex justify-between items-center">
-                                <span className="font-black text-[10px] text-slate-700 uppercase">{mesNombre}</span>
-                                <span className="text-[9px] font-bold text-slate-500">{mesLics.length}d</span>
+                              <div className="bg-slate-200 px-3 py-1.5 flex justify-between items-center">
+                                <span className="font-black text-xs text-slate-700 uppercase">{mesNombre}</span>
+                                <span className="text-[10px] font-bold text-slate-500">{mesLics.length} día{mesLics.length > 1 ? 's' : ''}</span>
                               </div>
-                              <div className="px-2 py-1 space-y-0.5">
+                              <div className="px-2 py-1.5 space-y-1">
                                 {mesLics.map(l => {
                                   const dia = parseInt(l.fecha.split('-')[2], 10);
                                   const fechaObj = new Date(l.fecha + 'T12:00:00');
-                                  const diaSem = fechaObj.toLocaleDateString('es-ES', { weekday: 'narrow' });
+                                  const diaSem = fechaObj.toLocaleDateString('es-ES', { weekday: 'short' });
                                   return (
-                                    <div key={l.id} className="flex items-center justify-between text-[10px]">
-                                      <span className="flex items-center gap-1">
-                                        <span className={`w-1.5 h-1.5 rounded-full ${tipoColorDot[l.tipo]}`}></span>
-                                        <span className="font-bold text-slate-700">{dia}</span>
-                                        <span className="text-slate-400 capitalize">{diaSem}</span>
-                                      </span>
-                                      <span>{tipoIcon[l.tipo]}</span>
+                                    <div key={l.id} className="flex items-start gap-1.5 text-xs leading-tight">
+                                      <span className={`w-2 h-2 rounded-full mt-1 shrink-0 ${tipoColorDot[l.tipo]}`}></span>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="font-black text-slate-700">{dia}</span>
+                                          <span className="text-slate-400 capitalize">{diaSem}</span>
+                                          <span className="ml-auto">{tipoIcon[l.tipo]}</span>
+                                        </div>
+                                        {l.descripcion && <p className="text-[10px] text-slate-500 italic truncate" title={l.descripcion}>{l.descripcion}</p>}
+                                      </div>
                                     </div>
                                   );
                                 })}
