@@ -275,7 +275,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
               <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase border ${userProfile?.role === 'admin' ? 'border-red-400/30 bg-red-500/10 text-red-400' : 'border-slate-400/30 bg-slate-500/10 text-slate-400'}`}>
                 {userProfile?.role === 'admin' ? 'Admin' : 'Usuario'}
               </span>
-              {!canSeeAllTurnos() && (
+              {!userProfile?.permisos?.ver_todos_turnos && (
                 <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase border border-indigo-400/30 bg-indigo-500/10 text-indigo-400">{userProfile?.turno === 4 ? 'ZO' : `T${userProfile?.turno || 1}`}</span>
               )}
             </div>
