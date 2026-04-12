@@ -255,7 +255,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
         </div>
         <div className="flex items-center justify-between md:justify-end gap-3">
           {/* Selector de turno para admin/supervisor */}
-          {['admin', 'supervisor'].includes(userProfile?.role) && (
+          {userProfile?.permisos?.ver_todos_turnos && (
             <select 
               value={turnoActivo} 
               onChange={(e) => setTurnoActivo(parseInt(e.target.value))}
@@ -272,10 +272,10 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
           <div className="flex flex-col items-end mr-2">
             <span className="text-sm font-bold text-emerald-400 truncate max-w-[100px] sm:max-w-none">{userProfile?.nombre}</span>
             <div className="flex items-center gap-2">
-              <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase border ${userProfile?.role === 'admin' ? 'border-red-400/30 bg-red-500/10 text-red-400' : userProfile?.role === 'supervisor' ? 'border-purple-400/30 bg-purple-500/10 text-purple-400' : userProfile?.role === 'encargado' ? 'border-blue-400/30 bg-blue-500/10 text-blue-400' : userProfile?.role === 'moderadorplus' ? 'border-teal-400/30 bg-teal-500/10 text-teal-400' : userProfile?.role === 'moderator' ? 'border-amber-400/30 bg-amber-500/10 text-amber-400' : 'border-slate-400/30 bg-slate-500/10 text-slate-400'}`}>
-                {userProfile?.role === 'admin' ? 'Admin' : userProfile?.role === 'supervisor' ? 'Supervisor' : userProfile?.role === 'encargado' ? 'Encargado' : userProfile?.role === 'moderadorplus' ? 'Mod+' : userProfile?.role === 'moderator' ? 'Moderador' : 'Usuario'}
+              <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase border ${userProfile?.role === 'admin' ? 'border-red-400/30 bg-red-500/10 text-red-400' : 'border-slate-400/30 bg-slate-500/10 text-slate-400'}`}>
+                {userProfile?.role === 'admin' ? 'Admin' : 'Usuario'}
               </span>
-              {!['admin', 'supervisor'].includes(userProfile?.role) && (
+              {!canSeeAllTurnos() && (
                 <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase border border-indigo-400/30 bg-indigo-500/10 text-indigo-400">{userProfile?.turno === 4 ? 'ZO' : `T${userProfile?.turno || 1}`}</span>
               )}
             </div>
@@ -287,7 +287,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
             <button onClick={onShowPass} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all border border-white/10" title="Cambiar Contraseña">
               <Icon name="key" size={16} />
             </button>
-            {['admin', 'supervisor', 'encargado'].includes(userProfile?.role) && (
+            {userProfile?.permisos?.ver_estadisticas && (
               <>
                 <button onClick={onShowStats} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all border border-white/10" title="Estadísticas">
                   <Icon name="chart" size={16} />
@@ -297,7 +297,7 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
                 </button>
               </>
             )}
-            {['admin', 'supervisor'].includes(userProfile?.role) && (
+            {userProfile?.permisos?.ver_todos_turnos && (
               <button onClick={onBackup} className="p-2.5 bg-emerald-500/30 hover:bg-emerald-500/50 rounded-xl transition-all border border-emerald-400/30" title="Descargar Respaldo">
                 <Icon name="save" size={16} />
               </button>
@@ -321,12 +321,12 @@ const Header = ({ userProfile, currentView, setView, onLogout, onShowStats, onSh
             <Icon name={tab.icon} size={14} /> {tab.label} {tab.count > 0 && <span className={`${tab.countColor} text-white text-[9px] px-1.5 py-0.5 rounded-full font-black ${tab.pulse ? 'animate-pulse' : ''}`}>{tab.count}</span>}
           </button>
         ))}
-        {['admin', 'supervisor', 'encargado', 'moderator'].includes(userProfile?.role) && (
+        {userProfile?.permisos?.crear_novedades && (
           <button onClick={() => setView('form')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${currentView === 'form' ? 'bg-emerald-500/90 text-white shadow-lg nav-tab-active' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
             <Icon name="plus" size={14} /> Nueva
           </button>
         )}
-        {['admin', 'supervisor', 'encargado'].includes(userProfile?.role) && (
+        {userProfile?.permisos?.ver_estadisticas && (
           <button onClick={() => setView('auditoria')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${currentView === 'auditoria' ? 'bg-emerald-500/90 text-white shadow-lg nav-tab-active' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
             <Icon name="search" size={14} /> Auditar
           </button>
@@ -523,6 +523,7 @@ const App = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const [expandedId, setExpandedId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [completedPage, setCompletedPage] = useState(1);
   const [selectedYear, setSelectedYear] = useState(() => {
     try { return localStorage.getItem('filter_year') || String(currentYear); } catch { return String(currentYear); }
   });
@@ -546,6 +547,7 @@ const App = () => {
     return () => clearInterval(interval);
   }, [lockoutSeconds > 0]);
   const [editingProfile, setEditingProfile] = useState(null);
+  const [editPermisos, setEditPermisos] = useState({});
   const [editPermisos, setEditPermisos] = useState({});
   
   // Estados para Juicios
@@ -580,6 +582,7 @@ const App = () => {
   const [highlightedItem, setHighlightedItem] = useState(null);
   const [transferItem, setTransferItem] = useState(null); // { item, cantidad, destino }
   const [stockSearch, setStockSearch] = useState('');
+  const [stockSearchScope, setStockSearchScope] = useState('actual');
   const [stockTurnoFilter, setStockTurnoFilter] = useState(0); // 0=todos, 1-4=turno específico (solo admin/supervisor)
   // Form controlado de stock item (en vez de document.getElementById)
   const [itemForm, setItemForm] = useState({ tipo: 'consumible', cantidad: 0, minimo: 5, replicar: false });
@@ -988,10 +991,6 @@ const App = () => {
   const TURNOS = { 1: '1er Turno', 2: '2do Turno', 3: '3er Turno', 4: 'Zona Oeste' };
   const ROLES = {
     admin: { label: 'Administrador', color: 'bg-red-500' },
-    supervisor: { label: 'Supervisor', color: 'bg-purple-500' },
-    encargado: { label: 'Encargado', color: 'bg-blue-500' },
-    moderadorplus: { label: 'Moderador+', color: 'bg-teal-500' },
-    moderator: { label: 'Moderador', color: 'bg-amber-500' },
     user: { label: 'Usuario', color: 'bg-slate-500' }
   };
   const PERMISSION_KEYS = [
@@ -1012,25 +1011,23 @@ const App = () => {
     { key: 'gestionar_personal', label: 'Gestionar personal', group: 'Sistema' },
     { key: 'ver_logs', label: 'Ver logs del sistema', group: 'Sistema' },
   ];
-  const ROLE_PRESETS = {
-    admin: {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:true,marcar_checks_otros:true,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:true,retirar_consumibles:true,ver_estadisticas:true,auditar:true,imprimir:true,exportar_respaldo:true,ver_todos_turnos:true,gestionar_personal:true,ver_logs:true},
-    supervisor: {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:true,marcar_checks_otros:true,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:true,retirar_consumibles:true,ver_estadisticas:true,auditar:true,imprimir:true,exportar_respaldo:true,ver_todos_turnos:true,gestionar_personal:false,ver_logs:false},
-    encargado: {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:true,marcar_checks_otros:true,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:true,retirar_consumibles:true,ver_estadisticas:true,auditar:true,imprimir:true,exportar_respaldo:false,ver_todos_turnos:false,gestionar_personal:false,ver_logs:false},
-    moderadorplus: {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:false,marcar_checks_otros:false,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:true,retirar_consumibles:true,ver_estadisticas:false,auditar:false,imprimir:false,exportar_respaldo:false,ver_todos_turnos:false,gestionar_personal:false,ver_logs:false},
-    moderator: {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:false,marcar_checks_otros:false,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:false,retirar_consumibles:true,ver_estadisticas:false,auditar:false,imprimir:false,exportar_respaldo:false,ver_todos_turnos:false,gestionar_personal:false,ver_logs:false},
-    user: {ver_novedades:true,completar_tareas:true,crear_novedades:false,editar_novedades:false,marcar_checks_otros:false,gestionar_juicios:false,gestionar_licencias:false,gestionar_stock:false,retirar_consumibles:true,ver_estadisticas:false,auditar:false,imprimir:false,exportar_respaldo:false,ver_todos_turnos:false,gestionar_personal:false,ver_logs:false},
+  // Plantillas de permisos para asignación rápida
+  const PERM_TEMPLATES = {
+    'Acceso total': {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:true,marcar_checks_otros:true,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:true,retirar_consumibles:true,ver_estadisticas:true,auditar:true,imprimir:true,exportar_respaldo:true,ver_todos_turnos:true,gestionar_personal:true,ver_logs:true},
+    'Supervisor': {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:true,marcar_checks_otros:true,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:true,retirar_consumibles:true,ver_estadisticas:true,auditar:true,imprimir:true,exportar_respaldo:true,ver_todos_turnos:true,gestionar_personal:false,ver_logs:false},
+    'Encargado': {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:true,marcar_checks_otros:true,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:true,retirar_consumibles:true,ver_estadisticas:true,auditar:true,imprimir:true,exportar_respaldo:false,ver_todos_turnos:false,gestionar_personal:false,ver_logs:false},
+    'Moderador+': {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:false,marcar_checks_otros:false,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:true,retirar_consumibles:true,ver_estadisticas:false,auditar:false,imprimir:false,exportar_respaldo:false,ver_todos_turnos:false,gestionar_personal:false,ver_logs:false},
+    'Moderador': {ver_novedades:true,completar_tareas:true,crear_novedades:true,editar_novedades:false,marcar_checks_otros:false,gestionar_juicios:true,gestionar_licencias:true,gestionar_stock:false,retirar_consumibles:true,ver_estadisticas:false,auditar:false,imprimir:false,exportar_respaldo:false,ver_todos_turnos:false,gestionar_personal:false,ver_logs:false},
+    'Básico': {ver_novedades:true,completar_tareas:true,crear_novedades:false,editar_novedades:false,marcar_checks_otros:false,gestionar_juicios:false,gestionar_licencias:false,gestionar_stock:false,retirar_consumibles:true,ver_estadisticas:false,auditar:false,imprimir:false,exportar_respaldo:false,ver_todos_turnos:false,gestionar_personal:false,ver_logs:false},
   };
+  const PERM_TEMPLATE_COLORS = {'Acceso total':'bg-red-500','Supervisor':'bg-purple-500','Encargado':'bg-blue-500','Moderador+':'bg-teal-500','Moderador':'bg-amber-500','Básico':'bg-slate-400'};
   const hasPerm = (perm) => {
     if (userProfile?.permisos && userProfile.permisos[perm] !== undefined) return userProfile.permisos[perm];
-    return ROLE_PRESETS[userProfile?.role]?.[perm] || false;
+    // Fallback: admin tiene todo, user tiene básico
+    if (userProfile?.role === 'admin') return true;
+    return perm === 'ver_novedades' || perm === 'completar_tareas' || perm === 'retirar_consumibles';
   };
-  const detectRole = (perms) => {
-    for (const r of ['admin','supervisor','encargado','moderadorplus','moderator','user']) {
-      const p = ROLE_PRESETS[r];
-      if (Object.keys(p).every(k => !!p[k] === !!perms[k])) return r;
-    }
-    return 'user';
-  };
+  const detectRole = (perms) => perms?.gestionar_personal ? 'admin' : 'user';
   const canSeeAllTurnos = () => hasPerm('ver_todos_turnos');
   const canManageUsers = () => hasPerm('gestionar_personal');
   const canSeeLogs = () => hasPerm('ver_logs');
@@ -1677,9 +1674,27 @@ const App = () => {
         {/* COMPLETADOS */}
         {currentView === 'completed' && (
           <div className="space-y-4">
-            <div className="mb-6"><h2 className="text-2xl sm:text-3xl font-black text-slate-800">Completados</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tareas finalizadas</p></div>
-            <SearchAndFilter searchTerm={searchTerm} onSearchChange={setSearchTerm} selectedYear={selectedYear} onYearChange={setSelectedYear} />
-            {dataLoading ? <Skeleton rows={4} /> : completedNovedades.length === 0 ? <EmptyState icon="folder" title="Sin completados" subtitle="Las novedades finalizadas aparecerán aquí" /> : <div className="grid gap-3">{completedNovedades.map(n => <NovedadCard key={n.id} n={n} isCompletedView={true} />)}</div>}
+            <div className="mb-6"><h2 className="text-2xl sm:text-3xl font-black text-slate-800">Completados</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tareas finalizadas ({completedNovedades.length})</p></div>
+            <SearchAndFilter searchTerm={searchTerm} onSearchChange={(v) => { setSearchTerm(v); setCompletedPage(1); }} selectedYear={selectedYear} onYearChange={(v) => { setSelectedYear(v); setCompletedPage(1); }} />
+            {dataLoading ? <Skeleton rows={4} /> : completedNovedades.length === 0 ? <EmptyState icon="folder" title="Sin completados" subtitle="Las novedades finalizadas aparecerán aquí" /> : (() => {
+              const PAGE_SIZE = 20;
+              const totalPages = Math.ceil(completedNovedades.length / PAGE_SIZE);
+              const visible = completedNovedades.slice(0, completedPage * PAGE_SIZE);
+              const hasMore = completedPage * PAGE_SIZE < completedNovedades.length;
+              return (<>
+                <div className="grid gap-3">{visible.map(n => <NovedadCard key={n.id} n={n} isCompletedView={true} />)}</div>
+                {hasMore && (
+                  <div className="flex justify-center pt-4">
+                    <button onClick={() => setCompletedPage(p => p + 1)} className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold text-sm hover:bg-slate-700 shadow-lg transition-all flex items-center gap-2">
+                      <Icon name="chevronDown" size={14} /> Mostrar más ({visible.length} de {completedNovedades.length})
+                    </button>
+                  </div>
+                )}
+                {!hasMore && completedNovedades.length > PAGE_SIZE && (
+                  <p className="text-center text-xs text-slate-400 font-bold pt-2">Mostrando todas ({completedNovedades.length})</p>
+                )}
+              </>);
+            })()}
           </div>
         )}
 
@@ -2018,13 +2033,13 @@ const App = () => {
                         </div>
                       </div>
                       
-                      {/* Presets rápidos */}
+                      {/* Plantillas rápidas */}
                       <div className="mb-5">
-                        <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Cargar preset:</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Cargar plantilla:</p>
                         <div className="flex flex-wrap gap-2">
-                          {Object.entries(ROLES).map(([roleKey, roleInfo]) => (
-                            <button key={roleKey} onClick={() => setEditPermisos({...ROLE_PRESETS[roleKey]})} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-2 ${detectRole(editPermisos) === roleKey ? roleInfo.color + ' text-white border-transparent shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}`}>
-                              {roleInfo.label}
+                          {Object.entries(PERM_TEMPLATES).map(([name, preset]) => (
+                            <button key={name} onClick={() => setEditPermisos({...preset})} className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-2 bg-white border-slate-200 text-slate-600 hover:border-slate-400 flex items-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full ${PERM_TEMPLATE_COLORS[name]}`}></span>{name}
                             </button>
                           ))}
                         </div>
@@ -2117,7 +2132,7 @@ const App = () => {
                               <div className="font-black text-slate-800">{p.nombre}</div>
                               <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
                                 <span className={`px-2 py-0.5 rounded ${roleInfo.color} text-white text-[8px]`}>{roleInfo.label}</span>
-                                {!['admin','supervisor'].includes(p.role) && (
+                                {!p.permisos?.ver_todos_turnos && (
                                   <span className="px-2 py-0.5 rounded bg-indigo-500 text-white text-[8px]">{p.turno === 4 ? 'ZO' : `T${p.turno || 1}`}</span>
                                 )}
                                 {permCount > 0 && <span className="text-[8px] text-slate-400">{permCount} permisos</span>}
@@ -2128,7 +2143,7 @@ const App = () => {
                             const isMe = p.id === userProfile.id;
                             const profile = isMe ? {...p, isSelf: true} : p;
                             setEditingProfile(profile);
-                            setEditPermisos(p.permisos || ROLE_PRESETS[p.role] || ROLE_PRESETS.user);
+                            setEditPermisos(p.permisos || (p.role === 'admin' ? PERM_TEMPLATES['Acceso total'] : PERM_TEMPLATES['Básico']));
                           }} className="text-[10px] bg-slate-100 px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-all flex items-center gap-1.5">
                             <Icon name="edit" size={12} /> {p.id === userProfile.id ? 'Mi Perfil' : 'Editar'}
                           </button>
@@ -2376,7 +2391,7 @@ const App = () => {
                       }
                     });
                     
-                    const roleColor = p.role === 'admin' ? 'bg-purple-600' : p.role === 'moderator' ? 'bg-blue-600' : 'bg-slate-700';
+                    const roleColor = p.role === 'admin' ? 'bg-red-600' : 'bg-slate-700';
                     
                     return (
                       <div key={p.id} className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
@@ -3670,9 +3685,12 @@ const App = () => {
                 <p className="text-xs text-slate-500 font-bold">{stockTurnoEfectivo > 0 ? TURNOS[stockTurnoEfectivo] : 'Todos los turnos'}</p>
               </div>
               <div className="flex gap-2 items-center">
-                <div className="relative flex-1 sm:w-48">
-                  <input value={stockSearch} onChange={(e) => setStockSearch(e.target.value)} placeholder="🔍 Buscar..." className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold" />
-                  {stockSearch && <button onClick={() => setStockSearch('')} className="absolute right-2 top-2 text-slate-400">x</button>}
+                <div className="relative flex-1 sm:w-56">
+                  <input value={stockSearch} onChange={(e) => setStockSearch(e.target.value)} placeholder={`🔍 ${stockSearchScope === 'actual' ? 'En esta valija' : 'En todas'}...`} className="w-full px-3 py-2 pr-16 bg-white border border-slate-200 rounded-lg text-sm font-bold" />
+                  <div className="absolute right-1 top-1 flex items-center gap-0.5">
+                    {stockSearch && <button onClick={() => setStockSearch('')} className="text-slate-400 hover:text-slate-600 px-1">✕</button>}
+                    <button onClick={() => setStockSearchScope(s => s === 'actual' ? 'todas' : 'actual')} className={`text-[8px] px-1.5 py-1 rounded font-bold ${stockSearchScope === 'todas' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-600'}`} title={stockSearchScope === 'actual' ? 'Buscar en todas las valijas' : 'Buscar solo en esta valija'}>{stockSearchScope === 'todas' ? 'TODAS' : 'ESTA'}</button>
+                  </div>
                 </div>
                 <div className="relative">
                   <button onClick={() => {
@@ -3743,18 +3761,31 @@ const App = () => {
             
             {stockSearch && (
               <div className="bg-amber-50 rounded-xl border-2 border-amber-200 p-3">
-                <p className="text-xs font-bold text-amber-700 mb-2">Resultados {stockTurnoEfectivo > 0 ? `en ${TURNOS[stockTurnoEfectivo]}` : 'en todos los turnos'}:</p>
+                <p className="text-xs font-bold text-amber-700 mb-2">
+                  {stockSearchScope === 'actual' 
+                    ? `Resultados en ${ubicacionesFiltradas.find(u => u.id === selectedUbicacion)?.nombre || 'valija actual'}` 
+                    : (stockTurnoEfectivo > 0 ? `Resultados en todas las valijas (${TURNOS[stockTurnoEfectivo]})` : 'Resultados en todas las valijas')}:
+                </p>
                 {(() => {
-                  const resultados = stockFiltrado.filter(i => i.nombre.toLowerCase().includes(stockSearch.toLowerCase()));
+                  const q = stockSearch.toLowerCase();
+                  const resultados = stockSearchScope === 'actual'
+                    ? stockFiltrado.filter(i => i.ubicacion === selectedUbicacion && i.nombre.toLowerCase().includes(q))
+                    : stockFiltrado.filter(i => i.nombre.toLowerCase().includes(q));
                   if (resultados.length === 0) return <p className="text-amber-600 text-sm">No encontrado</p>;
                   const getUbNombre = (id) => stockUbicaciones.find(u => u.id === id)?.nombre || id;
                   const getTurnoLabel = (id) => { const ub = stockUbicaciones.find(u => u.id === id); return ub ? (ub.turno === 4 ? 'ZO' : `T${ub.turno || 1}`) : ''; };
-                  return (<div className="space-y-1">{resultados.map(item => (
-                    <div key={item.id} onClick={() => { setSelectedUbicacion(item.ubicacion); setStockSearch(''); setHighlightedItem(item.id); setTimeout(() => setHighlightedItem(null), 6000); }} className={`flex items-center justify-between p-2 rounded-lg text-sm cursor-pointer hover:ring-2 hover:ring-amber-400 ${item.cantidad <= item.cantidad_minima ? 'bg-red-100' : 'bg-white'}`}>
+                  return (<div className="space-y-1 max-h-48 overflow-y-auto">{resultados.map(item => (
+                    <div key={item.id} onClick={() => { 
+                      setSelectedUbicacion(item.ubicacion); 
+                      setStockSearch(''); 
+                      setHighlightedItem(item.id); 
+                      setTimeout(() => { const el = document.querySelector(`[data-stock-id="${item.id}"]`); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 150);
+                      setTimeout(() => setHighlightedItem(null), 6000); 
+                    }} className={`flex items-center justify-between p-2 rounded-lg text-sm cursor-pointer hover:ring-2 hover:ring-amber-400 ${item.cantidad <= item.cantidad_minima ? 'bg-red-100' : 'bg-white'}`}>
                       <span className="font-bold">{item.nombre}</span>
                       <div className="flex items-center gap-2">
-                        {canSeeAllTurnos() && <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">{getTurnoLabel(item.ubicacion)}</span>}
-                        <span className="text-xs text-slate-500">{getUbNombre(item.ubicacion)}</span>
+                        {stockSearchScope === 'todas' && canSeeAllTurnos() && <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">{getTurnoLabel(item.ubicacion)}</span>}
+                        {stockSearchScope === 'todas' && <span className="text-xs text-slate-500">{getUbNombre(item.ubicacion)}</span>}
                         <span className={`text-[9px] px-1 rounded ${item.tipo === 'fijo' ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-700'}`}>{item.tipo === 'fijo' ? '🔧' : '📦'}</span>
                         <span className={`font-black ${item.cantidad <= item.cantidad_minima ? 'text-red-600' : 'text-slate-800'}`}>{item.cantidad}</span>
                       </div>
@@ -3891,7 +3922,7 @@ const App = () => {
                     const bgColor = highlighted ? 'bg-yellow-200 ring-2 ring-yellow-400' : bajo ? 'bg-red-50' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-100';
                     const esConsumible = item.tipo !== 'fijo';
                     return (
-                      <div key={item.id} className={`flex items-center justify-between py-1 px-2 rounded ${bgColor} ${highlighted ? 'animate-pulse' : ''}`}>
+                      <div key={item.id} data-stock-id={item.id} className={`flex items-center justify-between py-1 px-2 rounded ${bgColor} ${highlighted ? 'animate-pulse ring-2 ring-yellow-400' : ''}`}>
                         <div className="flex items-center gap-1 flex-1 min-w-0"><span className="font-semibold text-slate-800 text-sm truncate">{item.nombre}</span>{bajo && <span className="text-[8px] bg-red-500 text-white px-1 rounded">!</span>}</div>
                         <div className="flex items-center gap-0.5">
                           {canManageStock() ? (<>
@@ -4098,7 +4129,7 @@ const App = () => {
           const auditEffectiveTurno = canSeeAllTurnos() ? auditTurnoFilter : getUserTurno();
           const auditableProfiles = auditEffectiveTurno === 0 
             ? profiles 
-            : profiles.filter(p => p.turno === auditEffectiveTurno || ['admin', 'supervisor'].includes(p.role));
+            : profiles.filter(p => p.turno === auditEffectiveTurno || p.permisos?.ver_todos_turnos);
           return (
           <div className="space-y-6">
             <div className="mb-6">
@@ -4149,7 +4180,7 @@ const App = () => {
                       <h3 className="text-2xl font-black">{selectedAuditUser.nombre}</h3>
                       <p className="text-slate-400 text-sm uppercase font-bold flex items-center gap-2">
                         {ROLES[selectedAuditUser.role]?.label || selectedAuditUser.role}
-                        {!['admin', 'supervisor'].includes(selectedAuditUser.role) && (
+                        {!selectedAuditUser.permisos?.ver_todos_turnos && (
                           <span className="px-2 py-0.5 bg-indigo-500/30 text-indigo-300 rounded text-[10px]">T{selectedAuditUser.turno || 1}</span>
                         )}
                       </p>
@@ -4563,7 +4594,7 @@ const App = () => {
         const statsEffectiveTurno = canSeeAllTurnos() ? statsTurnoFilter : getUserTurno();
         const statsProfiles = statsEffectiveTurno === 0 
           ? profiles 
-          : profiles.filter(p => p.turno === statsEffectiveTurno || ['admin', 'supervisor'].includes(p.role));
+          : profiles.filter(p => p.turno === statsEffectiveTurno || p.permisos?.ver_todos_turnos);
         const currentStats = getFilteredStats(statsEffectiveTurno);
         
         return (
@@ -4666,7 +4697,7 @@ const App = () => {
                               <div className="font-black text-slate-800 text-sm">{p.nombre}</div>
                               <div className="text-[9px] text-slate-500 font-bold uppercase flex items-center gap-1">
                                 {ROLES[p.role]?.label || p.role}
-                                {canSeeAllTurnos() && !['admin', 'supervisor'].includes(p.role) && (
+                                {canSeeAllTurnos() && !p.permisos?.ver_todos_turnos && (
                                   <span className="px-1 bg-indigo-200 text-indigo-700 rounded text-[8px]">{p.turno === 4 ? 'ZO' : `T${p.turno || 1}`}</span>
                                 )}
                               </div>
