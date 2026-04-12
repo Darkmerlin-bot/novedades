@@ -480,7 +480,10 @@ const App = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
-  const [novedades, setNovedades] = useState([]);
+  const [novedades, setNovedades] = useState([]); // Solo pendientes (completado=false)
+  const [completedNov, setCompletedNov] = useState([]); // Completadas cargadas por página
+  const [completedTotal, setCompletedTotal] = useState(0);
+  const [completedLoading, setCompletedLoading] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const [logs, setLogs] = useState([]);
   const [currentView, setCurrentView] = useState(() => {
@@ -824,9 +827,13 @@ const App = () => {
     
     let loadErrors = [];
     
-    const { data: novData, error: novErr } = await sb.from('novedades').select('*').order('created_at', { ascending: false });
+    const { data: novData, error: novErr } = await sb.from('novedades').select('*').eq('completado', false).order('created_at', { ascending: false });
     if (novErr) loadErrors.push('novedades'); 
     setNovedades(novData || []);
+    
+    // Solo el conteo de completadas (la data se carga on-demand)
+    const { count: compCount } = await sb.from('novedades').select('id', { count: 'exact', head: true }).eq('completado', true);
+    setCompletedTotal(compCount || 0);
     
     const { data: profilesData, error: profErr } = await sb.from('profiles').select('*').order('nombre');
     if (profErr) loadErrors.push('profiles');
@@ -873,6 +880,31 @@ const App = () => {
     }
     setDataLoading(false);
   };
+
+  // Carga paginada de completadas desde servidor
+  const COMPLETED_PAGE_SIZE = 20;
+  const loadCompletedPage = async (page = 1, append = false) => {
+    setCompletedLoading(true);
+    const from = (page - 1) * COMPLETED_PAGE_SIZE;
+    const to = from + COMPLETED_PAGE_SIZE - 1;
+    const { data, error } = await sb.from('novedades').select('*').eq('completado', true).order('created_at', { ascending: false }).range(from, to);
+    if (!error && data) {
+      setCompletedNov(prev => append ? [...prev, ...data] : data);
+    }
+    setCompletedLoading(false);
+  };
+
+  // Realtime: suscripción a cambios en tablas clave
+  useEffect(() => {
+    if (!session) return;
+    const channel = sb.channel('sistema-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'novedades' }, () => { loadData(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items' }, () => { loadData(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'recordatorios' }, () => { loadData(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'juicios' }, () => { loadData(); })
+      .subscribe();
+    return () => { sb.removeChannel(channel); };
+  }, [session]);
 
   // Calcular juicios próximos (5 días) - mostrar a todos
   useEffect(() => {
@@ -1222,12 +1254,13 @@ const App = () => {
   });
 
   const pendingNovedades = useMemo(
-    () => sortNovedades(filterNovedades(novedades.filter(n => !isNovedadComplete(n))), userProfile),
+    () => sortNovedades(filterNovedades(novedades), userProfile),
     [novedades, userProfile, searchTerm, selectedYear, turnoActivo]
   );
+  // Completadas: filtradas desde datos cargados del servidor por página
   const completedNovedades = useMemo(
-    () => filterNovedades(novedades.filter(n => isNovedadComplete(n))).sort(sortByNumber),
-    [novedades, searchTerm, selectedYear, turnoActivo]
+    () => { const filtered = filterNovedades(completedNov); return filtered.sort(sortByNumber); },
+    [completedNov, searchTerm, selectedYear, turnoActivo]
   );
   // Contadores filtrados por turno (para pestañas)
   const novedadesFiltradas = useMemo(
@@ -1235,18 +1268,16 @@ const App = () => {
     [novedades, turnoActivo]
   );
   const totalPending = useMemo(
-    () => novedadesFiltradas.filter(n => !isNovedadComplete(n)).length,
+    () => novedadesFiltradas.length,
     [novedadesFiltradas]
   );
-  const totalCompleted = useMemo(
-    () => novedadesFiltradas.filter(n => isNovedadComplete(n)).length,
-    [novedadesFiltradas]
-  );
+  // totalCompleted viene del server (conteo exacto)
+  const totalCompleted = completedTotal;
 
   const checkDuplicate = checkDuplicateServer;
 
   const handleToggleCheck = async (id, checkKey, checkKeyOld) => {
-    const n = novedades.find(x => x.id === id);
+    const n = novedades.find(x => x.id === id) || completedNov.find(x => x.id === id);
     if (!n) { console.error('No se encontró la novedad'); return; }
     const currentVal = n[checkKey] || (n.checks && n.checks[checkKeyOld]) || false;
     const newVal = !currentVal;
@@ -1263,6 +1294,7 @@ const App = () => {
     // Actualizar estado local con los datos devueltos por el servidor
     if (data && data.length > 0) {
       setNovedades(prev => prev.map(x => x.id === id ? data[0] : x));
+      setCompletedNov(prev => prev.map(x => x.id === id ? data[0] : x));
     }
     
     // Log descriptivo
@@ -1278,6 +1310,25 @@ const App = () => {
       ? `Completó "${taskName}" en Nov. ${n.numero_novedad}` 
       : `Desmarcó "${taskName}" en Nov. ${n.numero_novedad}`;
     await addLog(action, detail);
+    
+    // Recalcular si la novedad está completa y actualizar columna
+    if (data && data.length > 0) {
+      const updated = data[0];
+      const nowComplete = isNovedadComplete(updated);
+      if (nowComplete !== updated.completado) {
+        await sb.from('novedades').update({ completado: nowComplete }).eq('id', id);
+        // Si se completó, moverla de pendientes y actualizar conteo
+        if (nowComplete) {
+          setNovedades(prev => prev.filter(x => x.id !== id));
+          setCompletedTotal(prev => prev + 1);
+        } else {
+          // Se desmarcó — traerla de vuelta a pendientes
+          setNovedades(prev => [...prev, {...updated, completado: false}]);
+          setCompletedTotal(prev => Math.max(0, prev - 1));
+          setCompletedNov(prev => prev.filter(x => x.id !== id));
+        }
+      }
+    }
   };
 
   const handleBackup = async () => {
@@ -1315,8 +1366,9 @@ const App = () => {
   const getUserDetailedStats = (profile, filterYear = 'todos') => {
     const stats = { informeActuacion: { a: 0, c: 0 }, informeCriminalistico: { a: 0, c: 0 }, informePericial: { a: 0, c: 0 }, croquis: { a: 0, c: 0 }, juicios: 0, comisiones: { cargaSgsp: 0, chofer: 0, acompanante: 0 }, eventos: { fotografo: 0, acompanante: 0 } };
     
-    // Filtrar novedades por año
-    const filteredNovedades = filterYear === 'todos' ? novedades : novedades.filter(n => n.anio?.toString() === filterYear);
+    // Combinar pendientes + completadas cargadas para estadísticas
+    const allNov = [...novedades, ...completedNov];
+    const filteredNovedades = filterYear === 'todos' ? allNov : allNov.filter(n => n.anio?.toString() === filterYear);
     
     // Set para contar novedades únicas donde participó
     const novedadesConcurridas = new Set();
@@ -1400,7 +1452,8 @@ const App = () => {
   
   // Estadísticas filtradas por año
   const getFilteredStats = (turnoFilter) => {
-    let filteredNovedades = statsYear === 'todos' ? novedades : novedades.filter(n => n.anio?.toString() === statsYear);
+    const allNov = [...novedades, ...completedNov];
+    let filteredNovedades = statsYear === 'todos' ? allNov : allNov.filter(n => n.anio?.toString() === statsYear);
     // Filtrar por turno si se especifica
     if (turnoFilter && turnoFilter > 0) {
       filteredNovedades = filteredNovedades.filter(n => n.turno === turnoFilter);
@@ -1652,7 +1705,12 @@ const App = () => {
   // APP
   return (
     <div className="pb-20 min-h-screen bg-slate-300 font-sans">
-      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); }} onLogout={handleLogout} onShowStats={() => setShowStats(true)} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={filterByTurno(juicios).filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={filterRecordatoriosByVisibility(recordatorios).filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} turnoActivo={turnoActivo} setTurnoActivo={setTurnoActivo} TURNOS={TURNOS} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+      <Header userProfile={userProfile} currentView={currentView} setView={v => { setCurrentView(v); setEditingNovedad(null); setIsComision(false); setIsEventoSocial(false); setSearchTerm(''); if(v === 'logs' || v === 'users' || v === 'recordatorios') loadData(); if(v === 'completed') { setCompletedPage(1); loadCompletedPage(1, false); } }} onLogout={handleLogout} onShowStats={async () => { 
+                  setShowStats(true); 
+                  // Cargar TODAS las completadas para estadísticas precisas
+                  const { data } = await sb.from('novedades').select('*').eq('completado', true).order('created_at', { ascending: false });
+                  if (data) setCompletedNov(data);
+                }} onShowPass={() => setShowPassModal(true)} onShowReport={() => setShowReport(true)} onBackup={handleBackup} pendingCount={totalPending} completedCount={totalCompleted} juiciosCount={filterByTurno(juicios).filter(j => { const fecha = parseFechaJuicio(j.fecha_juicio); if (!fecha) return false; const hoy = new Date(); hoy.setHours(0,0,0,0); return fecha >= hoy; }).length} recordatoriosCount={filterRecordatoriosByVisibility(recordatorios).filter(r => !r.completado).length} stockBajoCount={stockItems.filter(i => i.cantidad <= i.cantidad_minima).length} turnoActivo={turnoActivo} setTurnoActivo={setTurnoActivo} TURNOS={TURNOS} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
       
       <main className="max-w-5xl mx-auto px-3 py-4 md:p-8 animate-fadeIn">
         {/* PENDIENTES */}
@@ -1675,24 +1733,21 @@ const App = () => {
         {/* COMPLETADOS */}
         {currentView === 'completed' && (
           <div className="space-y-4">
-            <div className="mb-6"><h2 className="text-2xl sm:text-3xl font-black text-slate-800">Completados</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tareas finalizadas ({completedNovedades.length})</p></div>
-            <SearchAndFilter searchTerm={searchTerm} onSearchChange={(v) => { setSearchTerm(v); setCompletedPage(1); }} selectedYear={selectedYear} onYearChange={(v) => { setSelectedYear(v); setCompletedPage(1); }} />
-            {dataLoading ? <Skeleton rows={4} /> : completedNovedades.length === 0 ? <EmptyState icon="folder" title="Sin completados" subtitle="Las novedades finalizadas aparecerán aquí" /> : (() => {
-              const PAGE_SIZE = 20;
-              const totalPages = Math.ceil(completedNovedades.length / PAGE_SIZE);
-              const visible = completedNovedades.slice(0, completedPage * PAGE_SIZE);
-              const hasMore = completedPage * PAGE_SIZE < completedNovedades.length;
+            <div className="mb-6"><h2 className="text-2xl sm:text-3xl font-black text-slate-800">Completados</h2><p className="text-xs text-slate-600 font-bold uppercase mt-1">Tareas finalizadas ({completedTotal})</p></div>
+            <SearchAndFilter searchTerm={searchTerm} onSearchChange={(v) => { setSearchTerm(v); }} selectedYear={selectedYear} onYearChange={(v) => { setSelectedYear(v); }} />
+            {completedLoading && completedNov.length === 0 ? <Skeleton rows={4} /> : completedNovedades.length === 0 && !completedLoading ? <EmptyState icon="folder" title="Sin completados" subtitle="Las novedades finalizadas aparecerán aquí" /> : (() => {
+              const hasMore = completedNov.length < completedTotal;
               return (<>
-                <div className="grid gap-3">{visible.map(n => <NovedadCard key={n.id} n={n} isCompletedView={true} />)}</div>
+                <div className="grid gap-3">{completedNovedades.map(n => <NovedadCard key={n.id} n={n} isCompletedView={true} />)}</div>
                 {hasMore && (
                   <div className="flex justify-center pt-4">
-                    <button onClick={() => setCompletedPage(p => p + 1)} className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold text-sm hover:bg-slate-700 shadow-lg transition-all flex items-center gap-2">
-                      <Icon name="chevronDown" size={14} /> Mostrar más ({visible.length} de {completedNovedades.length})
+                    <button onClick={() => { const nextPage = Math.floor(completedNov.length / COMPLETED_PAGE_SIZE) + 1; loadCompletedPage(nextPage, true); }} disabled={completedLoading} className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold text-sm hover:bg-slate-700 shadow-lg transition-all flex items-center gap-2 disabled:opacity-50">
+                      {completedLoading ? 'Cargando...' : <><Icon name="chevronDown" size={14} /> Mostrar más ({completedNov.length} de {completedTotal})</>}
                     </button>
                   </div>
                 )}
-                {!hasMore && completedNovedades.length > PAGE_SIZE && (
-                  <p className="text-center text-xs text-slate-400 font-bold pt-2">Mostrando todas ({completedNovedades.length})</p>
+                {!hasMore && completedNov.length > COMPLETED_PAGE_SIZE && (
+                  <p className="text-center text-xs text-slate-400 font-bold pt-2">Mostrando todas ({completedTotal})</p>
                 )}
               </>);
             })()}
@@ -3007,7 +3062,7 @@ const App = () => {
                         .dia .inicial { font-size: 6px; font-weight: bold; display: block; line-height: 1; }
                         .finde { background: #f0f0f0; } .licencia { background: #bfdbfe; color: #1e40af; }
                         .enfermedad { background: #ef4444; color: white; } .estudio { background: #a855f7; color: white; }
-                        .descanso { background: #f59e0b; color: white; }
+                        .descanso { background: #fbbf24; color: #78350f; }
                         .leyenda { margin-top: 15px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; font-size: 9px; }
                         .leyenda span { display: flex; align-items: center; gap: 3px; }
                         .leyenda-color { width: 12px; height: 12px; border-radius: 2px; }
@@ -3054,7 +3109,7 @@ const App = () => {
                         .dia .inicial { font-size: 6px; font-weight: bold; display: block; line-height: 1; }
                         .finde { background: #f0f0f0; } .licencia { background: #bfdbfe; color: #1e40af; }
                         .enfermedad { background: #ef4444; color: white; } .estudio { background: #a855f7; color: white; }
-                        .descanso { background: #f59e0b; color: white; }
+                        .descanso { background: #fbbf24; color: #78350f; }
                         .leyenda { margin-top: 15px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; font-size: 9px; }
                         .leyenda span { display: flex; align-items: center; gap: 3px; }
                         .leyenda-color { width: 12px; height: 12px; border-radius: 2px; }
@@ -3409,8 +3464,8 @@ const App = () => {
                             bgColor = 'bg-purple-500';
                             textColor = 'text-white';
                           } else if (tipo === 'descanso') {
-                            bgColor = 'bg-amber-500';
-                            textColor = 'text-white';
+                            bgColor = 'bg-amber-400';
+                            textColor = 'text-amber-900';
                           } else {
                             // Licencia normal: color pastel por usuario
                             const userColor = getUserColor(userName);
@@ -3792,7 +3847,7 @@ const App = () => {
               {ubicacionesFiltradas.map(ub => {
                 const alertas = stockFiltrado.filter(i => i.ubicacion === ub.id && i.cantidad <= i.cantidad_minima).length;
                 const turnoLabel = canSeeAllTurnos() && stockTurnoEfectivo === 0 ? (ub.turno === 4 ? ' ZO' : ` T${ub.turno || 1}`) : '';
-                return (<button key={ub.id} onClick={() => { setSelectedUbicacion(ub.id); setStockSearch(''); }} className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 ${selectedUbicacion === ub.id ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{ub.nombre}{turnoLabel && <span className={`text-[8px] px-1 py-0.5 rounded ${selectedUbicacion === ub.id ? 'bg-indigo-400/50' : 'bg-indigo-100 text-indigo-600'}`}>{turnoLabel}</span>}{alertas > 0 && <span className="bg-red-500 text-white text-[8px] px-1 rounded-full">{alertas}</span>}</button>);
+                return (<button key={ub.id} onClick={() => { setSelectedUbicacion(ub.id); setStockSearch(''); }} className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 ${selectedUbicacion === ub.id ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{ub.nombre}{turnoLabel && <span className={`text-[8px] px-1 py-0.5 rounded ${selectedUbicacion === ub.id ? 'bg-indigo-400/50' : 'bg-indigo-100 text-indigo-600'}`}>{turnoLabel}</span>}{alertas > 0 && <span className="bg-red-500 text-white text-[8px] px-1 rounded-full" title={`${alertas} item${alertas > 1 ? 's' : ''} por debajo del mínimo`}>{alertas}</span>}</button>);
               })}
               {canManageStock() && (
                 <button onClick={() => setShowUbicacionesModal(true)} className="px-2 py-1.5 rounded-lg font-bold text-xs bg-teal-100 text-teal-700 hover:bg-teal-200">⚙️</button>
@@ -3916,7 +3971,7 @@ const App = () => {
                     const esConsumible = item.tipo !== 'fijo';
                     return (
                       <div key={item.id} data-stock-id={item.id} className={`flex items-center justify-between py-1 px-2 rounded ${bgColor} ${highlighted ? 'animate-pulse ring-2 ring-yellow-400' : ''}`}>
-                        <div className="flex items-center gap-1 flex-1 min-w-0"><span className="font-semibold text-slate-800 text-sm truncate">{item.nombre}</span>{bajo && <span className="text-[8px] bg-red-500 text-white px-1 rounded">!</span>}</div>
+                        <div className="flex items-center gap-1 flex-1 min-w-0"><span className="font-semibold text-slate-800 text-sm truncate">{item.nombre}</span>{bajo && <span className="text-[8px] bg-red-500 text-white px-1 rounded cursor-help" title={`Stock bajo el mínimo: ${item.cantidad} de ${item.cantidad_minima}`}>!</span>}</div>
                         <div className="flex items-center gap-0.5">
                           {canManageStock() ? (<>
                             <button onClick={async () => { const c = prompt("Sacar:","1"); if(!c)return; const n=parseInt(c); if(isNaN(n)||n<=0)return; if(n>item.cantidad){showNotify("No hay","error");return;} await sb.from('stock_items').update({cantidad:item.cantidad-n}).eq('id',item.id); await sb.from('stock_movimientos').insert([{item_id:item.id,tipo:'salida',cantidad:n,user_id:session.user.id,user_nombre:userProfile.nombre,ubicacion:item.ubicacion,turno:item.turno}]); loadData(); }} className="w-6 h-6 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">-</button>
@@ -4187,8 +4242,9 @@ const App = () => {
                     return isAssigned && !areUserTasksComplete(n, assignments);
                   });
                   
-                  // Comisiones donde participó el usuario
-                  const userComisiones = novedades.filter(n => 
+                  // Comisiones y eventos pueden estar en completadas
+                  const allNov = [...novedades, ...completedNov];
+                  const userComisiones = allNov.filter(n => 
                     n.es_comision && (
                       n.comision_carga_sgsp === selectedAuditUser.nombre ||
                       n.comision_chofer === selectedAuditUser.nombre ||
@@ -4197,7 +4253,7 @@ const App = () => {
                   );
                   
                   // Eventos sociales donde participó el usuario
-                  const userEventos = novedades.filter(n => 
+                  const userEventos = allNov.filter(n => 
                     n.es_evento_social && (
                       n.evento_fotografo === selectedAuditUser.nombre ||
                       n.evento_acompanante1 === selectedAuditUser.nombre ||
@@ -4904,7 +4960,7 @@ const App = () => {
               <div id="report-content" className="p-8 bg-white">
                 {(() => {
                   // Filtrar datos según opciones
-                  let filteredNovedades = novedades;
+                  let filteredNovedades = [...novedades, ...completedNov];
                   let filteredJuicios = juicios;
                   let filteredLogs = logs;
                   let filteredProfiles = profiles;
