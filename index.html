@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self';
+      style-src 'self' 'unsafe-inline' fonts.googleapis.com;
+      font-src fonts.gstatic.com;
+      connect-src 'self' *.supabase.co wss://*.supabase.co;
+      img-src 'self' raw.githubusercontent.com data: blob:;
+      frame-src 'none';
+      object-src 'none';
+      base-uri 'self';
+    ">
+    <title>Sistema de Novedades</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+  <script type="module" crossorigin src="/novedades/assets/index-wZmBqe8o.js"></script>
+  <link rel="stylesheet" crossorigin href="/novedades/assets/index-vA6dRt-R.css">
+</head>
+<body>
+    <div id="loading-screen" style="position:fixed;inset:0;background:#1e293b;display:flex;align-items:center;justify-content:center;z-index:9999;">
+        <div style="text-align:center;color:white;">
+            <div style="font-size:3rem;margin-bottom:1rem;">📋</div>
+            <div style="font-weight:bold;">Cargando sistema...</div>
+        </div>
+    </div>
+    <div id="root"></div>
+</body>
+</html>
