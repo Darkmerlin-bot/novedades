@@ -6,8 +6,8 @@
     <title>Sistema de Novedades - Policía Científica</title>
     <link rel="icon" href="https://raw.githubusercontent.com/Darkmerlin-bot/novedades/main/Logo%20para%20programa.png" type="image/png">
 
-    <!-- CSP: más seguro que antes, sin unsafe-eval (no se necesita Babel en runtime) -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://raw.githubusercontent.com; connect-src 'self' https://whfrenunfcrcrljithex.supabase.co wss://whfrenunfcrcrljithex.supabase.co; frame-ancestors 'none'; base-uri 'self';">
+    <!-- CSP sin frame-ancestors (no funciona en meta) ni inline handlers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://raw.githubusercontent.com; connect-src 'self' https://whfrenunfcrcrljithex.supabase.co wss://whfrenunfcrcrljithex.supabase.co; base-uri 'self';">
 
     <!-- Preconexiones para acelerar la carga -->
     <link rel="preconnect" href="https://whfrenunfcrcrljithex.supabase.co">
@@ -15,10 +15,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" href="https://raw.githubusercontent.com/Darkmerlin-bot/novedades/main/Escudo%203d%20sin%20fondo.png" as="image">
 
-    <!-- Inter font -->
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" media="print" onload="this.media='all'">
-  <script type="module" crossorigin src="/novedades/assets/index-6l8TpUet.js"></script>
+    <!-- Fuente Inter cargada directamente (sin trucos onload que rompen con CSP estricto) -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <script type="module" crossorigin src="/novedades/assets/index-DzqG_czj.js"></script>
   <link rel="stylesheet" crossorigin href="/novedades/assets/index-BbaI6s--.css">
 </head>
 <body>
