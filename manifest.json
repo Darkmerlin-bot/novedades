@@ -10,10 +10,10 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/Darkmerlin-bot/novedades/main/Logo%20para%20programa.png",
-      "sizes": "any",
+      "src": "/novedades/logo.png",
+      "sizes": "100x100",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }
